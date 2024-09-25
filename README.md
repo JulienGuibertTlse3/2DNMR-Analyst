@@ -9,6 +9,7 @@ Tool to analyze 2DNMR spectra including peak picking and peak integration.
 
 ## General info
 
+![image](https://github.com/user-attachments/assets/ba881101-ccda-41c0-b9a2-52ec6ce48397)
 
 
 ## Explanation
