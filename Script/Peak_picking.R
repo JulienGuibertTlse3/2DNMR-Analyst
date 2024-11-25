@@ -5,6 +5,8 @@ rownames(dataT) <- dataT[1,]
 colnames(dataT) <- dataT[,1]
 dataT <- dataT[-1,-1]
 
+#### Peak pick R ----
+
 # Function to perform peak picking on a 2D spectrum (A refaire en C++)
 peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
   # Define the threshold value
@@ -40,6 +42,83 @@ peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
   
   return(peak_df)
 }
+
+
+#### Peak pick C+++ -----
+
+# Load the Rcpp package
+library(Rcpp)
+
+# Embed the C++ function in the R script
+cppFunction('
+DataFrame peak_pick_2d(NumericMatrix intensity, NumericVector ppm_f1, NumericVector ppm_f2, double threshold) {
+  // Define the threshold value
+  double max_intensity = max(intensity);
+  double th = threshold * max_intensity / 100.0;
+
+  // Initialize vectors to store peak information
+  std::vector<double> peak_ppm_f1;
+  std::vector<double> peak_ppm_f2;
+  std::vector<double> peak_intensity;
+
+  // Loop through the intensity matrix to identify local maxima
+  int nrow = intensity.nrow();
+  int ncol = intensity.ncol();
+  for (int i = 1; i < nrow - 1; i++) {
+    for (int j = 1; j < ncol - 1; j++) {
+      double current = intensity(i, j);
+
+      // Check if the current point is above the threshold
+      if (current > th &&
+          current > intensity(i - 1, j) &&
+          current > intensity(i + 1, j) &&
+          current > intensity(i, j - 1) &&
+          current > intensity(i, j + 1)) {
+        // Record the peak information
+        peak_ppm_f1.push_back(ppm_f1[i]);
+        peak_ppm_f2.push_back(ppm_f2[j]);
+        peak_intensity.push_back(current);
+      }
+    }
+  }
+
+  // Return the results as a DataFrame
+  return DataFrame::create(
+    Named("ppm_f1") = peak_ppm_f1,
+    Named("ppm_f2") = peak_ppm_f2,
+    Named("intensity") = peak_intensity
+  );
+}
+')
+
+# Example usage in R
+
+# Create a test intensity matrix
+intensity <- matrix(
+  c(0, 0, 0, 0, 0,
+    0, 3, 6, 3, 0,
+    0, 5, 9, 5, 0,
+    0, 3, 6, 3, 0,
+    0, 0, 0, 0, 0),
+  nrow = 5,
+  byrow = TRUE
+)
+
+# Create ppm vectors
+ppm_f1 <- seq(1, 5)
+ppm_f2 <- seq(1, 5)
+
+# Set threshold percentage
+threshold <- 50
+
+# Call the function
+result <- peak_pick_2d(intensity, ppm_f1, ppm_f2, threshold)
+
+# Print the result
+print(result)
+
+
+### Viz ----
 
 # Function to load and process the 2D NMR data
 load_and_pick_peaks <- function(file_path, threshold) {
@@ -93,7 +172,7 @@ plot_2D_with_peaks(nmr_result)
 
 
 
-#### PLotting ----
+### PLotting ----
 
 # Function to plot 2D NMR spectrum and overlay peak-picking results
 plot_2d_nmr_with_peaks <- function(spectrum_matrix, ppm_x, ppm_y, peaks) {
