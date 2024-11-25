@@ -1,0 +1,141 @@
+### PeakPick F ------
+
+dataT <- read.table(file = "Ok_smll.csv", sep = ";")
+rownames(dataT) <- dataT[1,]
+colnames(dataT) <- dataT[,1]
+dataT <- dataT[-1,-1]
+
+# Function to perform peak picking on a 2D spectrum (A refaire en C++)
+peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
+  # Define the threshold value
+  th <- threshold * max(intensity) / 100
+  
+  # Initialize list to store peaks
+  peaks <- list()
+  
+  # Loop through the intensity matrix to identify local maxima
+  for (i in 2:(nrow(intensity) - 1)) {
+    for (j in 2:(ncol(intensity) - 1)) {
+      # Check if the current point is a local maximum
+      if (intensity[i, j] > th &&
+          intensity[i, j] > intensity[i - 1, j] &&
+          intensity[i, j] > intensity[i + 1, j] &&
+          intensity[i, j] > intensity[i, j - 1] &&
+          intensity[i, j] > intensity[i, j + 1]) {
+        
+        # Record the peak information
+        peaks <- append(peaks, list(
+          list(
+            ppm_f1 = ppm_f1[i],
+            ppm_f2 = ppm_f2[j],
+            intensity = intensity[i, j]
+          )
+        ))
+      }
+    }
+  }
+  
+  # Convert peaks list to a data frame for easier handling
+  peak_df <- do.call(rbind, lapply(peaks, as.data.frame))
+  
+  return(peak_df)
+}
+
+# Function to load and process the 2D NMR data
+load_and_pick_peaks <- function(file_path, threshold) {
+  # Load the data
+  raw_data <- read.csv(file_path, header = TRUE, row.names = 1, check.names = FALSE)
+  
+  # Extract ppm scales and intensity matrix
+  ppm_f2 <- as.numeric(colnames(raw_data))  # F2 ppm
+  ppm_f1 <- as.numeric(rownames(raw_data))  # F1 ppm
+  intensity <- as.matrix(raw_data)         # Intensity matrix
+  
+  # Perform peak picking
+  peaks <- peak_pick_2d(intensity, ppm_f1, ppm_f2, threshold)
+  
+  return(list(peaks = peaks, intensity = intensity, ppm_f1 = ppm_f1, ppm_f2 = ppm_f2))
+}
+
+# Example usage
+file_path <- "OK.csv"  # Replace with your file path
+threshold <- 10  # Threshold as percentage of the maximum intensity
+nmr_result <- load_and_pick_peaks(file_path, threshold)
+
+# Inspect the peaks
+print(nmr_result$peaks)
+
+# Visualize the spectrum with peaks
+plot_2D_with_peaks <- function(nmr_result) {
+  image(
+    x = nmr_result$ppm_f2,
+    y = nmr_result$ppm_f1,
+    z = nmr_result$intensity,
+    col = heat.colors(100),
+    xlab = "F2 (ppm)",
+    ylab = "F1 (ppm)",
+    main = "2D NMR Spectrum with Peaks",
+    useRaster = TRUE
+  )
+  
+  # Add peaks to the plot
+  points(
+    nmr_result$peaks$ppm_f2,
+    nmr_result$peaks$ppm_f1,
+    col = "red",
+    pch = 4,
+    cex = 1.2
+  )
+}
+
+# Plot the spectrum with peaks
+plot_2D_with_peaks(nmr_result)
+
+
+
+#### PLotting ----
+
+# Function to plot 2D NMR spectrum and overlay peak-picking results
+plot_2d_nmr_with_peaks <- function(spectrum_matrix, ppm_x, ppm_y, peaks) {
+  # Check input dimensions
+  if (!is.matrix(spectrum_matrix)) stop("spectrum_matrix must be a matrix.")
+  if (length(ppm_x) != ncol(spectrum_matrix)) stop("ppm_x length must match the number of columns in the spectrum_matrix.")
+  if (length(ppm_y) != nrow(spectrum_matrix)) stop("ppm_y length must match the number of rows in the spectrum_matrix.")
+  
+  # Plot the 2D NMR spectrum using a heatmap
+  image(x = ppm_x, y = ppm_y, z = t(spectrum_matrix), 
+        col = viridis::viridis(100), 
+        xlab = "1H Chemical Shift (ppm)", 
+        ylab = "13C Chemical Shift (ppm)", 
+        main = "2D NMR Spectrum")
+  
+  # Add contour lines for better visualization
+  contour(x = ppm_x, y = ppm_y, z = t(spectrum_matrix), add = TRUE, col = "white")
+  
+  # Overlay peak positions
+  if (!is.null(peaks)) {
+    points(peaks$ppm_x, peaks$ppm_y, col = "red", pch = 4, cex = 1.5, lwd = 2)
+    text(peaks$ppm_x, peaks$ppm_y, labels = peaks$intensity, pos = 4, col = "red", cex = 0.8)
+  }
+}
+
+# Example usage:
+# Assuming:
+# - `spectrum_matrix` is the 2D matrix of intensity values.
+# - `ppm_x` and `ppm_y` are vectors of ppm values for the columns and rows of the matrix, respectively.
+# - `peaks` is a data frame with columns `ppm_x`, `ppm_y`, and `intensity`.
+
+# Simulate some example data for peaks (replace this with your real peak-picking results)
+example_peaks <- data.frame(
+  ppm_x = c(10.1, 10.05, 9.95),
+  ppm_y = c(10.2, 10.15, 9.9),
+  intensity = c(4000, 3500, 2000)
+)
+
+# Call the plotting function
+plot_2d_nmr_with_peaks(
+  spectrum_matrix = as.matrix(dataT),  # Your 2D NMR matrix
+  ppm_x = ppm_x,  # PPM values for X-axis
+  ppm_y = ppm_y,  # PPM values for Y-axis
+  peaks = example_peaks  # Peak-picking results
+)
