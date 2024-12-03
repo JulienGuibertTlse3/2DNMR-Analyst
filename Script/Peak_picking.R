@@ -1,4 +1,4 @@
-### PeakPick F ------
+### PeakPick LM ------
 
 dataT <- read.table(file = "Ok_smll.csv", sep = ";")
 rownames(dataT) <- dataT[1,]
@@ -44,7 +44,7 @@ peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
 }
 
 
-#### Peak pick C+++ -----
+#### C++ Peak pick -----
 
 # Load the Rcpp package
 library(Rcpp)
@@ -116,6 +116,94 @@ result <- peak_pick_2d(intensity, ppm_f1, ppm_f2, threshold)
 
 # Print the result
 print(result)
+
+
+
+
+### PeakPick NN ------
+
+
+install.packages("keras")
+library(keras)
+
+# Install TensorFlow backend if not already installed
+install_keras()
+
+
+build_cnn <- function(input_shape) {
+  model <- keras_model_sequential() %>%
+    
+    # First Convolutional Layer
+    layer_conv_2d(filters = 40, kernel_size = 11, activation = 'relu', input_shape = input_shape) %>%
+    layer_max_pooling_2d(pool_size = 3) %>%
+    
+    # Second Convolutional Layer
+    layer_conv_2d(filters = 20, kernel_size = 1, activation = 'relu') %>%
+    layer_max_pooling_1d(pool_size = 3) %>%
+    
+    # Third Convolutional Layer
+    layer_conv_2d(filters = 10, kernel_size = 11, activation = 'relu') %>%
+    layer_max_pooling_2d(pool_size = 3) %>%
+    
+    # Fully Connected Layers
+    layer_flatten() %>%
+    layer_dense(units = 18, activation = 'relu') %>%
+    layer_dense(units = 3, activation = 'softmax')  # Output Layer (3 classes)
+  
+  return(model)
+}
+
+
+
+# Define dimensions
+batch_size <- 10   # Number of samples in the batch
+height <- 28       # Height of the image
+width <- 28        # Width of the image
+channels <- 1      # Number of channels (e.g., 1 for grayscale, 3 for RGB)
+
+# Create random data for the tensor
+input_tensor <- array(runif(batch_size * height * width * channels), 
+                      dim = c(batch_size, height, width, channels))
+
+model <- build_cnn(input_tensor)
+
+# Compile the model
+model %>% compile(
+  optimizer = 'adam',
+  loss = 'categorical_crossentropy',
+  metrics = c('accuracy')
+)
+
+# Display model summary
+summary(model)
+
+
+# Simulate NMR data
+x_train <- array(runif(10000), dim = c(100, 100, 1))  # 100 samples of 1D spectra, each with 100 points
+y_train <- to_categorical(sample(0:2, 100, replace = TRUE), num_classes = 3)
+
+# Split into training and validation sets
+x_val <- x_train[1:20,,]
+y_val <- y_train[1:20,]
+x_train <- x_train[21:100,,]
+y_train <- y_train[21:100,]
+
+history <- model %>% fit(
+  x = x_train,
+  y = y_train,
+  epochs = 50,  # Number of training epochs
+  batch_size = 32,
+  validation_data = list(x_val, y_val)
+)
+
+# Plot training history
+plot(history)
+
+
+
+
+
+
 
 
 ### Viz ----
