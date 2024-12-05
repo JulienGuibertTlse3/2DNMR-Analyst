@@ -6,11 +6,22 @@ colnames(dataT) <- dataT[,1]
 dataT <- dataT[-1,-1]
 
 #### Peak pick R ----
-
-# Function to perform peak picking on a 2D spectrum (A refaire en C++)
-peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
-  # Define the threshold value
-  th <- threshold * max(intensity) / 100
+peak_pick_2d <- function(bruker_output, threshold) {
+  # Extract intensity and ppm axes from the Bruker output
+  intensity <- bruker_output$rr_data
+  ppm_f1 <- bruker_output$ppm_y
+  ppm_f2 <- bruker_output$ppm_x
+  
+  # Replace Inf and -Inf with finite values
+  finite_max <- max(intensity[is.finite(intensity)], na.rm = TRUE)
+  finite_min <- min(intensity[is.finite(intensity)], na.rm = TRUE)
+  intensity[is.infinite(intensity) & intensity > 0] <- finite_max
+  intensity[is.infinite(intensity) & intensity < 0] <- finite_min
+  
+  
+  # Define the threshold value (percentage of maximum normalized intensity)
+  th <- threshold * finite_max / 100
+  print(paste("Threshold value (normalized):", th))
   
   # Initialize list to store peaks
   peaks <- list()
@@ -18,6 +29,13 @@ peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
   # Loop through the intensity matrix to identify local maxima
   for (i in 2:(nrow(intensity) - 1)) {
     for (j in 2:(ncol(intensity) - 1)) {
+      # Skip if the current point or its neighbors are NA
+      if (is.na(intensity[i, j]) ||
+          is.na(intensity[i - 1, j]) || is.na(intensity[i + 1, j]) ||
+          is.na(intensity[i, j - 1]) || is.na(intensity[i, j + 1])) {
+        next
+      }
+      
       # Check if the current point is a local maximum
       if (intensity[i, j] > th &&
           intensity[i, j] > intensity[i - 1, j] &&
@@ -30,7 +48,7 @@ peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
           list(
             ppm_f1 = ppm_f1[i],
             ppm_f2 = ppm_f2[j],
-            intensity = intensity[i, j]
+            intensity = intensity[i, j] * (finite_max - finite_min) + finite_min  # Scale back intensity
           )
         ))
       }
@@ -38,10 +56,18 @@ peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
   }
   
   # Convert peaks list to a data frame for easier handling
-  peak_df <- do.call(rbind, lapply(peaks, as.data.frame))
+  if (length(peaks) > 0) {
+    peak_df <- do.call(rbind, lapply(peaks, as.data.frame))
+  } else {
+    peak_df <- data.frame(ppm_f1 = numeric(0), ppm_f2 = numeric(0), intensity = numeric(0))
+  }
   
+  # Return the peak data frame
   return(peak_df)
 }
+
+
+
 
 
 #### C++ Peak pick -----
@@ -49,39 +75,80 @@ peak_pick_2d <- function(intensity, ppm_f1, ppm_f2, threshold) {
 # Load the Rcpp package
 library(Rcpp)
 
-# Embed the C++ function in the R script
-cppFunction('
-DataFrame peak_pick_2d(NumericMatrix intensity, NumericVector ppm_f1, NumericVector ppm_f2, double threshold) {
-  // Define the threshold value
-  double max_intensity = max(intensity);
-  double th = threshold * max_intensity / 100.0;
+# Load the Rcpp package
+library(Rcpp)
 
+# Embed the C++ function directly in R
+cppFunction('
+DataFrame peak_pick_2d(List bruker_output, double threshold) {
+  // Extract intensity and ppm axes from the bruker_output
+  NumericMatrix intensity = bruker_output["rr_data"];
+  NumericVector ppm_f1 = bruker_output["ppm_y"];
+  NumericVector ppm_f2 = bruker_output["ppm_x"];
+  
+  int nrow = intensity.nrow();
+  int ncol = intensity.ncol();
+  
+  // Find finite max and min values
+  double finite_max = R_NegInf;
+  double finite_min = R_PosInf;
+  for (int i = 0; i < nrow; ++i) {
+    for (int j = 0; j < ncol; ++j) {
+      double value = intensity(i, j);
+      if (R_finite(value)) {
+        finite_max = std::max(finite_max, value);
+        finite_min = std::min(finite_min, value);
+      }
+    }
+  }
+  
+  // Replace Inf and -Inf values with finite max/min
+  for (int i = 0; i < nrow; ++i) {
+    for (int j = 0; j < ncol; ++j) {
+      if (R_IsInf(intensity(i, j)) && intensity(i, j) > 0) {
+        intensity(i, j) = finite_max;
+      } else if (R_IsInf(intensity(i, j)) && intensity(i, j) < 0) {
+        intensity(i, j) = finite_min;
+      }
+    }
+  }
+  
+  // Define the threshold
+  double th = threshold * finite_max / 100.0;
+  Rcpp::Rcout << "Threshold value (normalized): " << th << std::endl;
+  
   // Initialize vectors to store peak information
   std::vector<double> peak_ppm_f1;
   std::vector<double> peak_ppm_f2;
   std::vector<double> peak_intensity;
-
+  
   // Loop through the intensity matrix to identify local maxima
-  int nrow = intensity.nrow();
-  int ncol = intensity.ncol();
-  for (int i = 1; i < nrow - 1; i++) {
-    for (int j = 1; j < ncol - 1; j++) {
+  for (int i = 1; i < nrow - 1; ++i) {
+    for (int j = 1; j < ncol - 1; ++j) {
       double current = intensity(i, j);
-
-      // Check if the current point is above the threshold
+      
+      // Skip if the current value or its neighbors are NA
+      if (NumericMatrix::is_na(current) ||
+          NumericMatrix::is_na(intensity(i - 1, j)) || NumericMatrix::is_na(intensity(i + 1, j)) ||
+          NumericMatrix::is_na(intensity(i, j - 1)) || NumericMatrix::is_na(intensity(i, j + 1))) {
+        continue;
+      }
+      
+      // Check if the current point is a local maximum
       if (current > th &&
           current > intensity(i - 1, j) &&
           current > intensity(i + 1, j) &&
           current > intensity(i, j - 1) &&
           current > intensity(i, j + 1)) {
-        // Record the peak information
+        // Scale back the intensity and record the peak
+        double scaled_intensity = current * (finite_max - finite_min) + finite_min;
         peak_ppm_f1.push_back(ppm_f1[i]);
         peak_ppm_f2.push_back(ppm_f2[j]);
-        peak_intensity.push_back(current);
+        peak_intensity.push_back(scaled_intensity);
       }
     }
   }
-
+  
   // Return the results as a DataFrame
   return DataFrame::create(
     Named("ppm_f1") = peak_ppm_f1,
@@ -92,117 +159,50 @@ DataFrame peak_pick_2d(NumericMatrix intensity, NumericVector ppm_f1, NumericVec
 ')
 
 # Example usage in R
-
-# Create a test intensity matrix
-intensity <- matrix(
-  c(0, 0, 0, 0, 0,
-    0, 3, 6, 3, 0,
-    0, 5, 9, 5, 0,
-    0, 3, 6, 3, 0,
-    0, 0, 0, 0, 0),
-  nrow = 5,
-  byrow = TRUE
+# Assuming bruker_output is the result of read_bruker_file
+bruker_output <- list(
+  rr_data = matrix(runif(10000, -1, 10), nrow = 100, ncol = 100),
+  ppm_y = seq(0, 10, length.out = 100),
+  ppm_x = seq(0, 10, length.out = 100)
 )
 
-# Create ppm vectors
-ppm_f1 <- seq(1, 5)
-ppm_f2 <- seq(1, 5)
+# Perform peak picking
+threshold <- 10
+peaks <- peak_pick_2d(bruker_output, threshold)
 
-# Set threshold percentage
-threshold <- 50
+# Display the peaks
+print(peaks)
 
-# Call the function
-result <- peak_pick_2d(intensity, ppm_f1, ppm_f2, threshold)
-
-# Print the result
-print(result)
 
 
 
 
 ### PeakPick NN ------
+library(Rcpp)
 
+# Embed the function
+tf <- import("tensorflow")
 
-install.packages("keras")
-library(keras)
+# redo2Djg python file
 
-# Install TensorFlow backend if not already installed
-install_keras()
+model <- tf$keras$models$load_model("C:/Users/juguibert/Documents/cnn_peak_detector_rebuilt.h5")
 
+# Create a dummy test spectrum (shape: [1, 64, 64, 1])
+test_spectrum <- array(runif(64 * 64), dim = c(1, 64, 64, 1))
 
-build_cnn <- function(input_shape) {
-  model <- keras_model_sequential() %>%
-    
-    # First Convolutional Layer
-    layer_conv_2d(filters = 40, kernel_size = 11, activation = 'relu', input_shape = input_shape) %>%
-    layer_max_pooling_2d(pool_size = 3) %>%
-    
-    # Second Convolutional Layer
-    layer_conv_2d(filters = 20, kernel_size = 1, activation = 'relu') %>%
-    layer_max_pooling_1d(pool_size = 3) %>%
-    
-    # Third Convolutional Layer
-    layer_conv_2d(filters = 10, kernel_size = 11, activation = 'relu') %>%
-    layer_max_pooling_2d(pool_size = 3) %>%
-    
-    # Fully Connected Layers
-    layer_flatten() %>%
-    layer_dense(units = 18, activation = 'relu') %>%
-    layer_dense(units = 3, activation = 'softmax')  # Output Layer (3 classes)
-  
-  return(model)
-}
+# Run inference
+predictions <- model$predict(test_spectrum)
 
+# Print the predictions
+print(predictions)
 
+# Threshold the predictions
+predictions <- ifelse(predictions > 0.5, 1, 0)
+print(predictions)
 
-# Define dimensions
-batch_size <- 10   # Number of samples in the batch
-height <- 28       # Height of the image
-width <- 28        # Width of the image
-channels <- 1      # Number of channels (e.g., 1 for grayscale, 3 for RGB)
-
-# Create random data for the tensor
-input_tensor <- array(runif(batch_size * height * width * channels), 
-                      dim = c(batch_size, height, width, channels))
-
-model <- build_cnn(input_tensor)
-
-# Compile the model
-model %>% compile(
-  optimizer = 'adam',
-  loss = 'categorical_crossentropy',
-  metrics = c('accuracy')
-)
-
-# Display model summary
-summary(model)
-
-
-# Simulate NMR data
-x_train <- array(runif(10000), dim = c(100, 100, 1))  # 100 samples of 1D spectra, each with 100 points
-y_train <- to_categorical(sample(0:2, 100, replace = TRUE), num_classes = 3)
-
-# Split into training and validation sets
-x_val <- x_train[1:20,,]
-y_val <- y_train[1:20,]
-x_train <- x_train[21:100,,]
-y_train <- y_train[21:100,]
-
-history <- model %>% fit(
-  x = x_train,
-  y = y_train,
-  epochs = 50,  # Number of training epochs
-  batch_size = 32,
-  validation_data = list(x_val, y_val)
-)
-
-# Plot training history
-plot(history)
-
-
-
-
-
+# Get the class with the highest probability
+predicted_classes <- apply(predictions, 1, which.max)
+print(predicted_classes)
 
 
 
