@@ -75,9 +75,6 @@ peak_pick_2d <- function(bruker_output, threshold) {
 # Load the Rcpp package
 library(Rcpp)
 
-# Load the Rcpp package
-library(Rcpp)
-
 # Embed the C++ function directly in R
 cppFunction('
 DataFrame peak_pick_2d(List bruker_output, double threshold) {
