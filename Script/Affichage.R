@@ -150,11 +150,10 @@ image(Mod(ser_data), main = "2D NMR Spectrum", xlab = "F2", ylab = "F1")
 
 
 
-#### Fonction lecture et chargement infos importantes fichier bruker ----
+#### Fonction lecture et chargement infos importantes fichier bruker  ----
 
 
 bruker_folder <- "C:/Users/juguibert/Documents/240202131_project/240202131_ech/240202131_Spectres_foie_2024/Spectres_UF_foie/404"
-
 
 read_bruker_file <- function(bruker_folder) {
   # Helper function to read metadata
@@ -167,8 +166,7 @@ read_bruker_file <- function(bruker_folder) {
       as.numeric(gsub(paste0("##\\$", key, "=\\s*"), "", line))
     }
     list(
-      TD1 = extract_value("TD"),
-      TD2 = extract_value("TD"),
+      TD = extract_value("TD"),
       BYTORDA = extract_value("BYTORDA"),  # 0 = big endian, 1 = little endian
       DTYPA = extract_value("DTYPA"),     # 0 = int32, 1 = float32, 2 = float64
       SW_h = extract_value("SW_h"),
@@ -185,11 +183,6 @@ read_bruker_file <- function(bruker_folder) {
     
     # Determine the number of points
     total_points <- file.info(filename)$size / byte_size
-    print(file.info(filename)$size)
-    print(byte_size)
-    print(total_points)
-    print(TD1)
-    print(TD2)
     if (is.null(TD1) || TD1 == 0) TD1 <- total_points
     if (is.null(TD2) || TD2 == 0) TD2 <- total_points / TD1
     if (total_points != TD1 * TD2) {
@@ -213,20 +206,18 @@ read_bruker_file <- function(bruker_folder) {
     }
   }
   
-  
   # Helper function to read 2rr file
   read_2rr_file <- function(data_file, TD1, TD2, byte_format) {
     total_points <- TD1 * TD2
     con <- file(data_file, "rb")
     on.exit(close(con))
     
-    intensity <- readBin(con, what = "double", size = 4, n = total_points, endian = ifelse(byte_format == 0, "big", "little"))
-    if (length(intensity) != total_points) {
+    intensity <- readBin(con, what = "double", size = 4, n = total_points, endian = "big")
+    if (length(intensity) != total_points && length(intensity) != total_points / 2) {
       stop("The file size does not match the expected dimensions (TD1 * TD2).")
     }
     matrix(intensity, nrow = TD1, ncol = TD2, byrow = TRUE)
   }
-  
   
   # Locate the necessary files
   acqus_file <- file.path(bruker_folder, "acqus")
@@ -247,14 +238,16 @@ read_bruker_file <- function(bruker_folder) {
   
   # Combine metadata
   metadata <- list(
-    TD1 = acqus$TD1,
-    TD2 = acqu2s$TD1,
+    TD1 = acqus$TD,
+    TD2 = acqu2s$TD,
     BYTORDA = acqus$BYTORDA,
     DTYPA = acqus$DTYPA,
-    SW_h = acqus$SW_h,
-    O1 = acqus$O1,
-    SF = procs$SF,
-    OFFSET = procs$OFFSET
+    SW_h_F2 = acqus$SW_h,
+    SW_h_F1 = acqu2s$SW_h,
+    SF_F2 = procs$SF,
+    SF_F1 = proc2s$SF,
+    OFFSET_F2 = procs$OFFSET,
+    OFFSET_F1 = proc2s$OFFSET
   )
   
   # Validate metadata
@@ -262,9 +255,23 @@ read_bruker_file <- function(bruker_folder) {
   if (is.null(metadata$BYTORDA)) stop("BYTORDA not found in metadata.")
   if (is.null(metadata$DTYPA)) stop("DTYPA not found in metadata.")
   
-  # Calculate ppm values
-  ppm_x <- metadata$OFFSET - (0:(metadata$TD2 - 1)) * (metadata$SW_h / metadata$SF / metadata$TD2)
-  ppm_y <- metadata$OFFSET - (0:(metadata$TD1 - 1)) * (metadata$SW_h / metadata$SF / metadata$TD1)
+  # Calculate ppm values with validation
+  if (!is.null(metadata$OFFSET_F2) && !is.null(metadata$SW_h_F2) && !is.null(metadata$SF_F2) && !is.null(metadata$TD2)) {
+    ppm_x <- metadata$OFFSET_F2 - (0:(metadata$TD2 - 1)) * (metadata$SW_h_F2 / metadata$SF_F2 / metadata$TD2)
+  } else {
+    stop("Invalid metadata for direct dimension: OFFSET, SW_h, SF, or TD2 is missing or corrupt.")
+  }
+  
+  if (!is.null(metadata$OFFSET_F1) && !is.null(metadata$SW_h_F1) && !is.null(metadata$SF_F1) && !is.null(metadata$TD1)) {
+    ppm_y <- metadata$OFFSET_F1 - (0:(metadata$TD1 - 1)) * (metadata$SW_h_F1 / metadata$SF_F1 / metadata$TD1)
+  } else {
+    stop("Invalid metadata for indirect dimension: OFFSET, SW_h, SF, or TD1 is missing or corrupt.")
+  }
+  
+  # Validate ppm values
+  if (any(!is.finite(ppm_x)) || any(!is.finite(ppm_y))) {
+    stop("Calculated ppm values contain invalid entries. Check metadata.")
+  }
   
   # Read FID/SER data if available
   binary_data <- if (file.exists(ser_or_fid_file)) {
@@ -300,6 +307,9 @@ read_bruker_file <- function(bruker_folder) {
     rr_data = rr_data
   )
 }
+
+bruker_folder <- "C:/Users/juguibert/Documents/240202131_project/240202131_ech/240202131_Spectres_foie_2024/Spectres_UF_foie/404"
+
 
 bruker_data <- read_bruker_file(bruker_folder)
 
@@ -338,7 +348,7 @@ plot_2D_NMR(ppm_x = Rppm_x, ppm_y = Rppm_y, intensity_matrix = rr_data, threshol
 
 
 
-### Calcul des contours ----
+### Calcul des contours (Not working as intended) ----
 
 library(Rcpp)
 cppFunction(
