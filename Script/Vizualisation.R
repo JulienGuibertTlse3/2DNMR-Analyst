@@ -1,94 +1,103 @@
 ### Vizualisation ----
 
-
 library(ggplot2)
-library(grid)
-library(gridExtra)
+library(reshape2)
 
-plot_2d_nmr <- function(bruker_data, 
-                        w1Range = NULL, 
-                        w2Range = NULL, 
-                        pos.zlim = NULL, 
-                        neg.zlim = NULL, 
-                        levels = 20, 
-                        pos.color = "blue", 
-                        neg.color = "red", 
-                        main_title = "2D NMR Spectrum") {
-  # Extract data
-  ppm_x <- bruker_data$ppm_x
-  ppm_y <- bruker_data$ppm_y
-  intensity_matrix <- bruker_data$rr_data
-  
-  if (is.null(ppm_x) || is.null(ppm_y) || is.null(intensity_matrix)) {
-    stop("Invalid bruker_data: Ensure 'ppm_x', 'ppm_y', and 'rr_data' are not NULL.")
+
+bruker_folder <- "C:/Users/juguibert/Documents/240202131_project/240202131_ech/240202131_Spectres_foie_2024/Spectres_UF_foie/404"
+
+
+bruker_data <- read_bruker_file(bruker_folder)
+
+
+bruker_data$rr_data[!is.finite(bruker_data$rr_data)] <- 0
+
+finite_max = max(bruker_data$rr_data[is.finite(bruker_data$rr_data)], na.rm = TRUE)
+finite_min = min(bruker_data$rr_data[is.finite(bruker_data$rr_data)], na.rm = TRUE)
+
+# Replace Inf with the maximum finite value
+bruker_data$rr_data[bruker_data$rr_data == Inf] <- finite_max
+
+# Replace -Inf with the minimum finite value
+bruker_data$rr_data[bruker_data$rr_data == -Inf] <- finite_min
+
+plot_peaks <- function(bruker_data, intensity_threshold = 0.2) {
+  if (is.null(bruker_data$rr_data) || is.null(bruker_data$ppm_x) || is.null(bruker_data$ppm_y) || is.null(bruker_data$experiment_type)) {
+    stop("Invalid Bruker data. Ensure rr_data, ppm_x, ppm_y, and experiment_type are present.")
   }
   
-  # Handle infinite or NaN values in the intensity matrix
-  intensity_matrix[!is.finite(intensity_matrix)] <- 0
+  # Extract experiment type
+  nuclei <- strsplit(bruker_data$experiment_type, ",\\s*")[[1]]
+  direct_nucleus <- sub("Direct: ", "", nuclei[1])
+  indirect_nucleus <- sub("Indirect: ", "", nuclei[2])
   
-  # Ensure axes are sorted in increasing order for compatibility with image
-  if (any(diff(ppm_x) < 0)) {
-    ppm_x <- rev(ppm_x)
-    intensity_matrix <- intensity_matrix[, ncol(intensity_matrix):1]
-  }
-  if (any(diff(ppm_y) < 0)) {
-    ppm_y <- rev(ppm_y)
-    intensity_matrix <- intensity_matrix[nrow(intensity_matrix):1, ]
-  }
+  # Set PPM ranges based on nuclei type
+  ppm_y_range <- if (direct_nucleus == "<13C>") c(220, 0) else if (direct_nucleus == "<1H>") c(15, 0) else NULL
+  ppm_x_range <- if (indirect_nucleus == "<13C>") c(220, 0) else if (indirect_nucleus == "<1H>") c(15, 0) else NULL
   
-  # Set w1Range and w2Range if not provided
-  if (is.null(w1Range)) {
-    w1Range <- range(ppm_y, na.rm = TRUE)
-  }
-  if (is.null(w2Range)) {
-    w2Range <- range(ppm_x, na.rm = TRUE)
+  if (is.null(ppm_x_range) || is.null(ppm_y_range)) {
+    stop("Unsupported nucleus type in experiment. Expected 1H or 13C.")
   }
   
-  # Set z-limits for positive and negative intensities
-  if (is.null(pos.zlim)) {
-    max_intensity <- max(intensity_matrix, na.rm = TRUE)
-    pos.zlim <- c(max_intensity / levels, max_intensity)
-  }
-  if (is.null(neg.zlim)) {
-    min_intensity <- min(intensity_matrix, na.rm = TRUE)
-    neg.zlim <- c(min_intensity, min_intensity / levels)
-  }
+  # Extract and normalize intensity values
+  intensity_matrix <- as.matrix(bruker_data$rr_data)
+  min_val <- min(intensity_matrix, na.rm = TRUE)
+  max_val <- max(intensity_matrix, na.rm = TRUE)
   
-  # Open a new interactive window
-  if (interactive()) {
-    dev.new(width = 10, height = 8)
+  if (max_val > min_val) {
+    intensity_norm <- (intensity_matrix - min_val) / (max_val - min_val)
+  } else {
+    intensity_norm <- matrix(0, nrow = nrow(intensity_matrix), ncol = ncol(intensity_matrix))
   }
   
-  # Plot the spectrum
-  image(
-    x = ppm_x, y = ppm_y, z = t(intensity_matrix),
-    col = colorRampPalette(c(neg.color, "white", pos.color))(levels),
-    xlab = "F2 (ppm)",
-    ylab = "F1 (ppm)",
-    main = main_title,
-    axes = FALSE
-  )
+  # Apply intensity threshold
+  intensity_norm[intensity_norm < intensity_threshold] <- NA
   
-  # Add axes with reversed labels for NMR convention
-  axis(1, at = pretty(ppm_x), labels = rev(pretty(ppm_x)))
-  axis(2, at = pretty(ppm_y), labels = rev(pretty(ppm_y)))
-  box()
+  # Convert matrix into a data frame for plotting
+  intensity_df <- melt(intensity_norm)
+  colnames(intensity_df) <- c("ppm_y_idx", "ppm_x_idx", "intensity")
   
-  # Add contours for better visualization
-  contour(
-    ppm_x, ppm_y, t(intensity_matrix),
-    levels = seq(pos.zlim[1], pos.zlim[2], length.out = levels),
-    col = pos.color, add = TRUE
-  )
-  contour(
-    ppm_x, ppm_y, t(intensity_matrix),
-    levels = seq(neg.zlim[1], neg.zlim[2], length.out = levels),
-    col = neg.color, add = TRUE
-  )
+  # Map indices to PPM values
+  ppm_x <- bruker_data$ppm_y
+  ppm_y <- bruker_data$ppm_x
+  intensity_df$ppm_x <- ppm_x[intensity_df$ppm_x_idx]
+  intensity_df$ppm_y <- ppm_y[intensity_df$ppm_y_idx]
+  
+  # Remove rows with NA intensities
+  intensity_df <- intensity_df[!is.na(intensity_df$intensity), ]
+  
+  # Restrict data to calculated PPM ranges
+  intensity_df <- intensity_df[
+    intensity_df$ppm_x >= min(ppm_x_range) & intensity_df$ppm_x <= max(ppm_x_range) &
+      intensity_df$ppm_y >= min(ppm_y_range) & intensity_df$ppm_y <= max(ppm_y_range),
+  ]
+  
+  # Debug: Print PPM ranges and data frame
+  cat("PPM X Range:", min(ppm_x_range), "-", max(ppm_x_range), "\n")
+  cat("PPM Y Range:", min(ppm_y_range), "-", max(ppm_y_range), "\n")
+  cat("Number of points to plot:", nrow(intensity_df), "\n")
+  
+  # Create ggplot
+  p <- ggplot(intensity_df, aes(x = ppm_y, y = ppm_x, color = intensity)) +
+    geom_point(size = 1, alpha = 0.8) +
+    scale_x_reverse() +
+    scale_y_reverse() +
+    scale_color_gradient(low = "white", high = "red", name = "Intensity") +
+    labs(
+      x = paste0("F2 (", direct_nucleus, ", ppm)"),
+      y = paste0("F1 (", indirect_nucleus, ", ppm)"),
+      title = paste("NMR Spectrum Peaks (", direct_nucleus, "-", indirect_nucleus, ")")
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 10, face = "bold"),
+      plot.title = element_text(size = 12, face = "bold", hjust = 0.5)
+    )
+  
+  return(p)
 }
 
-
-
-# Example usage
-# bruker_data <- read_bruker_file("path/to/bruker/folder")
-plot_2d_nmr(bruker_data, levels = 20)
+# Plot peaks with an intensity threshold
+p <- plot_peaks(bruker_data, intensity_threshold = 0.5)
+print(p)

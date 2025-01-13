@@ -1,152 +1,152 @@
-#### ACQUS ----
-
-
-read_acqus <- function(filename) {
-  # Read the file line by line
-  lines <- readLines(filename, warn = FALSE)
-  
-  # Patterns to identify different types of entries
-  patterns <- list(
-    ParVecVal = "^##\\$*(.+)= \\(\\d\\.\\.\\d+\\)(.+)",
-    ParVec = "^##\\$*(.+)= \\(\\d\\.\\.\\d+\\)$",
-    ParVal = "^##\\$*(.+)= (.+)",
-    Val = "^([^\\$#].*)",
-    Stamp = "^\\$\\$(.*)",
-    EmptyPar = "^##\\$*(.+)=",
-    Anything = "^(.+)"
-  )
-  
-  # Determine the type of each line
-  row_types <- lapply(lines, function(line) {
-    for (type in names(patterns)) {
-      if (grepl(patterns[[type]], line)) {
-        return(list(type = type, match = regmatches(line, regexec(patterns[[type]], line))[[1]]))
-      }
-    }
-    return(NULL)
-  })
-  
-  # Parse the lines into a list
-  params <- list()
-  last_param <- NULL
-  for (row in row_types) {
-    if (is.null(row)) next
-    type <- row$type
-    match <- row$match[-1]
-    if (type == "ParVal") {
-      last_param <- gsub("[- ]", "", match[1])
-      params[[last_param]] <- match[2]
-    } else if (type %in% c("ParVec", "EmptyPar")) {
-      last_param <- match[1]
-      params[[last_param]] <- NULL
-    } else if (type == "ParVecVal") {
-      last_param <- match[1]
-      params[[last_param]] <- match[2]
-    } else if (type == "Stamp") {
-      if (!is.null(params$Stamp)) {
-        params$Stamp <- paste(params$Stamp, "##", match[1])
-      } else {
-        params$Stamp <- match[1]
-      }
-    } else if (type == "Val" && !is.null(last_param)) {
-      params[[last_param]] <- paste(params[[last_param]], match[1], sep = " ")
-    }
-  }
-  
-  # Convert numeric fields
-  for (name in names(params)) {
-    val <- suppressWarnings(as.numeric(params[[name]]))
-    if (!is.na(val)) {
-      params[[name]] <- val
-    }
-  }
-  
-  return(params)
-}
-
-
-
-##### FID -----
-
-
-read_fid <- function(filename, bruker_byte_format, bruker_byte_size) {
-  # Determine endianness
-  endian <- if (bruker_byte_format == 0) "little" else if (bruker_byte_format == 1) "big" else stop("Unknown data format (BYTORDA)")
-  
-  # Determine data type
-  data_type <- switch(
-    bruker_byte_size,
-    "0" = "integer",
-    "1" = "double",
-    "2" = "double",
-    stop("Unknown data format (DTYPA)")
-  )
-  
-  # Read the binary data
-  con <- file(filename, "rb")
-  raw_data <- readBin(con, what = data_type, size = ifelse(data_type == "integer", 4, 8), endian = endian, n = file.info(filename)$size / (ifelse(data_type == "integer", 4, 8)))
-  close(con)
-  
-  # Combine real and imaginary parts
-  npoints <- length(raw_data) / 2
-  complex_data <- raw_data[seq(1, 2 * npoints, by = 2)] + 1i * raw_data[seq(2, 2 * npoints, by = 2)]
-  
-  return(complex_data)
-}
-
-#### SER -----
-
-read_ser <- function(filename, bruker_byte_format, bruker_byte_size, TD1, TD2) {
-  # Open the binary file
-  con <- file(filename, "rb")
-  on.exit(close(con))
-  
-  # Determine the number of points
-  total_points <- file.info(filename)$size / bruker_byte_size
-  if (total_points != TD1 * TD2) {
-    stop("The file size does not match the expected dimensions (TD1 * TD2).")
-  }
-  
-  # Read binary data
-  raw_data <- readBin(con, what = ifelse(bruker_byte_size == 4, "integer", "double"),
-                      n = total_points, size = bruker_byte_size, endian = ifelse(bruker_byte_format == 0, "big", "little"))
-  
-  # Convert to complex numbers
-  data_real <- raw_data[seq(1, total_points, 2)]
-  data_imag <- raw_data[seq(2, total_points, 2)]
-  complex_data <- complex(real = data_real, imaginary = data_imag)
-  
-  # Reshape into a matrix for 2D NMR
-  matrix_data <- matrix(complex_data, nrow = TD2, ncol = TD1, byrow = TRUE)
-  
-  return(matrix_data)
-}
-
-
-# Read metadata
-acqus <- read_acqus("path/to/acqus")
-acqu2s <- read_acqus("path/to/acqu2s")  # Use the same function as read_acqus
-
-# Parameters for `ser`
-TD <- acqus$TD        # Number of points in the direct dimension
-TD1 <- acqu2s$TD      # Number of points in the indirect dimension
-BYTORDA <- acqus$BYTORDA
-DTYPA <- acqus$DTYPA
-
-# Read the `ser` file
-ser_file <- "path/to/ser"
-ser_data <- read_ser(
-  filename = ser_file,
-  bruker_byte_format = BYTORDA,
-  bruker_byte_size = ifelse(DTYPA == 2, 4, 8),  # 4 bytes for int32, 8 bytes for double
-  TD1 = TD1,
-  TD2 = TD / TD1  # Compute the number of points in the second dimension
-)
-
-# Inspect the data
-print(dim(ser_data))  # Should show (TD2, TD1)
-
-image(Mod(ser_data), main = "2D NMR Spectrum", xlab = "F2", ylab = "F1")
+# #### ACQUS ----
+# 
+# 
+# read_acqus <- function(filename) {
+#   # Read the file line by line
+#   lines <- readLines(filename, warn = FALSE)
+#   
+#   # Patterns to identify different types of entries
+#   patterns <- list(
+#     ParVecVal = "^##\\$*(.+)= \\(\\d\\.\\.\\d+\\)(.+)",
+#     ParVec = "^##\\$*(.+)= \\(\\d\\.\\.\\d+\\)$",
+#     ParVal = "^##\\$*(.+)= (.+)",
+#     Val = "^([^\\$#].*)",
+#     Stamp = "^\\$\\$(.*)",
+#     EmptyPar = "^##\\$*(.+)=",
+#     Anything = "^(.+)"
+#   )
+#   
+#   # Determine the type of each line
+#   row_types <- lapply(lines, function(line) {
+#     for (type in names(patterns)) {
+#       if (grepl(patterns[[type]], line)) {
+#         return(list(type = type, match = regmatches(line, regexec(patterns[[type]], line))[[1]]))
+#       }
+#     }
+#     return(NULL)
+#   })
+#   
+#   # Parse the lines into a list
+#   params <- list()
+#   last_param <- NULL
+#   for (row in row_types) {
+#     if (is.null(row)) next
+#     type <- row$type
+#     match <- row$match[-1]
+#     if (type == "ParVal") {
+#       last_param <- gsub("[- ]", "", match[1])
+#       params[[last_param]] <- match[2]
+#     } else if (type %in% c("ParVec", "EmptyPar")) {
+#       last_param <- match[1]
+#       params[[last_param]] <- NULL
+#     } else if (type == "ParVecVal") {
+#       last_param <- match[1]
+#       params[[last_param]] <- match[2]
+#     } else if (type == "Stamp") {
+#       if (!is.null(params$Stamp)) {
+#         params$Stamp <- paste(params$Stamp, "##", match[1])
+#       } else {
+#         params$Stamp <- match[1]
+#       }
+#     } else if (type == "Val" && !is.null(last_param)) {
+#       params[[last_param]] <- paste(params[[last_param]], match[1], sep = " ")
+#     }
+#   }
+#   
+#   # Convert numeric fields
+#   for (name in names(params)) {
+#     val <- suppressWarnings(as.numeric(params[[name]]))
+#     if (!is.na(val)) {
+#       params[[name]] <- val
+#     }
+#   }
+#   
+#   return(params)
+# }
+# 
+# 
+# 
+# ##### FID -----
+# 
+# 
+# read_fid <- function(filename, bruker_byte_format, bruker_byte_size) {
+#   # Determine endianness
+#   endian <- if (bruker_byte_format == 0) "little" else if (bruker_byte_format == 1) "big" else stop("Unknown data format (BYTORDA)")
+#   
+#   # Determine data type
+#   data_type <- switch(
+#     bruker_byte_size,
+#     "0" = "integer",
+#     "1" = "double",
+#     "2" = "double",
+#     stop("Unknown data format (DTYPA)")
+#   )
+#   
+#   # Read the binary data
+#   con <- file(filename, "rb")
+#   raw_data <- readBin(con, what = data_type, size = ifelse(data_type == "integer", 4, 8), endian = endian, n = file.info(filename)$size / (ifelse(data_type == "integer", 4, 8)))
+#   close(con)
+#   
+#   # Combine real and imaginary parts
+#   npoints <- length(raw_data) / 2
+#   complex_data <- raw_data[seq(1, 2 * npoints, by = 2)] + 1i * raw_data[seq(2, 2 * npoints, by = 2)]
+#   
+#   return(complex_data)
+# }
+# 
+# #### SER -----
+# 
+# read_ser <- function(filename, bruker_byte_format, bruker_byte_size, TD1, TD2) {
+#   # Open the binary file
+#   con <- file(filename, "rb")
+#   on.exit(close(con))
+#   
+#   # Determine the number of points
+#   total_points <- file.info(filename)$size / bruker_byte_size
+#   if (total_points != TD1 * TD2) {
+#     stop("The file size does not match the expected dimensions (TD1 * TD2).")
+#   }
+#   
+#   # Read binary data
+#   raw_data <- readBin(con, what = ifelse(bruker_byte_size == 4, "integer", "double"),
+#                       n = total_points, size = bruker_byte_size, endian = ifelse(bruker_byte_format == 0, "big", "little"))
+#   
+#   # Convert to complex numbers
+#   data_real <- raw_data[seq(1, total_points, 2)]
+#   data_imag <- raw_data[seq(2, total_points, 2)]
+#   complex_data <- complex(real = data_real, imaginary = data_imag)
+#   
+#   # Reshape into a matrix for 2D NMR
+#   matrix_data <- matrix(complex_data, nrow = TD2, ncol = TD1, byrow = TRUE)
+#   
+#   return(matrix_data)
+# }
+# 
+# 
+# # Read metadata
+# acqus <- read_acqus("path/to/acqus")
+# acqu2s <- read_acqus("path/to/acqu2s")  # Use the same function as read_acqus
+# 
+# # Parameters for `ser`
+# TD <- acqus$TD        # Number of points in the direct dimension
+# TD1 <- acqu2s$TD      # Number of points in the indirect dimension
+# BYTORDA <- acqus$BYTORDA
+# DTYPA <- acqus$DTYPA
+# 
+# # Read the `ser` file
+# ser_file <- "path/to/ser"
+# ser_data <- read_ser(
+#   filename = ser_file,
+#   bruker_byte_format = BYTORDA,
+#   bruker_byte_size = ifelse(DTYPA == 2, 4, 8),  # 4 bytes for int32, 8 bytes for double
+#   TD1 = TD1,
+#   TD2 = TD / TD1  # Compute the number of points in the second dimension
+# )
+# 
+# # Inspect the data
+# print(dim(ser_data))  # Should show (TD2, TD1)
+# 
+# image(Mod(ser_data), main = "2D NMR Spectrum", xlab = "F2", ylab = "F1")
 
 
 
@@ -158,23 +158,25 @@ bruker_folder <- "C:/Users/juguibert/Documents/240202131_project/240202131_ech/2
 read_bruker_file <- function(bruker_folder) {
   # Helper function to read metadata
   read_metadata <- function(metadata_file) {
-    if (!file.exists(metadata_file)) stop(paste("Metadata file not found:", metadata_file))
-    metadata <- readLines(metadata_file, warn = FALSE)
-    extract_value <- function(key) {
-      line <- grep(paste0("##\\$", key, "="), metadata, value = TRUE)
-      if (length(line) == 0) return(NULL)
-      as.numeric(gsub(paste0("##\\$", key, "=\\s*"), "", line))
-    }
-    list(
-      TD = extract_value("TD"),
-      BYTORDA = extract_value("BYTORDA"),  # 0 = big endian, 1 = little endian
-      DTYPA = extract_value("DTYPA"),     # 0 = int32, 1 = float32, 2 = float64
-      SW_h = extract_value("SW_h"),
-      O1 = extract_value("O1"),
-      SF = extract_value("SF"),
-      OFFSET = extract_value("OFFSET")
-    )
+  if (!file.exists(metadata_file)) stop(paste("Metadata file not found:", metadata_file))
+  metadata <- readLines(metadata_file, warn = FALSE)
+  extract_value <- function(key) {
+    line <- grep(paste0("##\\$", key, "="), metadata, value = TRUE)
+    if (length(line) == 0) return(NULL)
+    gsub(paste0("##\\$", key, "=\\s*"), "", line)
   }
+  list(
+    TD = as.numeric(extract_value("TD")),
+    BYTORDA = as.numeric(extract_value("BYTORDA")),  # 0 = big endian, 1 = little endian
+    DTYPA = as.numeric(extract_value("DTYPA")),     # 0 = int32, 1 = float32, 2 = float64
+    SW_h = as.numeric(extract_value("SW_h")),
+    O1 = as.numeric(extract_value("O1")),
+    SF = as.numeric(extract_value("SF")),
+    OFFSET = as.numeric(extract_value("OFFSET")),
+    NUC1 = extract_value("NUC1"),                  # Observed nucleus for direct dimension
+    NUC2 = extract_value("NUC2")                   # Observed nucleus for indirect dimension
+  )
+}
   
   # Helper function to read binary data (fid/ser)
   read_binary_data <- function(filename, byte_format, byte_size, TD1, TD2) {
@@ -230,7 +232,6 @@ read_bruker_file <- function(bruker_folder) {
   }
   rr_file <- file.path(bruker_folder, "pdata/1/2rr")
   
-  # Read metadata
   acqus <- read_metadata(acqus_file)
   acqu2s <- if (file.exists(acqu2s_file)) read_metadata(acqu2s_file) else list()
   procs <- if (file.exists(procs_file)) read_metadata(procs_file) else list()
@@ -247,13 +248,19 @@ read_bruker_file <- function(bruker_folder) {
     SF_F2 = procs$SF,
     SF_F1 = proc2s$SF,
     OFFSET_F2 = procs$OFFSET,
-    OFFSET_F1 = proc2s$OFFSET
+    OFFSET_F1 = proc2s$OFFSET,
+    NUC1 = acqus$NUC1,
+    NUC2 = acqus$NUC2
   )
   
   # Validate metadata
   if (is.null(metadata$TD1) || is.null(metadata$TD2)) stop("TD1 or TD2 not found in metadata.")
   if (is.null(metadata$BYTORDA)) stop("BYTORDA not found in metadata.")
   if (is.null(metadata$DTYPA)) stop("DTYPA not found in metadata.")
+  
+  # Determine experiment type
+  experiment_type <- paste0("Direct: ", metadata$NUC1, ", Indirect: ", metadata$NUC2)
+  cat("Experiment type: ", experiment_type, "\n")
   
   # Calculate ppm values with validation
   if (!is.null(metadata$OFFSET_F2) && !is.null(metadata$SW_h_F2) && !is.null(metadata$SF_F2) && !is.null(metadata$TD2)) {
@@ -298,13 +305,14 @@ read_bruker_file <- function(bruker_folder) {
     NULL
   }
   
-  # Return data
+  # Return data with experiment type
   list(
     metadata = metadata,
     ppm_x = ppm_x,
     ppm_y = ppm_y,
     binary_data = binary_data,
-    rr_data = rr_data
+    rr_data = rr_data,
+    experiment_type = experiment_type
   )
 }
 

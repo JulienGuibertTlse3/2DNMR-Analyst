@@ -167,7 +167,7 @@ bruker_output <- list(
 )
 
 # Perform peak picking
-threshold <- 10
+threshold <- 90
 peaks <- peak_pick_2d(bruker_data, threshold)
 
 peaks_C <- peak_pick_2d_C(bruker_data, threshold)
@@ -177,39 +177,41 @@ print(peaks)
 
 print(peaks_C)
 
-library(R.matlab)
 
-# Save bruker_output as .mat
-writeMat("bruker_output.mat", rr_data = bruker_data$rr_data, 
-         ppm_y = bruker_data$ppm_y, ppm_x = bruker_data$ppm_x)
-
-
-
-
-### PeakPick NN ------
-library(Rcpp)
-
-# Embed the function
-tf <- import("tensorflow")
-
-# redo2Djg python file
-
-model <- tf$keras$models$load_model("C:/Users/juguibert/Documents/cnn_peak_detector_rebuilt.h5")
-
-# Create a dummy test spectrum (shape: [1, 64, 64, 1])
-test_spectrum <- array(runif(64 * 64), dim = c(1, 64, 64, 1))
-
-# Run inference
-predictions <- model$predict(test_spectrum)
-
-# Print the predictions
-print(predictions)
-
-# Threshold the predictions
-predictions <- ifelse(predictions > 0.5, 1, 0)
-print(predictions)
-
-# Get the class with the highest probability
-predicted_classes <- apply(predictions, 1, which.max)
-print(predicted_classes)
-
+# 
+# library(R.matlab)
+# 
+# # Save bruker_output as .mat
+# writeMat("bruker_output.mat", rr_data = bruker_data$rr_data, 
+#          ppm_y = bruker_data$ppm_y, ppm_x = bruker_data$ppm_x)
+# 
+# 
+# 
+# 
+# ### PeakPick NN ------
+# library(Rcpp)
+# 
+# # Embed the function
+# tf <- import("tensorflow")
+# 
+# # redo2Djg python file
+# 
+# model <- tf$keras$models$load_model("C:/Users/juguibert/Documents/cnn_peak_detector_rebuilt.h5")
+# 
+# # Create a dummy test spectrum (shape: [1, 64, 64, 1])
+# test_spectrum <- array(runif(64 * 64), dim = c(1, 64, 64, 1))
+# 
+# # Run inference
+# predictions <- model$predict(test_spectrum)
+# 
+# # Print the predictions
+# print(predictions)
+# 
+# # Threshold the predictions
+# predictions <- ifelse(predictions > 0.5, 1, 0)
+# print(predictions)
+# 
+# # Get the class with the highest probability
+# predicted_classes <- apply(predictions, 1, which.max)
+# print(predicted_classes)
+# 
