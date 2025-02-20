@@ -63,86 +63,208 @@ peak_pick_2d_nt <- function(bruker_data, threshold = 5, threshold_type = "percen
   return(peak_list)
 }
 
-#### Test ----
+#### Main function for now ----
 
-library(signal)  # Load for optional smoothing
+library(dplyr)
+library(zoo)
+library(matrixStats)
+library(minpack.lm)  # For Gaussian fitting
 
-enhanced_peak_picking <- function(bruker_data, threshold = 5, threshold_type = "percentage", consider_negative = FALSE, smoothing = TRUE) {
+peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, threshold_type = "percentage", neighborhood_size = 5, prominence_factor = 0.05) {
+  # Ensure input is a matrix or dataframe with row and column names
   if (is.null(rownames(bruker_data)) || is.null(colnames(bruker_data))) {
     stop("The input object must have row names (F2 ppm) and column names (F1 ppm).")
   }
   
-  ppm_x <- as.numeric(rownames(bruker_data))
-  ppm_y <- as.numeric(colnames(bruker_data))
+  # Convert row and column names to numeric ppm scales
+  ppm_x <- as.numeric(rownames(bruker_data))  # F2 ppm
+  ppm_y <- as.numeric(colnames(bruker_data))  # F1 ppm
   
-  # Apply Smoothing to Reduce Noise
-  if (smoothing) {
-    kernel <- matrix(1/9, 3, 3)  # Define a 3x3 smoothing kernel
-    bruker_data <- convolve(bruker_data, kernel, type = "filter")  # Apply convolution
-  }
-  
-  # Threshold Computation
+  # Determine threshold based on user selection
   if (threshold_type == "percentage") {
     max_intensity <- max(bruker_data, na.rm = TRUE)
-    threshold_value <- (threshold / 100) * max_intensity
+    threshold_value <- (threshold / 100) * max_intensity  # Threshold as percentage of max intensity
   } else if (threshold_type == "noise") {
-    noise_level <- sd(bruker_data[bruker_data < quantile(bruker_data, 0.1, na.rm = TRUE)], na.rm = TRUE)
-    threshold_value <- threshold * noise_level
+    noise_region <- bruker_data[bruker_data < quantile(bruker_data, 0.1, na.rm = TRUE)]
+    median_noise <- median(noise_region, na.rm = TRUE)
+    mad_noise <- mad(noise_region, na.rm = TRUE)  # Median Absolute Deviation
+    threshold_value <- median_noise + threshold * mad_noise  # Adaptive MAD-based threshold
   } else {
     stop("Invalid threshold_type. Choose 'percentage' or 'noise'.")
   }
   
-  significant_points <- which(abs(bruker_data) >= threshold_value, arr.ind = TRUE)
-  
-  if (nrow(significant_points) == 0) {
+  # Find significant points above the threshold
+  mask <- bruker_data >= threshold_value
+  if (!any(mask)) {
     return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
   }
   
-  # Local maxima detection using an adaptive approach
+  # Extract significant points indices
+  significant_points <- which(mask, arr.ind = TRUE)
+  peak_values <- bruker_data[mask]
+  
+  # Vectorized local maxima detection (neighborhood_size x neighborhood_size window)
   is_peak <- apply(significant_points, 1, function(idx) {
     x <- idx[1]
     y <- idx[2]
     
-    # Expand neighborhood to 3x3
-    x_range <- max(1, x - 1):min(nrow(bruker_data), x + 1)
-    y_range <- max(1, y - 1):min(ncol(bruker_data), y + 1)
+    x_range <- max(1, x - floor(neighborhood_size / 2)):min(nrow(bruker_data), x + floor(neighborhood_size / 2))
+    y_range <- max(1, y - floor(neighborhood_size / 2)):min(ncol(bruker_data), y + floor(neighborhood_size / 2))
     
-    neighbors <- as.vector(bruker_data[x_range, y_range])
-    central_val <- bruker_data[x, y]
+    neighbors <- bruker_data[x_range, y_range]
+    median_neighbors <- median(neighbors, na.rm = TRUE)
+    mad_neighbors <- mad(neighbors, na.rm = TRUE)
     
-    if (consider_negative) {
-      abs_val <- abs(central_val)
-      is_max <- all(abs_val > abs(neighbors), na.rm = TRUE)
-    } else {
-      is_max <- all(central_val > neighbors, na.rm = TRUE)
-    }
+    # Adaptive prominence threshold based on local median + MAD
+    prominence_threshold <- prominence_factor * (median_neighbors + mad_neighbors)
     
-    prominence <- central_val - mean(neighbors, na.rm = TRUE)  # Ensure peak prominence
+    is_local_max <- bruker_data[x, y] == max(neighbors, na.rm = TRUE)
+    prominence <- bruker_data[x, y] - median_neighbors  # Peak prominence
     
-    is_max && abs(central_val) > threshold_value && prominence > (0.1 * threshold_value)
+    is_local_max && prominence > prominence_threshold
   })
   
+  # Extract peak positions
   peaks <- significant_points[is_peak, , drop = FALSE]
   
   if (nrow(peaks) == 0) {
     return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
   }
   
+  # Compile results into a dataframe
   peak_list <- data.frame(
-    F2_ppm = ppm_x[peaks[, 1]],
-    F1_ppm = ppm_y[peaks[, 2]],
+    F2_ppm = ppm_x[peaks[, 1]],  # Convert row indices to ppm values
+    F1_ppm = ppm_y[peaks[, 2]],  # Convert column indices to ppm values
     Intensity = bruker_data[peaks]
   )
+  
+  # Sort peaks by intensity (descending order)
+  peak_list <- peak_list[order(-peak_list$Intensity), ]
   
   return(peak_list)
 }
 
+
 # Run the peak picking on the spectrumData
-result <- enhanced_peak_picking(bruker_data$spectrumData, threshold = 0.68)
+result <- peak_pick_2d_nt2(bruker_data$spectrumData, threshold = 0.7, threshold_type = "percentage")
+
 # Check the results
 result$p1  # x (direct) positions of peaks
 result$p2  # y (indirect) positions of peaks
 result$intensities  # Intensities of the detected peaks
+
+
+
+#### Db scan Test ----
+
+library(dbscan)  # Load clustering library
+library(matrixStats)  # Fast matrix computations
+library(EBImage)  # For fast 2D filtering
+
+
+peak_pick_2d_nt3 <- function(bruker_data, threshold = 5, threshold_type = "percentage", neighborhood_size = 5, prominence_factor = 0.05, dbscan_eps = NULL, dbscan_minPts = NULL, adaptive_eps_factor = 0.05) {
+  # Ensure input is a matrix or dataframe with row and column names
+  if (is.null(rownames(bruker_data)) || is.null(colnames(bruker_data))) {
+    stop("The input object must have row names (F2 ppm) and column names (F1 ppm).")
+  }
+  
+  # Convert row and column names to numeric ppm scales
+  ppm_x <- as.numeric(rownames(bruker_data))  # F2 ppm
+  ppm_y <- as.numeric(colnames(bruker_data))  # F1 ppm
+  
+  # Determine threshold based on user selection
+  if (threshold_type == "percentage") {
+    max_intensity <- max(bruker_data, na.rm = TRUE)
+    threshold_value <- (threshold / 100) * max_intensity  # Threshold as percentage of max intensity
+  } else if (threshold_type == "noise") {
+    noise_region <- bruker_data[bruker_data < quantile(bruker_data, 0.1, na.rm = TRUE)]
+    median_noise <- median(noise_region, na.rm = TRUE)
+    mad_noise <- mad(noise_region, na.rm = TRUE)  # Median Absolute Deviation
+    threshold_value <- median_noise + threshold * mad_noise  # Adaptive MAD-based threshold
+  } else {
+    stop("Invalid threshold_type. Choose 'percentage' or 'noise'.")
+  }
+  
+  # Find significant points above the threshold
+  mask <- bruker_data >= threshold_value
+  if (!any(mask)) {
+    return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
+  }
+  
+  # Extract significant points indices
+  significant_points <- which(mask, arr.ind = TRUE)
+  peak_values <- bruker_data[mask]
+  
+  # Vectorized local maxima detection (neighborhood_size x neighborhood_size window)
+  is_peak <- apply(significant_points, 1, function(idx) {
+    x <- idx[1]
+    y <- idx[2]
+    
+    x_range <- max(1, x - floor(neighborhood_size / 2)):min(nrow(bruker_data), x + floor(neighborhood_size / 2))
+    y_range <- max(1, y - floor(neighborhood_size / 2)):min(ncol(bruker_data), y + floor(neighborhood_size / 2))
+    
+    neighbors <- bruker_data[x_range, y_range]
+    median_neighbors <- median(neighbors, na.rm = TRUE)
+    mad_neighbors <- mad(neighbors, na.rm = TRUE)
+    
+    # Adaptive prominence threshold based on local median + MAD
+    prominence_threshold <- prominence_factor * (median_neighbors + mad_neighbors)
+    
+    is_local_max <- bruker_data[x, y] == max(neighbors, na.rm = TRUE)
+    prominence <- bruker_data[x, y] - median_neighbors  # Peak prominence
+    
+    is_local_max && prominence > prominence_threshold
+  })
+  
+  # Extract peak positions
+  peaks <- significant_points[is_peak, , drop = FALSE]
+  
+  if (nrow(peaks) == 0) {
+    return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
+  }
+  
+  # Compile results into a dataframe
+  peak_list <- data.frame(
+    F2_ppm = ppm_x[peaks[, 1]],  # Convert row indices to ppm values
+    F1_ppm = ppm_y[peaks[, 2]],  # Convert column indices to ppm values
+    Intensity = bruker_data[peaks]
+  )
+  
+  # Adaptive DBSCAN parameter selection
+  if (is.null(dbscan_eps)) {
+    ppm_range <- max(peak_list$F2_ppm) - min(peak_list$F2_ppm)
+    dbscan_eps <- adaptive_eps_factor * ppm_range  # Adjust eps dynamically
+  }
+  
+  if (is.null(dbscan_minPts)) {
+    dbscan_minPts <- max(2, round(0.01 * nrow(peak_list)))  # At least 1% of detected peaks per cluster
+  }
+  
+  # Apply DBSCAN Clustering to Filter Isolated Noise Peaks
+  db_result <- dbscan(peak_list[, c("F2_ppm", "F1_ppm")], eps = dbscan_eps, minPts = dbscan_minPts)
+  
+  # Keep only clustered peaks
+  clustered_peaks <- peak_list[db_result$cluster > 0, ]
+  cat("Initial peaks detected:", nrow(peak_list), "| Peaks after DBSCAN filtering:", nrow(clustered_peaks), "\n")
+  
+  # Sort peaks by intensity (descending order)
+  clustered_peaks <- clustered_peaks[order(-clustered_peaks$Intensity), ]
+  
+  return(clustered_peaks)
+}
+
+result <- peak_pick_2d_nt3 (bruker_data$spectrumData, threshold = 0.5, threshold_type = "percentage")
+
+#### Function to visualize detected peaks ----
+
+plot_peak_tt <- function(bruker_data, peak_list) {
+  ggplot() +
+    geom_tile(data = as.data.frame(as.table(bruker_data)), aes(x = as.numeric(Var1), y = as.numeric(Var2), fill = Freq)) +
+    scale_fill_gradient(low = "white", high = "blue") +
+    geom_point(data = peak_list, aes(x = F2_ppm, y = F1_ppm), color = "red", size = 2) +
+    labs(title = "2D NMR Spectrum with Detected Peaks", x = "F2 ppm", y = "F1 ppm") +
+    theme_minimal()
+}
 
 
 #### C++ Peak pick -----
