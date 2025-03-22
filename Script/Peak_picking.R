@@ -304,17 +304,17 @@ library(data.table)  # Optimized dataframe handling
 library(ggplot2)
 library(plotly)
 
-peak_pick_2d_hybrid <- function(bruker_data, threshold = 6.75, threshold_type = "percentage", neighborhood_size = 11, prominence_factor = 0.05, hdbscan_minPts = 3, adaptive_peak_threshold = 0.000001, initial_threshold_factor = 1, plot_results = TRUE) {
-  # Ensure input has valid row and column names
+peak_pick_2d_hybrid <- function(bruker_data, threshold = 6.75, threshold_type = "percentage", neighborhood_size = 11, 
+                                prominence_factor = 0.05, hdbscan_minPts = 3, adaptive_peak_threshold = 0.000001, 
+                                initial_threshold_factor = 1, plot_results = TRUE) {
+  
   if (is.null(rownames(bruker_data)) || is.null(colnames(bruker_data))) {
     stop("The input object must have row names (F2 ppm) and column names (F1 ppm).")
   }
   
-  # Convert row and column names to numeric ppm scales
-  ppm_x <- as.numeric(rownames(bruker_data))  # F2 ppm
-  ppm_y <- as.numeric(colnames(bruker_data))  # F1 ppm
+  ppm_x <- as.numeric(rownames(bruker_data))  
+  ppm_y <- as.numeric(colnames(bruker_data))  
   
-  # Determine lower initial threshold
   initial_threshold_value <- if (threshold_type == "percentage") {
     max(bruker_data, na.rm = TRUE) * (initial_threshold_factor * threshold / 100)
   } else if (threshold_type == "noise") {
@@ -324,42 +324,60 @@ peak_pick_2d_hybrid <- function(bruker_data, threshold = 6.75, threshold_type = 
     stop("Invalid threshold_type. Choose 'percentage' or 'noise'.")
   }
   
-  # Extract potential peaks using lower threshold
   significant_points <- which(bruker_data >= initial_threshold_value, arr.ind = TRUE)
   if (nrow(significant_points) == 0) {
     return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
   }
   
-  # Convert significant points to data.table for memory efficiency
   candidate_peaks <- data.table(
     F2_ppm = ppm_x[significant_points[, 1]],
     F1_ppm = ppm_y[significant_points[, 2]],
     Intensity = bruker_data[significant_points]
   )
   
-  # Apply HDBSCAN clustering
   hdbscan_result <- hdbscan(candidate_peaks[, .(F2_ppm, F1_ppm)], minPts = hdbscan_minPts)
   candidate_peaks[, cluster := hdbscan_result$cluster]
-  
-  # Keep clustered peaks
   clustered_candidates <- candidate_peaks[cluster > 0]
   
-  # Process multiplets: Group clustered peaks into single multiplet peaks
   multiplet_peaks <- clustered_candidates[, .(
     F2_min = min(F2_ppm),
     F2_max = max(F2_ppm),
     F1_min = min(F1_ppm),
     F1_max = max(F1_ppm),
-    Center_F2 = mean(c(min(F2_ppm), max(F2_ppm))),
-    Center_F1 = mean(c(min(F1_ppm), max(F1_ppm))),
-    Intensity = sum(Intensity)
+    Center_F2 = (min(F2_ppm) + max(F2_ppm)) / 2,
+    Center_F1 = (min(F1_ppm) + max(F1_ppm)) / 2,
+    Intensity = sum(Intensity),
+    Size = .N,
+    Peaks = list(.SD[, .(F2_ppm, F1_ppm)])
   ), by = cluster]
   
-  # Ensure multiplets do not share peaks
-  multiplet_peaks[, `:=`(unique_id = .I)]
-  unique_multiplets <- multiplet_peaks[!duplicated(F2_min) & !duplicated(F2_max) & !duplicated(F1_min) & !duplicated(F1_max)]
+  # Sort by intensity (strongest multiplet first)
+  multiplet_peaks <- multiplet_peaks[order(-Intensity, -Size)]
   
-  # Extract isolated peaks (singlets)
+  # Initialize final_multiplets with correct column structure
+  final_multiplets <- data.table(
+    F2_min = numeric(), F2_max = numeric(), F1_min = numeric(), F1_max = numeric(),
+    Center_F2 = numeric(), Center_F1 = numeric(), Intensity = numeric(), Size = numeric(), Peaks = list()
+  )
+  
+  for (i in 1:nrow(multiplet_peaks)) {
+    current <- multiplet_peaks[i]
+    
+    # Check for overlap only if final_multiplets is not empty
+    if (nrow(final_multiplets) > 0) {
+      overlap_check <- final_multiplets[
+        (current$Center_F2 >= F2_min & current$Center_F2 <= F2_max &
+           current$Center_F1 >= F1_min & current$Center_F1 <= F1_max)]
+    } else {
+      overlap_check <- data.table()
+    }
+    
+    if (nrow(overlap_check) == 0) {
+      # No overlap → Keep this multiplet
+      final_multiplets <- rbind(final_multiplets, current, fill = TRUE)
+    }
+  }
+  
   isolated_peaks <- candidate_peaks[cluster == 0, .(
     Center_F2 = F2_ppm,
     Center_F1 = F1_ppm,
@@ -370,35 +388,31 @@ peak_pick_2d_hybrid <- function(bruker_data, threshold = 6.75, threshold_type = 
     F1_max = F1_ppm
   )]
   
-  # Combine multiplets and singlets
-  final_peaks <- rbind(unique_multiplets, isolated_peaks, fill = TRUE)
-  
-  # Sort by intensity
+  final_peaks <- rbind(final_multiplets[, .(Center_F2, Center_F1, Intensity, F2_min, F2_max, F1_min, F1_max)], isolated_peaks, fill = TRUE)
   setorder(final_peaks, -Intensity)
   
-  cat("Initial candidates detected:", nrow(candidate_peaks), "| Multiplets after clustering:", nrow(unique_multiplets), "| Singlets detected:", nrow(isolated_peaks), "\n")
+  cat("Initial candidates detected:", nrow(candidate_peaks), "| Multiplets after clustering:", nrow(final_multiplets), "| Singlets detected:", nrow(isolated_peaks), "\n")
   
-  # Plot results if requested
   if (plot_results) {
     static_plot <- ggplot() +
       geom_point(data = candidate_peaks, aes(x = F2_ppm, y = F1_ppm), color = "grey", alpha = 0.5, size = 0.7) +
-      geom_rect(data = unique_multiplets, mapping = aes(xmin = F2_min - 0.02, xmax = F2_max + 0.02, ymin = F1_min - 0.02, ymax = F1_max + 0.02),
-                color = "black", fill = NA, linetype = "dashed", inherit.aes = FALSE) +
+      geom_rect(data = final_multiplets, mapping = aes(xmin = F2_min - 0.001, xmax = F2_max + 0.001, ymin = F1_min - 0.001, ymax = F1_max + 0.001),
+                color = "black", fill = NA, linetype = "solid", inherit.aes = FALSE) +
       scale_x_reverse() +
       scale_y_reverse() +
       theme_minimal() +
       theme(legend.position = "none") +
       labs(title = "Selected Multiplets and Peaks", x = "F2 ppm", y = "F1 ppm")
     
-    interactive_plot <- ggplotly(static_plot)  # Convert to interactive plot
-    print(interactive_plot)  # Display interactive plot
+    interactive_plot <- ggplotly(static_plot)
+    print(interactive_plot)
   }
   
-  return(final_peaks[, .(Center_F2, Center_F1, Intensity, F2_min, F2_max, F1_min, F1_max)])
+  return(final_peaks)
 }
 
 
-result_db <- peak_pick_2d_hybrid(bruker_data$spectrumData, threshold = 2, threshold_type = "percentage", neighborhood_size = 11, prominence_factor = 0.05, hdbscan_minPts = 3, adaptive_peak_threshold = 0.000001, initial_threshold_factor = 1, plot_results = TRUE)
+result_db <- peak_pick_2d_hybrid(bruker_data$spectrumData, threshold = 2, threshold_type = "percentage", neighborhood_size = 11, prominence_factor = 0.04, hdbscan_minPts = 3, adaptive_peak_threshold = 0.000001, initial_threshold_factor = 1, plot_results = TRUE)
 
 #### Function to visualize detected peaks ----
 
@@ -506,29 +520,132 @@ print(result)
 # 
 # 
 # 
-# ### PeakPick NN ------
-library(Rcpp)
 
-# Embed the function
-tf <- import("tensorflow")
+# ### PeakPick Centroid ------
 
-# redo2Djg python file
+peak_pick_from_centroids <- function(centroid_df, threshold = 5, threshold_type = "percentage", neighborhood_size = 1,
+                                     prominence_factor = 0, adaptive_peak_threshold = 0) {
+  if (nrow(centroid_df) == 0) {
+    warning("No centroids found for peak picking.")
+    return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
+  }
+  
+  # Ensure numeric data types
+  centroid_df <- centroid_df %>%
+    mutate(F2_ppm = as.numeric(F2_ppm),
+           F1_ppm = as.numeric(F1_ppm),
+           stain_intensity = as.numeric(stain_intensity))
+  
+  # Extract intensity values
+  intensities <- centroid_df$stain_intensity
+  
+  # Determine threshold
+  if (threshold_type == "percentage") {
+    max_intensity <- max(intensities, na.rm = TRUE)
+    threshold_value <- (threshold / 100) * max_intensity
+  } else if (threshold_type == "absolute") {
+    threshold_value <- threshold
+  } else {
+    stop("Invalid threshold_type. Choose 'percentage' or 'absolute'.")
+  }
+  
+  print(paste("Threshold Value:", threshold_value))
+  
+  # Filter centroids
+  filtered_centroids <- centroid_df %>%
+    filter(stain_intensity >= threshold_value)
+  
+  print(paste("Filtered Centroids:", nrow(filtered_centroids)))
+  
+  if (nrow(filtered_centroids) == 0) {
+    return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
+  }
+  
+  # Local maxima detection
+  is_peak <- apply(filtered_centroids, 1, function(row) {
+    f2 <- as.numeric(row["F2_ppm"])
+    f1 <- as.numeric(row["F1_ppm"])
+    intensity <- as.numeric(row["stain_intensity"])
+    
+    neighborhood <- filtered_centroids %>%
+      filter(abs(F2_ppm - f2) <= neighborhood_size & abs(F1_ppm - f1) <= neighborhood_size)
+    
+    print(paste("Neighborhood size for", f2, f1, ":", nrow(neighborhood)))
+    
+    median_neighbors <- median(neighborhood$stain_intensity, na.rm = TRUE)
+    mad_neighbors <- mad(neighborhood$stain_intensity, na.rm = TRUE)
+    
+    prominence_threshold <- prominence_factor * (median_neighbors + mad_neighbors)
+    
+    sorted_neighbors <- sort(neighborhood$stain_intensity, decreasing = TRUE, na.last = NA)
+    top_index <- ceiling(adaptive_peak_threshold * length(sorted_neighbors))
+    top_threshold <- ifelse(top_index > 0, sorted_neighbors[top_index], sorted_neighbors[1])
+    
+    is_local_max <- intensity >= top_threshold
+    prominence <- intensity - median_neighbors
+    
+    is_local_max && prominence > prominence_threshold
+  })
+  
+  print(paste("Number of detected peaks:", sum(is_peak)))
+  
+  print(head(is_peak))
+  
+  peak_list <- filtered_centroids[is_peak, , drop = FALSE] %>%
+    arrange(desc(stain_intensity)) %>%
+    select(F2_ppm, F1_ppm, stain_intensity) %>%
+    rename(Intensity = stain_intensity)
+  
+  return(peak_list)
+}
 
-model <- tf$keras$models$load_model("C:/Users/juguibert/Documents/cnn_peak_detector_rebuilt.h5")
 
-# Create a dummy test spectrum (shape: [1, 64, 64, 1])
-test_spectrum <- array(runif(64 * 64), dim = c(1, 64, 64, 1))
+simple_peak_pick <- function(centroid_df, threshold = 5, neighborhood_size = 1) {
+  if (nrow(centroid_df) == 0) {
+    warning("No centroids found for peak picking.")
+    return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
+  }
+  
+  # Convert data to numeric
+  centroid_df <- centroid_df %>%
+    mutate(F2_ppm = as.numeric(F2_ppm),
+           F1_ppm = as.numeric(F1_ppm),
+           stain_intensity = as.numeric(stain_intensity))
+  
+  # Apply threshold filtering
+  max_intensity <- max(centroid_df$stain_intensity, na.rm = TRUE)
+  threshold_value <- (threshold / 100) * max_intensity
+  filtered_centroids <- centroid_df %>%
+    filter(stain_intensity >= threshold_value)
+  
+  print(paste("Filtered Centroids:", nrow(filtered_centroids)))
+  
+  if (nrow(filtered_centroids) == 0) {
+    return(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), Intensity = numeric(0)))
+  }
+  
+  # Find local maxima
+  is_peak <- apply(filtered_centroids, 1, function(row) {
+    f2 <- as.numeric(row["F2_ppm"])
+    f1 <- as.numeric(row["F1_ppm"])
+    intensity <- as.numeric(row["stain_intensity"])
+    
+    # Find neighbors within the neighborhood
+    neighbors <- filtered_centroids %>%
+      filter(abs(F2_ppm - f2) <= neighborhood_size & abs(F1_ppm - f1) <= neighborhood_size)
+    
+    # Check if current point is the highest
+    return(intensity >= max(neighbors$stain_intensity, na.rm = TRUE))
+  })
+  
+  # Extract detected peaks
+  peak_list <- filtered_centroids[is_peak, , drop = FALSE] %>%
+    arrange(desc(stain_intensity)) %>%
+    select(F2_ppm, F1_ppm, stain_intensity) %>%
+    rename(Intensity = stain_intensity)
+  
+  print(paste("Number of detected peaks:", nrow(peak_list)))
+  
+  return(peak_list)
+}
 
-# Run inference
-predictions <- model$predict(test_spectrum)
-
-# Print the predictions
-print(predictions)
-
-# Threshold the predictions
-predictions <- ifelse(predictions > 0.5, 1, 0)
-print(predictions)
-
-# Get the class with the highest probability
-predicted_classes <- apply(predictions, 1, which.max)
-print(predicted_classes)
