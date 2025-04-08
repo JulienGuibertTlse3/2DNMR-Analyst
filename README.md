@@ -11,7 +11,7 @@ Tool to analyze 2DNMR spectra including peak picking and peak integration.
 
 ![image](https://github.com/user-attachments/assets/ba881101-ccda-41c0-b9a2-52ec6ce48397)
 
-This repository holds the different function which will be used in the 2DNMR-Analyst tool. This tool will be used to handle the automatic processing of 2D NMR spectra.
+This repository holds the different functions which will be used in the 2DNMR-Analyst tool. This tool will be used to handle the automatic processing of 2D NMR spectra.
 
 ## Explanation
 
