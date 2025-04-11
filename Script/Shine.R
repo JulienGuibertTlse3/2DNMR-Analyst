@@ -10,6 +10,8 @@ library(dplyr)
 source("C://Users//juguibert//Documents//Function_test//Read_2DNMR_spectrum.R")
 source("C://Users//juguibert//Documents//Function_test//Vizualisation.R")
 
+# Interface ----
+
 ui <- fluidPage(
   # Custom CSS to allow full-screen resizing of the plot and README iframe
   tags$head(
@@ -54,6 +56,8 @@ ui <- fluidPage(
       }
     "))
   ),
+  
+  ## DashBoard ----
   
   dashboardPage(
     dashboardHeader(title = "NMR 2D Spectra Analysis"),
@@ -138,7 +142,12 @@ ui <- fluidPage(
   )
 )
 
+
+# Functions ----
+
 server <- function(input, output, session) {
+  
+  ## Description ----
   
   # Render the tool description directly
   output$toolDescription <- renderUI({
@@ -166,6 +175,23 @@ server <- function(input, output, session) {
     # Return the HTML description
     tags$div(HTML(description_text))
   })
+  
+  
+  ## Reactive Values ----
+  
+  bruker_data <- reactiveVal(NULL)
+  result_data <- reactiveVal(NULL)
+  centroids_data <- reactiveVal(NULL)
+  bounding_boxes_data <- reactiveVal(NULL)
+  contour_plot_base <- reactiveVal(NULL)
+  nmr_plot <- reactiveVal(NULL)
+  status_msg <- reactiveVal("")
+  bounding_boxes_data <- reactiveVal(data.frame(xmin = numeric(0), xmax = numeric(0), ymin = numeric(0), ymax = numeric(0)))
+  
+  output$matrix_dim <- renderPrint({ req(bruker_data()); dim(bruker_data()$spectrumData) })
+  output$status_message <- renderText({ status_msg() })
+  
+  ## File Loading ----
   
   roots <- c(Home = normalizePath("~"), Root = "/")
   shinyDirChoose(input, "directory", roots = roots, session = session)
@@ -197,13 +223,32 @@ server <- function(input, output, session) {
     div(id = "subfolder-path", textOutput("selected_subfolder"))
   })
   
-  bruker_data <- reactiveVal(NULL)
-  result_data <- reactiveVal(NULL)
-  centroids_data <- reactiveVal(NULL)
-  bounding_boxes_data <- reactiveVal(NULL)
-  contour_plot_base <- reactiveVal(NULL)
-  nmr_plot <- reactiveVal(NULL)
-  status_msg <- reactiveVal("")
+  observeEvent(input$load_data, {
+    req(input$selected_subfolder)
+    data_path <- file.path(input$selected_subfolder, "pdata", "1")
+    status_msg("🔄 Chargement des données...")
+    
+    if (!dir.exists(data_path)) {
+      showNotification(paste("Data path does not exist:", data_path), type = "error")
+      status_msg("❌ Échec du chargement")
+      return(NULL)
+    }
+    
+    data <- tryCatch(read_bruker(data_path, dim = "2D"), error = function(e) {
+      showNotification(paste("Erreur chargement:", e$message), type = "error")
+      status_msg("❌ Échec du chargement")
+      return(NULL)
+    })
+    
+    if (!is.null(data)) {
+      bruker_data(data)
+      showNotification("✅ Données chargées", type = "message")
+      status_msg("✅ Données chargées")
+    }
+  })
+  
+  
+  ## Refresh plot when modification are made ----
   
   refresh_nmr_plot <- function() {
     req(contour_plot_base())
@@ -229,32 +274,7 @@ server <- function(input, output, session) {
     nmr_plot(plot)
   }
   
-  output$matrix_dim <- renderPrint({ req(bruker_data()); dim(bruker_data()$spectrumData) })
-  output$status_message <- renderText({ status_msg() })
-  
-  observeEvent(input$load_data, {
-    req(input$selected_subfolder)
-    data_path <- file.path(input$selected_subfolder, "pdata", "1")
-    status_msg("🔄 Chargement des données...")
-    
-    if (!dir.exists(data_path)) {
-      showNotification(paste("Data path does not exist:", data_path), type = "error")
-      status_msg("❌ Échec du chargement")
-      return(NULL)
-    }
-    
-    data <- tryCatch(read_bruker(data_path, dim = "2D"), error = function(e) {
-      showNotification(paste("Erreur chargement:", e$message), type = "error")
-      status_msg("❌ Échec du chargement")
-      return(NULL)
-    })
-    
-    if (!is.null(data)) {
-      bruker_data(data)
-      showNotification("✅ Données chargées", type = "message")
-      status_msg("✅ Données chargées")
-    }
-  })
+  ## Generate Plot ----
   
   observeEvent(input$generate_plot, {
     req(bruker_data())
@@ -288,6 +308,9 @@ server <- function(input, output, session) {
     shinyjs::hide("loading_message")
   })
   
+  
+  ## Generate Centroids ----
+  
   observeEvent(input$generate_centroids, {
     req(bruker_data())
     result <- result_data()
@@ -320,10 +343,7 @@ server <- function(input, output, session) {
     shinyjs::hide("loading_message")
   })
   
-  observeEvent(input$toggle_centroid_section, {
-    toggle(id = "centroid_section")  # Toggle visibility for adding centroid
-    toggle(id = "delete_centroid_section")  # Toggle visibility for deleting centroid
-  })
+  ## Manually Add Centroids ----
   
   observeEvent(input$add_manual_centroid, {
     req(input$manual_f2, input$manual_f1)
@@ -367,16 +387,7 @@ server <- function(input, output, session) {
     showNotification(paste("Centroïde ajouté :", new_point$stain_id, "- Intensité =", round(estimated_intensity)), type = "message")
   })
   
-  # Dans le server
-  output$centroid_table <- renderDT({
-    centroids_filtered <- centroids_data()[, 1:3]  # Afficher seulement les 3 premières colonnes
-    datatable(centroids_filtered, selection = "single", options = list(pageLength = 5))
-  })
-  
-  output$full_centroid_table <- renderDT({
-    # Afficher toutes les colonnes
-    datatable(centroids_data(), selection = "single", options = list(pageLength = 5))
-  })
+  ## Manually Delete centroids ----
   
   observeEvent(input$delete_centroid, {
     selected <- input$centroid_table_rows_selected
@@ -390,10 +401,27 @@ server <- function(input, output, session) {
     }
   })
   
+  ## Dataframes ----
+  
+  # Dans le server
+  output$centroid_table <- renderDT({
+    centroids_filtered <- centroids_data()[, 1:3]  # Afficher seulement les 3 premières colonnes
+    datatable(centroids_filtered, selection = "single", options = list(pageLength = 5))
+  })
+  
+  output$full_centroid_table <- renderDT({
+    # Afficher toutes les colonnes
+    datatable(centroids_data(), selection = "single", options = list(pageLength = 5))
+  })
+  
+  ## Interactive Plot ----
+  
   output$interactivePlot <- renderPlotly({
     req(nmr_plot())
     ggplotly(nmr_plot(), source = "nmr_plot")
   })
+  
+  ## Export Centroids ----
   
   observeEvent(input$export_centroids, {
     shinyjs::show("loading_message")  # Show loading message during export
@@ -417,6 +445,9 @@ server <- function(input, output, session) {
     
     shinyjs::hide("loading_message")  # Hide loading message after export
   })
+  
+  
+  ## Import centroid list ----
   
   observeEvent(input$import_centroids, {
     req(input$import_centroids)
