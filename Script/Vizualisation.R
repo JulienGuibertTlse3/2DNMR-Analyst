@@ -458,26 +458,26 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
   
   # ---------------------------------------------------------------------
 
-    if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
-      first_range <- TRUE
-      for (range in keep_peak_ranges) {
-        if (length(range) == 2) {
-          centroids_in_range <- centroids %>%
-            filter(F2_ppm >= range[2] & F2_ppm <= range[1])
-
-          num_peaks_to_keep <- if (first_range) 2 else 2
-          first_range <- FALSE
-
-          top_peaks_in_range <- centroids_in_range %>%
-            arrange(desc(stain_intensity)) %>%
-            slice_head(n = num_peaks_to_keep)
-
-          centroids <- centroids %>%
-            filter(!(F2_ppm >= range[2] & F2_ppm <= range[1])) %>%
-            bind_rows(top_peaks_in_range)
-        }
+  if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
+    first_range <- TRUE
+    for (range in keep_peak_ranges) {
+      if (length(range) == 2) {
+        centroids_in_range <- centroids %>%
+          filter(F2_ppm >= range[2] & F2_ppm <= range[1])
+        
+        num_peaks_to_keep <- if (first_range) 2 else 2
+        first_range <- FALSE
+        
+        top_peaks_in_range <- centroids_in_range %>%
+          arrange(desc(stain_intensity)) %>%
+          slice_head(n = num_peaks_to_keep)
+        
+        centroids <- centroids %>%
+          filter(!(F2_ppm >= range[2] & F2_ppm <= range[1])) %>%
+          bind_rows(top_peaks_in_range)
       }
     }
+  }
   
   # Return the processed centroids and bounding boxes
   return(list(
