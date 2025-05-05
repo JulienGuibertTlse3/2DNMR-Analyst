@@ -130,6 +130,8 @@ ui <- fluidPage(
                                     # Valeur modifiable par l'utilisateur
                                     numericInput("contour_start", "Valeur de départ des contours :", value = NULL, min = 0, step = 100),
                                     numericInput("intensity_threshold", "Valeur d'intensité :", value = 50000, min = 0, step = 100),
+                                    numericInput("eps_value", "Valeur pour clustering :", value = 0.01, min = 0, step = 0.001),
+                                    
                                     
                                     actionButton("generate_plot", "📊 Generate Plot"),
                                     actionButton("generate_centroids", "Generate Centroids / Bounding Boxes"),
@@ -282,9 +284,9 @@ server <- function(input, output, session) {
   bounding_boxes_data <- reactiveVal(data.frame(xmin = numeric(0), xmax = numeric(0), ymin = numeric(0), ymax = numeric(0)))
   spectrum_params <- reactive({
     switch(input$spectrum_type,
-           "TOCSY" = list(intensity_threshold = 50000, contour_num = 110, contour_factor = 1.3),
-           "HSQC"  = list(intensity_threshold = 30000,  contour_num = 80,  contour_factor = 1.3),
-           "COSY"  = list(intensity_threshold = 50000,  contour_num = 60,  contour_factor = 1.3)
+           "TOCSY" = list(intensity_threshold = 50000, contour_num = 110, contour_factor = 1.3, eps_value = 0.0068),
+           "HSQC"  = list(intensity_threshold = 30000,  contour_num = 80,  contour_factor = 1.3, eps_value = 0.0068),
+           "COSY"  = list(intensity_threshold = 50000,  contour_num = 110,  contour_factor = 1.3, eps_value = 0.01)
     )
   })
   output$matrix_dim <- renderPrint({ req(bruker_data()); dim(bruker_data()$spectrumData) })
@@ -298,13 +300,25 @@ server <- function(input, output, session) {
   
   `%||%` <- function(a, b) if (!is.null(a)) a else b
   
-  spectra_list <- reactive({
-    req(input$bruker_files)
-    files <- input$bruker_files
-    paths <- unique(dirname(files$datapath))
-    names(paths) <- basename(paths)
+  spectra_list <- reactiveVal(list())
+  
+  observeEvent(subfolders(), {
+    all_spectra <- lapply(subfolders(), function(p) {
+      tryCatch({
+        data_path <- file.path(p, "pdata", "1")
+        read_bruker(data_path, dim = "2D")
+      }, error = function(e) {
+        NULL
+      })
+    })
+    names(all_spectra) <- basename(subfolders())
+    spectra_list(all_spectra)
     
-    lapply(paths, function(p) bruker_read(p, type = "2D"))
+    # Mise à jour du choix dans le menu déroulant
+    updateSelectInput(session, "selected_spectrum", choices = names(all_spectra), selected = names(all_spectra)[1])
+    
+    # Affiche immédiatement le premier spectre
+    bruker_data(all_spectra[[1]])
   })
   
   
@@ -329,6 +343,19 @@ server <- function(input, output, session) {
         (file.exists(file.path(folder, "ser")) || file.exists(file.path(folder, "fid")))
     })]
   })
+  
+  observeEvent(input$selected_spectrum, {
+    req(spectra_list())
+    selected <- input$selected_spectrum
+    if (!is.null(selected) && selected %in% names(spectra_list())) {
+      bruker_data(spectra_list()[[selected]])
+      result_data(NULL)
+      nmr_plot(NULL)
+      contour_plot_base(NULL)
+      status_msg("Spectre changé, veuillez recalculer le plot.")
+    }
+  })
+  
   
   output$subfolder_selector <- renderUI({
     req(subfolders())
@@ -487,6 +514,7 @@ server <- function(input, output, session) {
         intensity_threshold = input$intensity_threshold,
         contour_num = params$contour_num,
         contour_factor = params$contour_factor,
+        eps_value = input$eps_value,
         keep_peak_ranges = list(c(0.5, -0.5), c(1, 0.8), c(1.55,1.45))
       )
     }, error = function(e) {
@@ -518,7 +546,7 @@ server <- function(input, output, session) {
     
     # === Estimate intensity from contour_data
     contour_data <- result_data()$contour_data
-    eps <- 0.02  # or any value you used for clustering
+    eps <- 0.04  # or any value you used for clustering
     
     local_points <- contour_data %>%
       dplyr::filter(
