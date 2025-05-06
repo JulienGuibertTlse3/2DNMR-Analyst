@@ -31,14 +31,33 @@ test_Tocsy_cpl <- "C:/Users/juguibert/Documents/240202131_project/240202131_ech/
 
 test_TOCSY_20 <- "C:/Users/juguibert/Documents/Spectres_TOCSY_melange/MTH_melange_20mM/5/pdata/1"
 
-bruker_data <- read_bruker(test_COSY, dim = "2D")
+bruker_data <- read_bruker(test_TOCSY, dim = "2D")
 
 peak_results <- peak_pick_2d_nt2(bruker_data$spectrumData, threshold = 1500, threshold_type = "noise")
 
 peak_results2 <- peak_pick_2d_nt_optimized(bruker_data$spectrumData, threshold = 200, threshold_type = "noise")
 
 
+find_nmr_peak_centroids(
+  bruker_data$spectrumData,
+  spectrum_type = "TOCSY",
+  intensity_threshold = 3000,
+  contour_start = 100000,
+  contour_num = 70,
+  contour_factor = 1.3,
+  f2_exclude_range = c(4.7, 5.0)
+)
+
+
 df <- peak_results
+
+as.data.frame(data$spectrumData) -> datae
+
+# Get the 90th percentile (i.e., bottom value of the top 10%)
+intensity_threshold <- quantile(datae, 0.9995, na.rm = TRUE)
+
+# Result: this is the minimal intensity among the top 10% values
+intensity_threshold
 
 # filtered_df <- df[df$F2_ppm <= 7.8 & df$F2_ppm >= 0 & df$F1_ppm <= 7.8 & df$F1_ppm >= 0 , ]
 

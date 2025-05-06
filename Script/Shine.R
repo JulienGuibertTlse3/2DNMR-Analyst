@@ -120,6 +120,9 @@ ui <- fluidPage(
                                     actionButton("load_data", "📂 Load Data"),
                                     withSpinner(verbatimTextOutput("matrix_dim"), type = 4, color = "#007bff"),
                                     
+                                    actionButton("reset_all", "🔁 Réinitialiser l'interface", icon = icon("redo")),
+                                    
+                                    
                                     selectInput("spectrum_type", "Type de spectre :",
                                                 choices = c("TOCSY", "HSQC", "COSY"),
                                                 selected = "TOCSY"),
@@ -179,7 +182,13 @@ ui <- fluidPage(
                                     fileInput("import_centroids_file", "Importer un fichier CSV :", accept = ".csv"),
                                     downloadButton("export_boxes", "Exporter les boîtes englobantes")
                                     
-                           )
+                           ),
+                           
+                           tabPanel("Batch processing",
+                                    shinyDirButton("save_directory", "Choose output folder", "Please select a folder"),
+                                    verbatimTextOutput("save_dir_display"),
+                                    actionButton("run_batch", "Calculer intensités (batch)")
+                                    )
                          )
                   ),
                   
@@ -276,17 +285,18 @@ server <- function(input, output, session) {
   calculated_contour_value <- reactiveVal(NULL)
   result_data <- reactiveVal(NULL)
   centroids_data <- reactiveVal(NULL)
-  bounding_boxes_data <- reactiveVal(NULL)
+  fixed_boxes <- reactiveVal(data.frame(xmin = numeric(), xmax = numeric(),
+                                        ymin = numeric(), ymax = numeric()))  
   contour_plot_base <- reactiveVal(NULL)
   nmr_plot <- reactiveVal(NULL)
   status_msg <- reactiveVal("")
   centroids <- reactiveVal(NULL)
-  bounding_boxes_data <- reactiveVal(data.frame(xmin = numeric(0), xmax = numeric(0), ymin = numeric(0), ymax = numeric(0)))
+  # bounding_boxes_data <- reactiveVal(data.frame(xmin = numeric(0), xmax = numeric(0), ymin = numeric(0), ymax = numeric(0)))
   spectrum_params <- reactive({
     switch(input$spectrum_type,
-           "TOCSY" = list(intensity_threshold = 50000, contour_num = 110, contour_factor = 1.3, eps_value = 0.0068),
-           "HSQC"  = list(intensity_threshold = 30000,  contour_num = 80,  contour_factor = 1.3, eps_value = 0.0068),
-           "COSY"  = list(intensity_threshold = 50000,  contour_num = 110,  contour_factor = 1.3, eps_value = 0.01)
+           "TOCSY" = list(intensity_threshold = 50000, contour_num = 30, contour_factor = 1.3, eps_value = 0.0068),
+           "HSQC"  = list(intensity_threshold = 30000,  contour_num = 40,  contour_factor = 1.3, eps_value = 0.0068),
+           "COSY"  = list(intensity_threshold = 50000,  contour_num = 60,  contour_factor = 1.3, eps_value = 0.01)
     )
   })
   output$matrix_dim <- renderPrint({ req(bruker_data()); dim(bruker_data()$spectrumData) })
@@ -322,6 +332,58 @@ server <- function(input, output, session) {
   })
   
   
+  bounding_boxes_data <- reactive({
+    req(fixed_boxes(), bruker_data())
+    
+    # Récupérer la matrice de données
+    mat <- bruker_data()$spectrumData
+    if (is.null(mat)) {
+      warning("La matrice du spectre est NULL")
+      return(NULL)
+    }
+    
+    ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
+    ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
+    
+    # Vérifier les ppm
+    if (any(is.na(ppm_x)) || any(is.na(ppm_y))) {
+      warning("ppm_x ou ppm_y contient des NA (conversion ratée ?)")
+      return(NULL)
+    }
+    
+    boxes <- fixed_boxes()
+    if (nrow(boxes) == 0) {
+      return(boxes)
+    }
+    
+    # Ajouter l'intensité
+    boxes$stain_intensity <- NA_real_
+    for (i in seq_len(nrow(boxes))) {
+      xmin <- as.numeric(boxes$xmin[i])
+      xmax <- as.numeric(boxes$xmax[i])
+      ymin <- as.numeric(boxes$ymin[i])
+      ymax <- as.numeric(boxes$ymax[i])
+      
+      x_idx <- which(ppm_x >= xmin & ppm_x <= xmax)
+      y_idx <- which(ppm_y >= ymin & ppm_y <= ymax)
+      
+      if (length(x_idx) > 0 && length(y_idx) > 0) {
+        boxes$stain_intensity[i] <- sum(mat[y_idx, x_idx], na.rm = TRUE)
+      }
+    }
+    
+    boxes
+  })
+  
+  reference_boxes <- reactiveVal()
+  reference_centroids <- reactiveVal()
+  
+  results_dir <- reactive({
+    dir.create(file.path(main_directory(), "results_batch"), showWarnings = FALSE)
+    file.path(main_directory(), "results_batch")
+  })
+  
+  
   ## File Loading ----
   
   roots <- c(Home = normalizePath("~"), Root = "/")
@@ -350,7 +412,6 @@ server <- function(input, output, session) {
     if (!is.null(selected) && selected %in% names(spectra_list())) {
       bruker_data(spectra_list()[[selected]])
       result_data(NULL)
-      nmr_plot(NULL)
       contour_plot_base(NULL)
       status_msg("Spectre changé, veuillez recalculer le plot.")
     }
@@ -369,6 +430,10 @@ server <- function(input, output, session) {
   
   observeEvent(input$load_data, {
     req(input$selected_subfolder)
+    
+    status_msg("🔄 Réinitialisation et chargement des données...")
+    
+    
     data_path <- file.path(input$selected_subfolder, "pdata", "1")
     status_msg("🔄 Chargement des données...")
     
@@ -525,7 +590,11 @@ server <- function(input, output, session) {
     
     if (!is.null(result1)) {
       centroids_data(result1$centroids)
-      bounding_boxes_data(result1$bounding_boxes)
+      
+      # ⚠️ Ne stocke que les coordonnées (pas les intensités)
+      box_coords_only <- result1$bounding_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
+      fixed_boxes(box_coords_only)
+      
       refresh_nmr_plot()
       showNotification("✅ Centroïdes et BBs calculés", type = "message")
       status_msg("✅ Analyse terminée")
@@ -632,7 +701,7 @@ server <- function(input, output, session) {
       showNotification("Veuillez sélectionner une boîte englobante à supprimer", type = "warning")
     }
   })
-  
+
   
   ## Dataframes ----
   
@@ -654,16 +723,21 @@ server <- function(input, output, session) {
   ## Interactive Plot ----
   
   output$interactivePlot <- renderPlotly({
-    req(nmr_plot())
-    ggplotly(nmr_plot(), source = "nmr_plot")
+    plot_obj <- nmr_plot()
+    if (is.null(plot_obj)) {
+      # Affiche un message vide ou un plot vide
+      ggplotly(ggplot() + theme_void() + ggtitle("Aucun spectre affiché"))
+    } else {
+      ggplotly(plot_obj, source = "nmr_plot")
+    }
   })
   
   
   observeEvent(input$spectrum_type, {
     params <- switch(input$spectrum_type,
-                     "TOCSY" = list(intensity_threshold = 30000, contour_start = 100000, contour_num = 110, contour_factor = 1.3),
-                     "HSQC"  = list(intensity_threshold = 5000,  contour_start = 20000,  contour_num = 80,  contour_factor = 1.1),
-                     "COSY"  = list(intensity_threshold = 10000, contour_start = 50000,  contour_num = 90,  contour_factor = 1.2)
+                     "TOCSY" = list(intensity_threshold = 30000, contour_start = 100000, contour_num = 30, contour_factor = 1.3),
+                     "HSQC"  = list(intensity_threshold = 5000,  contour_start = 20000,  contour_num = 30,  contour_factor = 1.3),
+                     "COSY"  = list(intensity_threshold = 10000, contour_start = 50000,  contour_num = 30,  contour_factor = 1.3)
     )
     
     updateNumericInput(session, "contour_start", value = params$contour_start)
@@ -768,6 +842,99 @@ server <- function(input, output, session) {
       write.csv(centroids(), file, row.names = FALSE)
     }
   )
+  
+  ## Batch ( Pas du tout fini ) ----
+
+  observeEvent(input$run_batch, {
+    req(save_directory())
+    
+    if (is.null(bounding_boxes_data()  ) || is.null(centroids_data()) || is.null(spectra_list())) {
+      showNotification("❌ Données manquantes pour le traitement batch.", type = "error")
+      return(NULL)
+    }    
+    
+    box_ref <- bounding_boxes_data()  
+    print("box_ref:")
+    print(box_ref)
+    centroids_ref <- centroids_data()
+
+    spectra <- spectra_list()
+    n <- length(spectra)
+    
+    if (n == 0) {
+      showNotification("❌ Aucun spectre chargé.", type = "error")
+      return(NULL)
+    }
+    
+    dir.create("results_batch", showWarnings = FALSE)
+    
+    withProgress(message = "Traitement batch en cours...", value = 0, {
+      lapply(seq_along(spectra), function(i) {
+        incProgress(1 / n, detail = paste("Spectre", names(spectra)[i]))
+        spectre_name <- names(spectra)[i]
+        data <- spectra[[i]]
+        mat <- data$spectrumData
+        ppm_x <- as.numeric(colnames(mat))
+        # print("ppm_x :")
+        # print(ppm_x)
+        ppm_y <- as.numeric(rownames(mat))
+        # print("ppm_y :")
+        # print(ppm_y)
+        
+        boxes <- box_ref
+        boxes$stain_intensity <- apply(boxes, 1, function(box) {
+          x_idx <- which(ppm_y <= box["xmax"] & ppm_y >= box["xmin"])
+          print("ppm_x_idx :")
+          print(x_idx)
+          y_idx <- which(ppm_x <= box["ymax"] & ppm_x >= box["ymin"])
+          # print("ppm_y_idx :")
+          # print(y_idx)
+          sum(mat[x_idx, y_idx], na.rm = TRUE)
+        })
+        
+        # Ajouter un identifiant de boîte si nécessaire
+        if (is.null(boxes$box_id)) {
+          boxes$box_id <- paste0("box", seq_len(nrow(boxes)))
+        }
+        
+        # Réorganiser les colonnes pour le CSV
+        result_data <- boxes[, c("box_id", "xmin", "xmax", "ymin", "ymax", "stain_intensity")]
+        
+        
+        write.csv(result_data, file.path(save_directory(), paste0(basename(spectre_name), "_results.csv")), row.names = FALSE)
+        
+      })
+    })
+    
+    showNotification("✅ Traitement batch terminé. Résultats sauvegardés dans le dossier 'results_batch/'.", type = "message")
+  })
+  
+  
+  # Allow user to select output directory
+  save_roots <- c(Home = normalizePath("~"), Root = "/")
+  shinyDirChoose(input, "save_directory", roots = save_roots, session = session)
+  
+  save_directory <- reactive({
+    req(input$save_directory)
+    parseDirPath(save_roots, input$save_directory)
+  })
+  
+  output$save_dir_display <- renderPrint({
+    save_directory()
+  })
+  
+  
+  ## Reset all ----
+  
+  observeEvent(input$reset_all, {
+    nmr_plot(NULL)
+    contour_plot_base(NULL)
+    imported_centroids(NULL)
+    centroids_data(NULL)
+    fixed_boxes(NULL)
+    status_msg("🔁 Interface réinitialisée.")
+  })
+  
   
   
 }
