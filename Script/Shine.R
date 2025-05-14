@@ -10,6 +10,7 @@ library(dplyr)
 
 source("C://Users//juguibert//Documents//Function_test//Read_2DNMR_spectrum.R")
 source("C://Users//juguibert//Documents//Function_test//Vizualisation.R")
+source("C://Users//juguibert//Documents//Function_test//Integration.R")
 
 # Interface ----
 
@@ -116,7 +117,6 @@ ui <- fluidPage(
                                     shinyDirButton("directory", "Select Main Directory", "Select Directory"),
                                     verbatimTextOutput("selected_dir"),
                                     uiOutput("subfolder_selector"),
-                                    selectInput("selected_spectrum", "Spectre à afficher", choices = NULL),
                                     actionButton("load_data", "📂 Load Data"),
                                     withSpinner(verbatimTextOutput("matrix_dim"), type = 4, color = "#007bff"),
                                     
@@ -138,7 +138,10 @@ ui <- fluidPage(
                                     
                                     actionButton("generate_plot", "📊 Generate Plot"),
                                     actionButton("generate_centroids", "Generate Centroids / Bounding Boxes"),
-                                    textOutput("status_message")
+                                    textOutput("status_message"),
+                                    actionButton("export_projected_centroids", "📤 Export intensity across all spectra")
+                                    
+
                            ),
                            
                            tabPanel("🔵 Centroïdes",
@@ -279,6 +282,10 @@ server <- function(input, output, session) {
   
   ## Reactive Values ----
   
+  
+  result_data_list <- reactiveVal(list())
+  reference_boxes <- reactiveVal()
+  plot_list <- reactiveVal(list())
   bruker_data <- reactiveVal(NULL)
   imported_centroids <- reactiveVal(NULL)
   data_cc <- reactiveVal(NULL)
@@ -296,7 +303,7 @@ server <- function(input, output, session) {
     switch(input$spectrum_type,
            "TOCSY" = list(intensity_threshold = 50000, contour_num = 30, contour_factor = 1.3, eps_value = 0.0068),
            "HSQC"  = list(intensity_threshold = 30000,  contour_num = 40,  contour_factor = 1.3, eps_value = 0.0068),
-           "COSY"  = list(intensity_threshold = 50000,  contour_num = 60,  contour_factor = 1.3, eps_value = 0.01)
+           "COSY"  = list(intensity_threshold = 50000,  contour_num = 80,  contour_factor = 1.3, eps_value = 0.014)
     )
   })
   output$matrix_dim <- renderPrint({ req(bruker_data()); dim(bruker_data()$spectrumData) })
@@ -383,9 +390,8 @@ server <- function(input, output, session) {
     file.path(main_directory(), "results_batch")
   })
   
-  
   ## File Loading ----
-  
+  # Initialisation
   roots <- c(Home = normalizePath("~"), Root = "/")
   shinyDirChoose(input, "directory", roots = roots, session = session)
   
@@ -397,91 +403,111 @@ server <- function(input, output, session) {
   
   output$selected_dir <- renderPrint({ main_directory() })
   
+  # Détection des sous-dossiers valides
   subfolders <- reactive({
     req(main_directory())
     all_subfolders <- list.dirs(main_directory(), recursive = TRUE, full.names = TRUE)
-    all_subfolders[sapply(all_subfolders, function(folder) {
+    valid_subfolders <- all_subfolders[sapply(all_subfolders, function(folder) {
       file.exists(file.path(folder, "acqus")) &&
         (file.exists(file.path(folder, "ser")) || file.exists(file.path(folder, "fid")))
     })]
+    valid_subfolders
   })
   
-  observeEvent(input$selected_spectrum, {
-    req(spectra_list())
-    selected <- input$selected_spectrum
-    if (!is.null(selected) && selected %in% names(spectra_list())) {
-      bruker_data(spectra_list()[[selected]])
-      result_data(NULL)
-      contour_plot_base(NULL)
-      status_msg("Spectre changé, veuillez recalculer le plot.")
+  # Conteneurs réactifs
+  spectra_list <- reactiveVal(list())       # Contient les données Bruker
+  spectra_plots <- reactiveVal(list())      # Contient les plots générés automatiquement
+  
+  # Chargement automatique + génération des plots
+  observeEvent(subfolders(), {
+    folders <- subfolders()
+    if (length(folders) == 0) return(NULL)
+    
+    status_msg("🔄 Chargement et génération des spectres...")
+    
+    all_data <- list()
+    all_plots <- list()
+    
+    for (sub in folders) {
+      data_path <- file.path(sub, "pdata", "1")
+      if (!dir.exists(data_path)) next
+      
+      data <- tryCatch({
+        read_bruker(data_path, dim = "2D")
+      }, error = function(e) {
+        showNotification(paste("Erreur lecture Bruker dans", sub), type = "error")
+        return(NULL)
+      })
+      
+      if (!is.null(data)) {
+        all_data[[sub]] <- data
+      }
+    }
+    
+    spectra_list(all_data)
+
+    
+    # Sélection du 1er spectre automatiquement
+    updateSelectInput(session, "selected_subfolder", choices = setNames(names(all_data), basename(names(all_data))))
+    if (length(all_data) > 0) {
+      bruker_data(all_data[[1]])
+      status_msg("✅ Spectres chargés et plots générés")
     }
   })
-  
-  
+
+  # UI pour sélectionner le spectre
   output$subfolder_selector <- renderUI({
-    req(subfolders())
-    selectInput("selected_subfolder", "Select a Bruker Subfolder:", choices = subfolders())
+    req(spectra_list())
+    # Utilisation de basename pour afficher seulement les noms des dossiers
+    # Vérification si les noms sont bien un vecteur de caractères
+    subfolder_names <- names(spectra_list())
+    subfolder_names <- if (is.character(subfolder_names)) subfolder_names else as.character(subfolder_names)
+    selectInput("selected_subfolder", "Spectre à afficher :", choices = setNames(subfolder_names, basename(subfolder_names)))
   })
   
-  output$subfolder_path <- renderUI({
-    req(input$selected_subfolder)
-    div(id = "subfolder-path", textOutput("selected_subfolder"))
-  })
   
-  observeEvent(input$load_data, {
-    req(input$selected_subfolder)
+  observeEvent(input$selected_subfolder, {
+    req(spectra_list(), spectra_plots())
+    selected <- input$selected_subfolder
     
-    status_msg("🔄 Réinitialisation et chargement des données...")
-    
-    
-    data_path <- file.path(input$selected_subfolder, "pdata", "1")
-    status_msg("🔄 Chargement des données...")
-    
-    if (!dir.exists(data_path)) {
-      showNotification(paste("Data path does not exist:", data_path), type = "error")
-      status_msg("❌ Échec du chargement")
-      return(NULL)
-    }
-    
-    data <- tryCatch(read_bruker(data_path, dim = "2D"), error = function(e) {
-      showNotification(paste("Erreur chargement:", e$message), type = "error")
-      status_msg("❌ Échec du chargement")
-      return(NULL)
-    })
-    
-    if (!is.null(data)) {
-      bruker_data(data)
-      showNotification("✅ Données chargées", type = "message")
-      status_msg("✅ Données chargées")
+    if (!is.null(selected) && selected %in% names(spectra_list())) {
+      selected_data <- spectra_list()[[selected]]
+      
+      # Si des boîtes fixes ont été définies dans un spectre précédent
+      if (!is.null(reference_boxes())) {
+        fixed_boxes(reference_boxes())  # Appliquer les boîtes du spectre précédent
+      } else {
+        fixed_boxes(data.frame(xmin = numeric(), xmax = numeric(), ymin = numeric(), ymax = numeric()))  # Aucune boîte
+      }
+      
+      # Générer et afficher le spectre
+      selected_plot <- spectra_plots()[[selected]]
+      contour_plot_base(selected_plot)
+      bounding_boxes_data()  # force recalcul lors du changement de spectre
+      refresh_nmr_plot()  # Mettre à jour le plot avec les boîtes réutilisées
+      
+      status_msg(paste0("🔄 Spectre sélectionné : ", selected))
     }
   })
   
-  observe({
-    updateSelectInput(session, "selected_spectrum", choices = names(spectra_list()))
-  })
   
-  spectre_bruker <- reactive({
-    req(input$selected_spectrum)
-    spectra_list()[[input$selected_spectrum]]
-  })
-  
-  
-  
-  ## Refresh plot when modification are made ----
+  ## Refresh ----
   
   refresh_nmr_plot <- function() {
-    req(contour_plot_base())
+    req(contour_plot_base(), bruker_data())
+    
+    # ⚠️ Forcer l’évaluation de la réactive ici pour mettre à jour les intensités
+    boxes <- bounding_boxes_data()
+    
     plot <- contour_plot_base()
     
-    # Add bounding boxes
-    boxes <- bounding_boxes_data()
     if (!is.null(boxes) && nrow(boxes) > 0) {
       plot <- plot +
         geom_rect(data = boxes, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
                   color = "red", fill = NA, linetype = "dashed", inherit.aes = FALSE)
     }
     
-    # Choisir les centroïdes les plus récemment chargés
+    # Ajout des centroïdes
     centroids <- NULL
     if (!is.null(imported_centroids()) && nrow(imported_centroids()) > 0) {
       centroids <- imported_centroids()
@@ -489,7 +515,6 @@ server <- function(input, output, session) {
       centroids <- centroids_data()
     }
     
-    # Ajout des centroïdes sélectionnés
     if (!is.null(centroids)) {
       plot <- plot +
         geom_point(data = centroids, aes(x = F2_ppm, y = F1_ppm, color = as.numeric(stain_intensity)),
@@ -499,6 +524,13 @@ server <- function(input, output, session) {
     
     nmr_plot(plot)
   }
+  
+  
+  
+  output$main_plot <- renderPlot({
+    req(nmr_plot())  # Le graphe mis à jour avec centroïdes et BB
+    nmr_plot()
+  })
   
   
   ## Calcul Threshold ----
@@ -530,78 +562,123 @@ server <- function(input, output, session) {
   ## Generate Plot ----
   
   observeEvent(input$generate_plot, {
-    req(bruker_data())
+    req(spectra_list())
+    status_msg("🔄 Génération des graphiques...")
     params <- spectrum_params()
-    shinyjs::show("loading_message")
-    status_msg("🔄 Génération du graphique...")
     
-    result <- tryCatch({
-      find_nmr_peak_centroids(
-        bruker_data()$spectrumData,
-        spectrum_type = input$spectrum_type,
-        intensity_threshold = input$intensity_threshold,
-        contour_start = input$contour_start %||% calculated_contour_value(),  # ← pris depuis input utilisateur        contour_num = params$contour_num,
-        contour_factor = params$contour_factor,
-        f2_exclude_range = c(4.7, 5.0)
-      )
-    }, error = function(e) {
-      showNotification(paste("Erreur de traitement :", e$message), type = "error")
-      shinyjs::hide("loading_message")
-      return(NULL)
+    all_results <- lapply(spectra_list(), function(data) {
+      tryCatch({
+        find_nmr_peak_centroids(
+          data$spectrumData,
+          spectrum_type = input$spectrum_type,
+          intensity_threshold = input$intensity_threshold,
+          contour_start = input$contour_start %||% calculated_contour_value(),
+          contour_num = params$contour_num,
+          contour_factor = params$contour_factor,
+          f2_exclude_range = c(4.7, 5.0)
+        )
+      }, error = function(e) {
+        showNotification(paste("Erreur dans le traitement d'un spectre :", e$message), type = "error")
+        return(NULL)
+      })
     })
     
-    if (!is.null(result)) {
-      result_data(result)
-      contour_plot_base(result$plot + labs(title = ""))
+    # Séparation des plots et des données de résultat
+    all_plots <- lapply(all_results, function(res) if (!is.null(res)) res$plot else NULL)
+    
+    spectra_plots(all_plots)
+    
+    if (length(all_results) > 0 && !is.null(all_results[[1]])) {
+
+      # Donne des noms aux résultats pour les retrouver plus tard
+      names(all_results) <- names(spectra_list())
+      
+      # Stocke tous les résultats
+      result_data_list(all_results)      
+      
+      # Stocke le premier résultat dans result_data()
+      result_data(all_results[[1]])
+      
+      contour_plot_base(all_results[[1]]$plot + labs(title = ""))
       refresh_nmr_plot()
-      showNotification("✅ Graphique générés", type = "message")
+      showNotification("✅ Graphiques générés avec succès", type = "message")
       status_msg("✅ Analyse terminée")
     }
     
     shinyjs::hide("loading_message")
   })
   
-  
-  ## Generate Centroids ----
+  ## Generate Centroids & Bb ----
   
   observeEvent(input$generate_centroids, {
-    req(bruker_data())
-    result <- result_data()
-    params <- spectrum_params()
-    req(result)
-    shinyjs::show("loading_message")
-    status_msg("🔄 Génération des centroïdes et BB...")
-    
-    result1 <- tryCatch({
-      process_nmr_centroids(
-        rr_data = bruker_data()$spectrumData,
-        contour_data = result$contour_data, 
-        intensity_threshold = input$intensity_threshold,
-        contour_num = params$contour_num,
-        contour_factor = params$contour_factor,
-        eps_value = input$eps_value,
-        keep_peak_ranges = list(c(0.5, -0.5), c(1, 0.8), c(1.55,1.45))
-      )
-    }, error = function(e) {
-      showNotification(paste("Erreur de traitement :", e$message), type = "error")
-      shinyjs::hide("loading_message")
-      return(NULL)
-    })
-    
-    if (!is.null(result1)) {
-      centroids_data(result1$centroids)
-      
-      # ⚠️ Ne stocke que les coordonnées (pas les intensités)
-      box_coords_only <- result1$bounding_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
-      fixed_boxes(box_coords_only)
-      
-      refresh_nmr_plot()
-      showNotification("✅ Centroïdes et BBs calculés", type = "message")
-      status_msg("✅ Analyse terminée")
-    }
-    
+  
+  req(input$selected_subfolder)
+  req(result_data_list())
+  req(bruker_data())
+  params <- spectrum_params()
+  
+  # Récupérer le bon résultat basé sur le spectre sélectionné
+  all_results <- result_data_list()
+  selected_result <- all_results[[input$selected_subfolder]]
+
+  
+  if (is.null(selected_result)) {
+    showNotification(paste("⚠️ Aucun résultat pour", input$selected_subfolder), type = "error")
+    print("❌ selected_result est NULL")
+    return()
+  }
+
+  shinyjs::show("loading_message")
+  status_msg("🔄 Génération des centroïdes et BB...")
+
+  # Récupération du spectre associé
+  selected_spectrum <- bruker_data()$spectrumData
+  if (is.null(selected_spectrum)) {
+    showNotification(paste("⚠️ Spectre introuvable pour", input$selected_subfolder), type = "error")
+    print("❌ selected_spectrum est NULL")
     shinyjs::hide("loading_message")
+    return()
+  }
+  
+  result1 <- tryCatch({
+    process_nmr_centroids(
+      rr_data = selected_spectrum,
+      contour_data = selected_result$contour_data,
+      intensity_threshold = input$intensity_threshold,
+      contour_num = params$contour_num,
+      contour_factor = params$contour_factor,
+      eps_value = input$eps_value,
+      keep_peak_ranges = list(c(0.5, -0.5), c(1, 0.8), c(1.55,1.45))
+    )
+  }, error = function(e) {
+    showNotification(paste("❌ Erreur de traitement :", e$message), type = "error")
+    print(paste("Erreur capturée :", e$message))
+    shinyjs::hide("loading_message")
+    return(NULL)
   })
+
+  if (!is.null(result1)) {
+    centroids_data(result1$centroids)
+
+    box_coords_only <- result1$bounding_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
+    fixed_boxes(box_coords_only)
+    reference_boxes(fixed_boxes())
+    
+    # Mise à jour du graphe affiché
+    contour_plot_base(selected_result$plot + labs(title =""))
+    refresh_nmr_plot()
+
+    showNotification("✅ Centroïdes et BBs calculés", type = "message")
+    status_msg("✅ Analyse terminée")
+  } else {
+    print("⚠️ Aucun résultat à afficher après process_nmr_centroids.")
+  }
+
+  shinyjs::hide("loading_message")
+})
+
+  
+  
   
   ## Manually Add Centroids / BBs ----
   
@@ -615,7 +692,7 @@ server <- function(input, output, session) {
     
     # === Estimate intensity from contour_data
     contour_data <- result_data()$contour_data
-    eps <- 0.04  # or any value you used for clustering
+    eps <- input$eps_value/2 # or any value you used for clustering
     
     local_points <- contour_data %>%
       dplyr::filter(
@@ -707,7 +784,7 @@ server <- function(input, output, session) {
   
   # Dans le server
   output$centroid_table <- renderDT({
-    centroids_filtered <- centroids_data()[, 1:3]  # Afficher seulement les 3 premières colonnes
+    centroids_filtered <- centroids_data()[, 1:4]  # Afficher seulement les 3 premières colonnes
     datatable(centroids_filtered, selection = "single", options = list(pageLength = 5))
   })
   
@@ -747,6 +824,7 @@ server <- function(input, output, session) {
     # updateNumericInput(session, "contour_num", value = params$contour_num)
     # updateNumericInput(session, "contour_factor", value = params$contour_factor)
   })
+
   
   ## Export Centroids & BB ----
   
@@ -907,6 +985,55 @@ server <- function(input, output, session) {
     })
     
     showNotification("✅ Traitement batch terminé. Résultats sauvegardés dans le dossier 'results_batch/'.", type = "message")
+  })
+  
+  ## Test ----
+  
+  
+  project_centroids_with_intensity <- function(reference_centroids, result_list, output_dir = "centroid_exports", eps = input$eps_value/2) {
+    if (!dir.exists(output_dir)) dir.create(output_dir)
+    
+    for (name in names(result_list)) {
+      result <- result_list[[name]]
+      if (is.null(result$contour_data)) next
+      
+      contour_data <- result$contour_data
+      
+      projected_centroids <- reference_centroids %>%
+        dplyr::rowwise() %>%
+        dplyr::mutate(
+          stain_intensity = {
+            local_points <- contour_data %>%
+              dplyr::filter(
+                abs(-x - F2_ppm) <= eps,
+                abs(-y - F1_ppm) <= eps
+              )
+            sum(local_points$level, na.rm = TRUE)
+          }
+        ) %>%
+        dplyr::ungroup()
+      
+      # Export en CSV
+      # Extraire le nom de base (dernier segment du chemin)
+      subfolder_name <- basename(name)
+      output_file <- file.path(output_dir, paste0(subfolder_name, "_projected_centroids.csv"))
+      readr::write_csv(projected_centroids, output_file)
+    }
+    
+    showNotification("✅ Centroïdes projetés et exportés avec intensité.", type = "message")
+  }
+  
+  
+  observeEvent(input$export_projected_centroids, {
+    req(centroids_data())  # vos centroïdes de référence
+    req(result_data_list())
+    
+    project_centroids_with_intensity(
+      reference_centroids = centroids_data(),
+      result_list = result_data_list(),
+      output_dir = "centroid_exports",  # ou n'importe quel dossier
+      eps = input$eps_value %||% 0.04
+    )
   })
   
   
