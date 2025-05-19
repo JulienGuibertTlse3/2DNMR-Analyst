@@ -84,8 +84,7 @@ ui <- fluidPage(
     dashboardSidebar(
       sidebarMenu(
         menuItem("README", tabName = "readme", icon = icon("book")),
-        menuItem("Visualisation", tabName = "visualisation", icon = icon("chart-area")),
-        menuItem("Centroids", tabName = "centroids", icon = icon("table"))
+        menuItem("Visualisation", tabName = "visualisation", icon = icon("chart-area"))
       )
     ),
     
@@ -116,35 +115,58 @@ ui <- fluidPage(
                                     div(tags$h4("Browse Data Folder"), style = "font-size: 18px; font-weight: 700;"),
                                     shinyDirButton("directory", "Select Main Directory", "Select Directory"),
                                     verbatimTextOutput("selected_dir"),
-                                    uiOutput("subfolder_selector"),
-                                    actionButton("load_data", "📂 Load Data"),
                                     withSpinner(verbatimTextOutput("matrix_dim"), type = 4, color = "#007bff"),
                                     
-                                    actionButton("reset_all", "🔁 Réinitialiser l'interface", icon = icon("redo")),
+                                    actionButton("reset_all", "🔁 Réinitialiser l'interface", icon = icon("redo"))),
+                            
                                     
+                           tabPanel("📈 Plot",   
+                                    
+                                    uiOutput("subfolder_selector"),
                                     
                                     selectInput("spectrum_type", "Type de spectre :",
                                                 choices = c("TOCSY", "HSQC", "COSY"),
                                                 selected = "TOCSY"),
                                     
-                                    actionButton("calculate_contour", "📈 Calculer valeur contour"),
-                                    verbatimTextOutput("calculated_contour_text"),
+                                    selectInput("seuil_method", "Méthode de seuil :", 
+                                                choices = c("Pourcentage du max" = "max_pct", 
+                                                            "Multiple du bruit" = "bruit_mult")),
                                     
+                                    conditionalPanel(
+                                      condition = "input.seuil_method == 'max_pct'",
+                                      numericInput("pct_val", "Pourcentage du maximum :", value = 0.01, min = 0.001, max = 1, step = 0.001)
+                                    ),
+                                    
+                                    conditionalPanel(
+                                      condition = "input.seuil_method == 'bruit_mult'",
+                                      numericInput("bruit_mult", "Facteur multiplicatif du bruit :", value = 3, min = 0.5, max = 10, step = 0.5)
+                                    ),
+                                    
+                                    # Bouton pour lancer le calcul
+                                    actionButton("calculate_contour", "Calculer le seuil"),
+                                    
+                                    # Affichage du seuil calculé
+                                    br(),
+                                    strong("Seuil calculé :"),
+                                    verbatimTextOutput("seuil_text"),
+                                    br(),
+                                  
                                     # Valeur modifiable par l'utilisateur
-                                    numericInput("contour_start", "Valeur de départ des contours :", value = NULL, min = 0, step = 100),
-                                    numericInput("intensity_threshold", "Valeur d'intensité :", value = 50000, min = 0, step = 100),
+                                    numericInput("contour_start", "Valeur d'intensité :", value = NULL, min = 0, step = 100),
                                     numericInput("eps_value", "Valeur pour clustering :", value = 0.01, min = 0, step = 0.001),
                                     
                                     
                                     actionButton("generate_plot", "📊 Generate Plot"),
-                                    actionButton("generate_centroids", "Generate Centroids / Bounding Boxes"),
+                                    actionButton("generate_centroids", "🔴 Find Peaks"),
+                                    br(),
                                     textOutput("status_message"),
-                                    actionButton("export_projected_centroids", "📤 Export intensity across all spectra")
+                                    br(),
+                                    actionButton("export_projected_centroids", "📤 Export batch intensity")
                                     
 
                            ),
                            
-                           tabPanel("🔵 Centroïdes",
+                           tabPanel("🔴 Centroïdes",
                                     actionButton("toggle_centroid_section", "Ajouter/Supprimer un centroïde"),
                                     hidden(div(
                                       id = "centroid_section",
@@ -538,26 +560,31 @@ server <- function(input, output, session) {
   
   observeEvent(input$calculate_contour, {
     req(bruker_data())
-    data_cc <- as.data.frame(bruker_data()$spectrumData)
+    mat <- bruker_data()$spectrumData
     
-    # Choix du quantile selon le type de spectre
-    selected_quantile <- switch(input$spectrum_type,
-                                "TOCSY" = 0.9995,
-                                "HSQC" = 0.998,
-                                "COSY" = 0.998,
-                                0.999)  # par défaut
+    seuil <- switch(input$seuil_method,
+                    
+                    "max_pct" = seuil_max_pourcentage(mat, pourcentage = input$pct_val),
+                    
+                    "bruit_mult" = seuil_bruit_multiplicatif(mat, facteur = input$bruit_mult),
+                    
+                    { showNotification("❌ Méthode de seuil non reconnue", type = "error"); return(NULL) }
+    )
     
-    # Calcul
-    inten <- quantile(data_cc, selected_quantile, na.rm = TRUE)
-    calculated_contour_value(inten)
+    calculated_contour_value(seuil)
     
     showNotification(
-      paste0("✅ Seuil de départ des contours calculé : ", round(inten, 2)),
+      paste0("✅ Seuil de départ des contours calculé : ", round(seuil, 2)),
       type = "message"
     )
   })
   
-  
+  # Affichage du seuil dans l'interface
+  output$seuil_text <- renderText({
+    val <- calculated_contour_value()
+    if (is.null(val)) return("Aucun seuil calculé.")
+    round(val, 5)
+  })
   
   ## Generate Plot ----
   
@@ -571,7 +598,7 @@ server <- function(input, output, session) {
         find_nmr_peak_centroids(
           data$spectrumData,
           spectrum_type = input$spectrum_type,
-          intensity_threshold = input$intensity_threshold,
+          intensity_threshold = modulate_threshold(input$contour_start) %||% modulate_threshold(calculated_contour_value()),
           contour_start = input$contour_start %||% calculated_contour_value(),
           contour_num = params$contour_num,
           contour_factor = params$contour_factor,
@@ -692,7 +719,7 @@ server <- function(input, output, session) {
     
     # === Estimate intensity from contour_data
     contour_data <- result_data()$contour_data
-    eps <- input$eps_value/2 # or any value you used for clustering
+    eps <- input$eps_value # or any value you used for clustering
     
     local_points <- contour_data %>%
       dplyr::filter(
@@ -812,15 +839,13 @@ server <- function(input, output, session) {
   
   observeEvent(input$spectrum_type, {
     params <- switch(input$spectrum_type,
-                     "TOCSY" = list(intensity_threshold = 30000, contour_start = 100000, contour_num = 30, contour_factor = 1.3),
-                     "HSQC"  = list(intensity_threshold = 5000,  contour_start = 20000,  contour_num = 30,  contour_factor = 1.3),
-                     "COSY"  = list(intensity_threshold = 10000, contour_start = 50000,  contour_num = 30,  contour_factor = 1.3)
+                     "TOCSY" = list(contour_start = 100000, contour_num = 30, contour_factor = 1.3),
+                     "HSQC"  = list(contour_start = 20000,  contour_num = 30,  contour_factor = 1.3),
+                     "COSY"  = list(contour_start = 50000,  contour_num = 30,  contour_factor = 1.3)
     )
     
     updateNumericInput(session, "contour_start", value = params$contour_start)
     
-    # Si plus tard tu veux que les autres valeurs soient modifiables aussi :
-    updateNumericInput(session, "intensity_threshold", value = params$intensity_threshold)
     # updateNumericInput(session, "contour_num", value = params$contour_num)
     # updateNumericInput(session, "contour_factor", value = params$contour_factor)
   })
