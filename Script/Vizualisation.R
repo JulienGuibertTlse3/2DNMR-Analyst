@@ -24,12 +24,13 @@ find_nmr_peak_centroids <- function(rr_data, spectrum_type = NULL,
   spectrum_defaults <- list(
     HSQC = list(contour_start = 8000, intensity_threshold = 200, contour_num = 8, contour_factor = 1.3),
     TOCSY = list(contour_start = 100000, intensity_threshold = 4000 , contour_num = 110, contour_factor = 1.3, f2_exclude_range = c(4.7, 5.0)),
+    UFCOSY  = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3),
     COSY  = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3)
   )
   
   if (!is.null(spectrum_type)) {
     if (!spectrum_type %in% names(spectrum_defaults)) {
-      stop("Invalid spectrum_type. Choose from 'HSQC', 'TOCSY', or 'COSY'.")
+      stop("Invalid spectrum_type. Choose from 'HSQC', 'TOCSY', 'COSY' or 'UFCOSY'.")
     }
     defaults <- spectrum_defaults[[spectrum_type]]
     
@@ -144,15 +145,15 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
   
   # Optionnel : conserver les pics dans des plages définies
   if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
-    first_range <- TRUE
-    for (range in keep_peak_ranges) {
+    for (i in seq_along(keep_peak_ranges)) {
+      range <- keep_peak_ranges[[i]]
+      
       if (length(range) == 2) {
         centroids_in_range <- centroids %>%
           filter(F2_ppm >= range[2] & F2_ppm <= range[1])
         
-        num_peaks_to_keep <- if (first_range) 2 else 2
-        first_range <- FALSE
-        
+        num_peaks_to_keep <- if (i <= 3) 2 else 10
+
         top_peaks_in_range <- centroids_in_range %>%
           arrange(desc(stain_intensity)) %>%
           slice_head(n = num_peaks_to_keep)
@@ -163,6 +164,29 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       }
     }
   }
+  
+  # Optionnel : conserver les boîtes dans des plages définies
+  if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
+    for (i in seq_along(keep_peak_ranges)) {
+      range <- keep_peak_ranges[[i]]
+      
+      if (length(range) == 2) {
+        boxes_in_range <- bounding_boxes %>%
+          filter(xmin >= range[2] & xmax <= range[1])
+        
+        num_boxes_to_keep <- if (i <= 3) 2 else 10
+
+        top_boxes_in_range <- boxes_in_range %>%
+          arrange(desc(intensity)) %>%  # ou box_intensity, selon vos données
+          slice_head(n = num_boxes_to_keep)
+        
+        bounding_boxes <- bounding_boxes %>%
+          filter(!(xmin >= range[2] & xmax <= range[1])) %>%
+          bind_rows(top_boxes_in_range)
+      }
+    }
+  }
+  
   
   return(list(
     centroids = centroids,
