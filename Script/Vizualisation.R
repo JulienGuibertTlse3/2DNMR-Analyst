@@ -1,60 +1,73 @@
-# Functional function ----
+# 2D NMR Peak Picking and Analysis ----
 
-library(Matrix)
-library(ggplot2)
-library(data.table)
-library(dbscan)
-library(FNN)
-library(zoo)
-library(stringr)  # For extracting stain IDs
 
-## Peak pick ----
+# This script defines two main functions:
+# 1. find_nmr_peak_centroids: Generates a contour plot from a 2D NMR matrix and extracts contour data.
+# 2. process_nmr_centroids: Applies clustering to the contour lines to define peak centroids and bounding boxes.
+# Additionally, it includes functions to estimate signal thresholds and local intensity.
 
-# Function for displaying contours
+
+## ---- Required libraries ----
+library(ggplot2)    # for contour plotting
+library(data.table) # for efficient data manipulation
+library(dplyr)      # for data wrangling (group_by, summarise, etc.)
+library(dbscan)     # for DBSCAN clustering
+library(magrittr)   # for piping (%>%)
+
+# ---- Function: find_nmr_peak_centroids ----
+# Purpose: Display 2D NMR contours and extract contour data for clustering
 find_nmr_peak_centroids <- function(rr_data, spectrum_type = NULL, 
                                     contour_start = NULL, intensity_threshold = NULL, 
                                     contour_num = NULL, contour_factor = NULL, 
                                     zoom_xlim = NULL, zoom_ylim = NULL, 
                                     f2_exclude_range = NULL) {
+  
+  # Validate input data: must be a numeric matrix
   if (is.null(rr_data) || !is.matrix(rr_data)) {
     stop("Invalid Bruker data. Ensure rr_data is a matrix with proper intensity values.")
   }
   
-  # Default values based on spectrum type
+  # Define default contour parameters for different spectrum types
   spectrum_defaults <- list(
     HSQC = list(contour_start = 8000, intensity_threshold = 200, contour_num = 8, contour_factor = 1.3),
     TOCSY = list(contour_start = 100000, intensity_threshold = 4000 , contour_num = 110, contour_factor = 1.3, f2_exclude_range = c(4.7, 5.0)),
-    UFCOSY  = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3),
-    COSY  = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3)
+    UFCOSY = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3),
+    COSY   = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3)
   )
   
+  # Apply defaults if spectrum type is recognized and user did not override parameters
   if (!is.null(spectrum_type)) {
     if (!spectrum_type %in% names(spectrum_defaults)) {
       stop("Invalid spectrum_type. Choose from 'HSQC', 'TOCSY', 'COSY' or 'UFCOSY'.")
     }
     defaults <- spectrum_defaults[[spectrum_type]]
-    
     contour_start <- ifelse(is.null(contour_start), defaults$contour_start, contour_start)
     intensity_threshold <- ifelse(is.null(intensity_threshold), defaults$intensity_threshold, intensity_threshold)
     contour_num <- ifelse(is.null(contour_num), defaults$contour_num, contour_num)
     contour_factor <- ifelse(is.null(contour_factor), defaults$contour_factor, contour_factor)
   }
   
-  ppm_x <- as.numeric(rownames(rr_data))
-  ppm_y <- as.numeric(colnames(rr_data))
+  # Extract the ppm axes from the matrix row/column names
+  ppm_x <- as.numeric(rownames(rr_data))  # F1 dimension
+  ppm_y <- as.numeric(colnames(rr_data))  # F2 dimension
   
+  # Create a data.frame from matrix for ggplot compatibility
   intensity_df <- expand.grid(ppm_x = ppm_x, ppm_y = ppm_y)
   intensity_df$intensity <- as.vector(rr_data)
   
+  # Optional: remove water region or other excluded ppm range in F2
   if (!is.null(f2_exclude_range) && length(f2_exclude_range) == 2) {
     intensity_df <- intensity_df %>%
       filter(!(ppm_y >= f2_exclude_range[1] & ppm_y <= f2_exclude_range[2]))
   }
   
+  # Filter out points below the intensity threshold
   intensity_df <- intensity_df[intensity_df$intensity >= intensity_threshold, ]
   
+  # Calculate contour levels exponentially
   contour_levels <- contour_start * contour_factor^(0:(contour_num - 1))
   
+  # Generate the contour plot using ggplot2
   p <- ggplot(intensity_df, aes(x = ppm_y, y = ppm_x, z = intensity)) +
     geom_contour(color = "black", breaks = contour_levels) + 
     scale_x_reverse() +
@@ -62,32 +75,35 @@ find_nmr_peak_centroids <- function(rr_data, spectrum_type = NULL,
     labs(y = "F1_ppm", x = "F2_ppm") +
     theme_minimal()
   
+  # Extract contour data from the plot for further processing
   contour_data <- ggplot_build(p)$data[[1]]
   
-  return(list( plot = p, contour_data = contour_data))
+  # Return both the plot and the extracted contour data
+  return(list(plot = p, contour_data = contour_data))
 }
 
+## Identify peaks ----
 
 process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, contour_factor = NULL, 
                                   intensity_threshold = NULL, keep_peak_ranges = NULL, eps_value = NULL) {
   
-  # Vérifie que des contours sont disponibles
+  # Check if contour data is available and well-formed
   if (nrow(contour_data) == 0 || !"group" %in% colnames(contour_data)) {
     stop("No contours data available for processing.")
   }
   
-  # Normalisation
+  # Normalize contour coordinates for clustering
   contour_data <- contour_data %>%
     mutate(
       x_scaled = (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE),
       y_scaled = (y - mean(y, na.rm = TRUE)) / sd(y, na.rm = TRUE)
     )
   
-  # Clustering DBSCAN
+  # Apply DBSCAN clustering to contour points
   clusters <- dbscan::dbscan(contour_data[, c("x_scaled", "y_scaled")], eps = eps_value, minPts = 0)
   contour_data$stain_id <- as.character(clusters$cluster)
   
-  # Calcul des centroïdes
+  # Calculate centroids for each cluster
   centroids <- contour_data %>%
     group_by(stain_id) %>%
     summarise(
@@ -97,11 +113,11 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       .groups = "drop"
     )
   
-  # Inversion des ppm
+  # Invert ppm axes to match NMR convention
   centroids$F2_ppm <- -centroids$F2_ppm
   centroids$F1_ppm <- -centroids$F1_ppm
   
-  # Calcul des boîtes englobantes
+  # Create bounding boxes for each cluster
   bounding_boxes <- contour_data %>%
     group_by(stain_id) %>%
     summarise(
@@ -113,7 +129,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       .groups = "drop"
     )
   
-  # Suppression des centroïdes de faible intensité à l'intérieur des boîtes englobantes d'autres pics
+  # Remove weaker centroids that fall inside bounding boxes of stronger ones
   if (nrow(centroids) > 1) {
     centroids_with_boxes <- centroids %>%
       left_join(bounding_boxes, by = "stain_id")
@@ -143,7 +159,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     bounding_boxes <- bounding_boxes %>% filter(!stain_id %in% to_remove)
   }
   
-  # Optionnel : conserver les pics dans des plages définies
+  # Optional: Keep only strongest peaks in user-defined ppm regions
   if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
     for (i in seq_along(keep_peak_ranges)) {
       range <- keep_peak_ranges[[i]]
@@ -153,7 +169,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
           filter(F2_ppm >= range[2] & F2_ppm <= range[1])
         
         num_peaks_to_keep <- if (i <= 3) 2 else 10
-
+        
         top_peaks_in_range <- centroids_in_range %>%
           arrange(desc(stain_intensity)) %>%
           slice_head(n = num_peaks_to_keep)
@@ -165,7 +181,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     }
   }
   
-  # Optionnel : conserver les boîtes dans des plages définies
+  # Optional: Keep only strongest boxes in defined regions
   if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
     for (i in seq_along(keep_peak_ranges)) {
       range <- keep_peak_ranges[[i]]
@@ -175,9 +191,9 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
           filter(xmin >= range[2] & xmax <= range[1])
         
         num_boxes_to_keep <- if (i <= 3) 2 else 10
-
+        
         top_boxes_in_range <- boxes_in_range %>%
-          arrange(desc(intensity)) %>%  # ou box_intensity, selon vos données
+          arrange(desc(intensity)) %>%
           slice_head(n = num_boxes_to_keep)
         
         bounding_boxes <- bounding_boxes %>%
@@ -187,7 +203,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     }
   }
   
-  
+  # Return centroids and their bounding boxes
   return(list(
     centroids = centroids,
     bounding_boxes = bounding_boxes
@@ -196,8 +212,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
 
 
 
-## Intensité Locale ----
-
+# Compute local contour intensity around a point (stain)
 get_local_stain_intensity <- function(f2_ppm, f1_ppm, contour_data, eps_ppm = 0.004) {
   local_points <- contour_data %>%
     filter(
@@ -213,20 +228,24 @@ get_local_stain_intensity <- function(f2_ppm, f1_ppm, contour_data, eps_ppm = 0.
 }
 
 
+
 ## Seuil Bruit ----
 
+# Threshold based on standard deviation * factor (default = 3)
 seuil_bruit_multiplicatif <- function(mat, facteur = 3) {
   bruit_estime <- sd(as.numeric(mat), na.rm = TRUE)
   seuil <- bruit_estime * facteur
   return(seuil)
 }
 
+# Threshold based on percentage of the max intensity (default = 5%)
 seuil_max_pourcentage <- function(mat, pourcentage = 0.05) {
   max_val <- max(mat, na.rm = TRUE)
   seuil <- max_val * pourcentage
   return(seuil)
 }
 
+# Custom threshold modulation based on intensity (VI)
 modulate_threshold <- function(VI) {
   a <- 0.0006
   b <- 1.2

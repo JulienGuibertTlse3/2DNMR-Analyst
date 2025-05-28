@@ -736,7 +736,7 @@ server <- function(input, output, session) {
         contour_num = params$contour_num,
         contour_factor = params$contour_factor,
         eps_value = input$eps_value,
-        keep_peak_ranges = list(c(0.5, -0.5), c(1, 0.8), c(1.55, 1.45), c(3.397, 3.38), c(1.28, 1.26), c(5.367, 5.353), c(4.47, 4.45), c(4,39,4,38))
+        keep_peak_ranges = list(c(0.5, -0.5), c(1, 0.8), c(1.55, 1.45), c(3.397, 3.38), c(1.28, 1.26), c(5.367, 5.353), c(4.47, 4.45), c(4.385,4.375))
       )
     }, error = function(e) {
       showNotification(paste("❌ Processing error:", e$message), type = "error")
