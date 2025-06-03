@@ -210,6 +210,128 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
   ))
 }
 
+## Identify local maxima ----
+
+library(dplyr)
+library(tidyr)
+
+process_nmr_centroids_localmax <- function(contour_data, neighborhood_size = 3, min_intensity = NULL) {
+  # contour_data doit contenir au minimum: x, y, level
+  
+  if (nrow(contour_data) == 0) {
+    stop("contour_data est vide")
+  }
+  
+  # Créer une grille complète des points pour rechercher les maxima locaux
+  # On pivotera pour une matrice avec colonnes = unique(x), lignes = unique(y)
+  grid_df <- contour_data %>%
+    select(x, y, level) %>%
+    pivot_wider(names_from = x, values_from = level)
+  
+  # Récupérer les vecteurs x et y uniques (ordonnés)
+  unique_x <- sort(unique(contour_data$x))
+  unique_y <- sort(unique(contour_data$y))
+  
+  # Construire une matrice des intensités
+  intensity_matrix <- as.matrix(grid_df[,-1])  # enlever colonne y (pivot_wider conserve y en 1ère col)
+  rownames(intensity_matrix) <- grid_df$y
+  
+  # Padding de la matrice pour gérer bords
+  pad <- floor(neighborhood_size / 2)
+  padded_mat <- matrix(NA, 
+                       nrow = nrow(intensity_matrix) + 2 * pad, 
+                       ncol = ncol(intensity_matrix) + 2 * pad)
+  padded_mat[(pad+1):(pad+nrow(intensity_matrix)), (pad+1):(pad+ncol(intensity_matrix))] <- intensity_matrix
+  
+  maxima_coords <- list()
+  
+  # Fonction pour vérifier si un point est un maximum local
+  is_local_max <- function(i, j, mat, neighborhood_size) {
+    neighborhood <- mat[(i - pad):(i + pad), (j - pad):(j + pad)]
+    center_value <- mat[i, j]
+    if (is.na(center_value)) return(FALSE)
+    all(center_value >= neighborhood, na.rm = TRUE) && any(center_value > neighborhood, na.rm = TRUE)
+  }
+  
+  # Balayage de la matrice sans les bords
+  for (i in (pad+1):(nrow(padded_mat)-pad)) {
+    for (j in (pad+1):(ncol(padded_mat)-pad)) {
+      if (is_local_max(i, j, padded_mat, neighborhood_size)) {
+        # Récupérer coords x,y correspondants
+        x_val <- unique_x[j - pad]
+        y_val <- unique_y[i - pad]
+        maxima_coords <- append(maxima_coords, list(c(x_val, y_val, padded_mat[i,j])))
+      }
+    }
+  }
+  
+  if (length(maxima_coords) == 0) {
+    warning("Aucun maximum local trouvé")
+    return(list(centroids = NULL, bounding_boxes = NULL))
+  }
+  
+  maxima_df <- do.call(rbind, maxima_coords) %>%
+    as.data.frame()
+  colnames(maxima_df) <- c("x", "y", "intensity")
+  
+  # Filtrer par intensity si demandé
+  if (!is.null(min_intensity)) {
+    maxima_df <- maxima_df %>% filter(intensity >= min_intensity)
+  }
+  
+  # Pour chaque maximum local, définir une boîte englobante autour des points proches
+  bounding_boxes <- maxima_df %>% rowwise() %>%
+    do({
+      cx <- .$x
+      cy <- .$y
+      # Définir un rayon autour du maximum (ex: ±0.01 ppm ou adapté selon données)
+      radius <- 0.01
+      
+      nearby_points <- contour_data %>%
+        filter(abs(x - cx) <= radius, abs(y - cy) <= radius)
+      
+      if (nrow(nearby_points) == 0) {
+        # Au moins une petite boîte autour du centroïde
+        tibble(
+          xmin = cx - radius, xmax = cx + radius,
+          ymin = cy - radius, ymax = cy + radius,
+          intensity = .$intensity
+        )
+      } else {
+        tibble(
+          xmin = min(nearby_points$x),
+          xmax = max(nearby_points$x),
+          ymin = min(nearby_points$y),
+          ymax = max(nearby_points$y),
+          intensity = sum(nearby_points$level)
+        )
+      }
+    }) %>% ungroup()
+  
+  # Renommer colonnes pour cohérence avec ta fonction
+  centroids <- maxima_df %>%
+    rename(F2_ppm = x, F1_ppm = y, stain_intensity = intensity)
+  
+  # Inverser axes pour correspondre à convention NMR (optionnel)
+  centroids <- centroids %>%
+    mutate(
+      F2_ppm = -F2_ppm,
+      F1_ppm = -F1_ppm
+    )
+  
+  bounding_boxes <- bounding_boxes %>%
+    mutate(
+      xmin = -xmax,
+      xmax = -xmin,
+      ymin = -ymax,
+      ymax = -ymin
+    )
+  
+  return(list(
+    centroids = centroids,
+    bounding_boxes = bounding_boxes
+  ))
+}
 
 
 # Compute local contour intensity around a point (stain)

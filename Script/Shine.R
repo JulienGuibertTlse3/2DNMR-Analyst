@@ -7,10 +7,13 @@ library(shinycssloaders)
 library(shinydashboard)
 library(shinyjs)
 library(dplyr)
+library(sp)
 
 source("C://Users//juguibert//Documents//Function_test//Read_2DNMR_spectrum.R")
 source("C://Users//juguibert//Documents//Function_test//Vizualisation.R")
 source("C://Users//juguibert//Documents//Function_test//Integration.R")
+source("C://Users//juguibert//Documents//Function_test//Pping.R")
+
 
 # Interface ----
 
@@ -159,11 +162,11 @@ ui <- fluidPage(
                                     
                                     # User-editable value
                                     numericInput("contour_start", "Intensity value:", value = NULL, min = 0, step = 100),
-                                    numericInput("eps_value", "Clustering epsilon:", value = 0.01, min = 0, step = 0.001),
-                                    
                                     
                                     actionButton("generate_plot", "📊 Generate Plot"),
+                                    checkboxInput("disable_clustering", "🔍 Ne pas utiliser de clustering (méthode alternative)", value = FALSE),
                                     actionButton("generate_centroids", "🔴 Find Peaks"),
+                                    numericInput("eps_value", "Clustering epsilon:", value = 0.01, min = 0, step = 0.001),
                                     actionButton("export_projected_centroids", "📤 Export batch intensity")
                            ),
                            
@@ -536,12 +539,14 @@ server <- function(input, output, session) {
   # This function updates the NMR contour plot with the current bounding boxes and centroids.
   refresh_nmr_plot <- function() {
     req(contour_plot_base(), bruker_data())  # Ensure required reactive inputs are available before proceeding
-    
+
     # ⚠️ Force evaluation of the reactive bounding_boxes_data to update intensity values
     boxes <- bounding_boxes_data()
+
     
     # Start with the base contour plot
     plot <- contour_plot_base()
+
     
     # If bounding boxes exist, overlay them on the plot as red dashed rectangles
     if (!is.null(boxes) && nrow(boxes) > 0) {
@@ -549,6 +554,7 @@ server <- function(input, output, session) {
         geom_rect(data = boxes, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
                   color = "red", fill = NA, linetype = "dashed", inherit.aes = FALSE)
     }
+
     
     # Initialize centroids to NULL
     centroids <- NULL
@@ -698,7 +704,6 @@ server <- function(input, output, session) {
   
   
   ## Generate Centroids & Bounding Boxes ----
-  
   observeEvent(input$generate_centroids, {
     
     req(input$selected_subfolder)
@@ -706,7 +711,6 @@ server <- function(input, output, session) {
     req(bruker_data())
     params <- spectrum_params()
     
-    # Retrieve the correct result based on selected spectrum
     all_results <- result_data_list()
     selected_result <- all_results[[input$selected_subfolder]]
     
@@ -719,7 +723,6 @@ server <- function(input, output, session) {
     shinyjs::show("loading_message")
     status_msg("🔄 Generating centroids and bounding boxes...")
     
-    # Retrieve the associated spectrum
     selected_spectrum <- bruker_data()$spectrumData
     if (is.null(selected_spectrum)) {
       showNotification(paste("⚠️ Spectrum not found for", input$selected_subfolder), type = "error")
@@ -728,42 +731,74 @@ server <- function(input, output, session) {
       return()
     }
     
-    result1 <- tryCatch({
-      process_nmr_centroids(
-        rr_data = selected_spectrum,
-        contour_data = selected_result$contour_data,
-        intensity_threshold = input$intensity_threshold,
-        contour_num = params$contour_num,
-        contour_factor = params$contour_factor,
-        eps_value = input$eps_value,
-        keep_peak_ranges = list(c(0.5, -0.5), c(1, 0.8), c(1.55, 1.45), c(3.397, 3.38), c(1.28, 1.26), c(5.367, 5.353), c(4.47, 4.45), c(4.385,4.375))
-      )
-    }, error = function(e) {
-      showNotification(paste("❌ Processing error:", e$message), type = "error")
-      print(paste("Caught error:", e$message))
-      shinyjs::hide("loading_message")
-      return(NULL)
-    })
-    
-    if (!is.null(result1)) {
-      centroids_data(result1$centroids)
+    if (input$disable_clustering) {
+
+      ### 🔹 UTILISATION de `peak_pick_2d_nt2` (pas de clustering) ----
+      result_peaks <- tryCatch({
+        peak_pick_2d_nt2(
+          bruker_data = selected_spectrum,
+          threshold_value = input$contour_start,
+          f2_exclude_range = c(4.7, 5.0)
+        )
+      }, error = function(e) {
+        showNotification(paste("❌ peak_pick_2d_nt2 error:", e$message), type = "error")
+        print(paste("Caught error in peak_pick_2d_nt2:", e$message))
+        shinyjs::hide("loading_message")
+        return(NULL)
+      })
       
-      box_coords_only <- result1$bounding_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
+
+      
+      centroids_data(result_peaks$peaks)  # <- ici on accède bien au data.frame
+      box_coords_only <- result_peaks$bounding_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
       fixed_boxes(box_coords_only)
       reference_boxes(fixed_boxes())
-      
-      # Update the displayed plot
       contour_plot_base(selected_result$plot + labs(title = ""))
+
       refresh_nmr_plot()
+
+      showNotification("✅ Peaks (sans clustering) générés", type = "message")
+
+      status_msg("✅ Peak picking alternatif terminé")
+
       
-      showNotification("✅ Peaks and bounding boxes generated", type = "message")
-      status_msg("✅ Analysis complete")
     } else {
-      print("⚠️ No result to display after process_nmr_centroids.")
+      ### 🔹 UTILISATION de `process_nmr_centroids` (avec clustering) ----
+      result1 <- tryCatch({
+        process_nmr_centroids(
+          rr_data = selected_spectrum,
+          contour_data = selected_result$contour_data,
+          intensity_threshold = modulate_threshold(input$contour_start) %||% modulate_threshold(calculated_contour_value()),
+          contour_num = params$contour_num,
+          contour_factor = params$contour_factor,
+          eps_value = input$eps_value,
+          keep_peak_ranges = list(
+            c(0.5, -0.5), c(1, 0.8), c(1.55, 1.45), c(3.397, 3.38),
+            c(1.28, 1.26), c(5.367, 5.353), c(4.47, 4.45), c(4.385, 4.375)
+          )
+        )
+      }, error = function(e) {
+        showNotification(paste("❌ Processing error:", e$message), type = "error")
+        print(paste("Caught error:", e$message))
+        shinyjs::hide("loading_message")
+        return(NULL)
+      })
+      
+      if (!is.null(result1)) {
+        centroids_data(result1$centroids)
+        box_coords_only <- result1$bounding_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
+        fixed_boxes(box_coords_only)
+        reference_boxes(fixed_boxes())
+        contour_plot_base(selected_result$plot + labs(title = ""))
+        refresh_nmr_plot()
+        showNotification("✅ Peaks and bounding boxes generated", type = "message")
+        status_msg("✅ Analysis complete")
+      }
     }
     
     shinyjs::hide("loading_message")
   })
+  
   
   
   

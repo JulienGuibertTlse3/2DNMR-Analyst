@@ -193,6 +193,8 @@ calculate_peak_volumes <- function(spectrum, peaks, gran = 200, c.vol = TRUE, mi
 
 
 
+
+
 # # Calculate peak volumes
 # peak_volumes <- calculate_peak_volumes(bruker_data, peaks, gran = 200, c.vol = TRUE)
 # 
