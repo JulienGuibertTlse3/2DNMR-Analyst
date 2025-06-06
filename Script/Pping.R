@@ -108,15 +108,15 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
   
   # Compute bounding boxes
   max_intensity <- max(peak_list$stain_intensity, na.rm = TRUE)
-  min_box_size_ppm <- 0.005  # taille minimale en ppm
-  max_box_size_ppm <- 0.05   # taille maximale en ppm
+  min_box_size_ppm <- 0.05  # taille minimale en ppm
+  max_box_size_ppm <- 0.5   # taille maximale en ppm
   
   bounding_boxes <- lapply(seq_len(nrow(peak_list)), function(i) {
     peak <- peak_list[i, ]
     
     # Échelle de taille (exponentielle douce)
     scale_factor <- (peak$stain_intensity / max_intensity)^0.5
-    half_size_ppm <- min_box_size_ppm + scale_factor * (max_box_size_ppm - min_box_size_ppm) / 2
+    half_size_ppm <- min_box_size_ppm + scale_factor * (max_box_size_ppm - min_box_size_ppm)
     
     # Centrage autour du pic
     center_x <- peak$F1_ppm
@@ -126,8 +126,8 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
       stain_id = peak$stain_id,
       xmin = center_y - half_size_ppm,
       xmax = center_y + half_size_ppm,
-      ymin = center_x - half_size_ppm,
-      ymax = center_x + half_size_ppm
+      ymin = center_x - half_size_ppm/2,
+      ymax = center_x + half_size_ppm/2
     )
   })
   

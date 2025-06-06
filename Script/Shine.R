@@ -5,6 +5,7 @@ library(ggplot2)
 library(DT)
 library(shinycssloaders)
 library(shinydashboard)
+library(shinyBS) 
 library(shinyjs)
 library(dplyr)
 library(sp)
@@ -73,6 +74,37 @@ ui <- fluidPage(
   table.dataTable {
     width: 100% !important;
   }
+  
+  /* Réduction de la taille de la police pour les éléments de l'interface */
+body, label, input, button, select, .form-control, .box, .tabBox, .shiny-input-container {
+  font-size: 13px !important;
+}
+
+/* Titres h4 et h5 un peu plus petits */
+h4 {
+  font-size: 13px !important;
+}
+
+h5 {
+  font-size: 13px !important;
+}
+
+/* Réduction taille police globale dans les boxes shinydashboardPlus::box */
+.box {
+  font-size: 13px !important;
+}
+
+/* Pour réduire aussi la taille des titres dans ces boxes (ex: les titres de box) */
+.box .box-title {
+  font-size: 13px !important;
+  font-weight: 500;
+}
+
+.nav-tabs-custom > .box-header > .box-title {
+      font-size: 20px !important;
+      font-weight: bold;
+    }
+
         
                     "))
     
@@ -87,7 +119,7 @@ ui <- fluidPage(
     dashboardSidebar(
       sidebarMenu(
         menuItem("README", tabName = "Readme", icon = icon("book")),
-        menuItem("Visualization", tabName = "Visualisation", icon = icon("chart-area"))
+        menuItem("Visualization", tabName = "Visualization", icon = icon("chart-area"))
       )
     ),
     
@@ -106,7 +138,7 @@ ui <- fluidPage(
                 )
         ),
         
-        tabItem(tabName = "Visualisation",
+        tabItem(tabName = "Visualization",
                 fluidRow(
                   column(3,
                          tabBox(
@@ -132,48 +164,76 @@ ui <- fluidPage(
                                     uiOutput("subfolder_selector"),
                                     textOutput("status_message"),
                                     br(),
+                                    div(
+                                      style = "background-color: #eaf4fc; padding: 10px; border-left: 5px solid #007bff; margin-bottom: 10px;",
+                                      tags$strong("💡 Tip:"),
+                                      " For optimal batch processing, start by tuning the parameters on a QC sample or the most intense spectrum."
+                                    ),
                                     
                                     selectInput("spectrum_type", "Spectrum type:",
                                                 choices = c("TOCSY", "HSQC", "COSY", "UFCOSY"),
                                                 selected = "TOCSY"),
                                     
-                                    selectInput("seuil_method", "Thresholding method:", 
-                                                choices = c("Percentage of max" = "max_pct", 
-                                                            "Noise multiplier" = "bruit_mult")),
-                                    
-                                    conditionalPanel(
-                                      condition = "input.seuil_method == 'max_pct'",
-                                      numericInput("pct_val", "Percentage of max:", value = 0.01, min = 0.001, max = 1, step = 0.001)
+                                    shinydashboardPlus::box(
+                                      title = "Threshold Parameters",
+                                      status = "primary",
+                                      solidHeader = TRUE,
+                                      collapsible = TRUE,
+                                      collapsed = TRUE,  # facultatif : pour que la boîte soit repliée par défaut
+                                      width = 12,
+                                      
+                                      selectInput("seuil_method", "Thresholding method:", 
+                                                  choices = c("Percentage of max" = "max_pct", 
+                                                              "Noise multiplier" = "bruit_mult")),
+                                      
+                                      conditionalPanel(
+                                        condition = "input.seuil_method == 'max_pct'",
+                                        numericInput("pct_val", "Percentage of max:", value = 0.01, min = 0.001, max = 1, step = 0.001)
+                                      ),
+                                      
+                                      conditionalPanel(
+                                        condition = "input.seuil_method == 'bruit_mult'",
+                                        numericInput("bruit_mult", "Noise multiplier:", value = 3, min = 0.5, max = 10, step = 0.5)
+                                      ),
+                                      
+                                      actionButton("calculate_contour", "Compute threshold"),
+                                      
+                                      br(),
+                                      strong("Computed threshold:"),
+                                      verbatimTextOutput("seuil_text"),
+                                      br()
                                     ),
-                                    
-                                    conditionalPanel(
-                                      condition = "input.seuil_method == 'bruit_mult'",
-                                      numericInput("bruit_mult", "Noise multiplier:", value = 3, min = 0.5, max = 10, step = 0.5)
-                                    ),
-                                    
-                                    # Button to compute the threshold
-                                    actionButton("calculate_contour", "Compute threshold"),
-                                    
-                                    # Display computed threshold
-                                    br(),
-                                    strong("Computed threshold:"),
-                                    verbatimTextOutput("seuil_text"),
-                                    br(),
                                     
                                     # User-editable value
                                     numericInput("contour_start", "Intensity value:", value = NULL, min = 0, step = 100),
                                     
                                     actionButton("generate_plot", "📊 Generate Plot"),
-                                    checkboxInput("disable_clustering", "🔍 Ne pas utiliser de clustering (méthode alternative)", value = FALSE),
-                                    actionButton("generate_centroids", "🔴 Find Peaks"),
-                                    numericInput("eps_value", "Clustering epsilon:", value = 0.01, min = 0, step = 0.001),
-                                    actionButton("export_projected_centroids", "📤 Export batch intensity")
-                           ),
+                                    br(),
+                                    br(),
+                                    shinydashboardPlus::box(
+                                      title = "Peak picking",
+                                      status = "primary",
+                                      solidHeader = TRUE,
+                                      collapsible = TRUE,
+                                      collapsed = TRUE,  # facultatif : pour que la boîte soit repliée par défaut
+                                      width = 12,
+                                      actionButton("generate_centroids", "🔴 Find Peaks"),
+                                      checkboxInput("disable_clustering", "🔍 No clustering", value = FALSE),
+                                      numericInput("eps_value", "Clustering epsilon:", value = 0.01, min = 0, step = 0.001)),
+                                    
+                                    div(
+                                      style = "background-color: #eaf4fc; padding: 10px; border-left: 5px solid #007bff; margin-bottom: 10px;",
+                                      tags$strong("💡 Tip:"),
+                                      " Using clustering will help detect multiplets as such."
+                                    ),
+                                    
+                                    ),
+                           
+                           
                            
                            # Third panel : Used to manually modify automated peak picking result
                            
-                           tabPanel("🔴 Peaks and Bounding Boxes",
-                                    actionButton("toggle_centroid_section", "Add/Remove a peak"),
+                           tabPanel("✋ Manual Editing",
                                     hidden(div(
                                       id = "centroid_section",
                                       tags$h4("➕ Manually add a Peak"),
@@ -210,52 +270,59 @@ ui <- fluidPage(
                            # Fifth panel : Used to manually import or export result
                            
                            tabPanel("🔁 Import/Export",
-                                    actionButton("export_centroids", "Export peaks"),
                                     verbatimTextOutput("centroids_output"),
                                     tags$h4("📥 Import peaks"),
                                     fileInput("import_centroids_file", "Import CSV file:", accept = ".csv"),
-                                    downloadButton("export_boxes", "Export bounding boxes")
+                                    downloadButton("export_centroids", "Export peaks"),
+                                    br(),
+                                    br(),
+                                    downloadButton("export_boxes", "Export bounding boxes"),
+                                    br(),
+                                    br(),
+                                    downloadButton("download_projected_centroids", "Export Projected Centroids")
+                                    
                            )
                          )
                   ),
                   
-                  column(9, 
-                         # Loading messages
-                         div(id = "loading_message", 
-                             "Generating plot, please wait...", 
-                             style = "font-size: 18px; color: blue; font-weight: bold; display: none;"),
-                         div(id = "export_loading_message", 
-                             "Exporting centroids, please wait...", 
-                             style = "font-size: 18px; color: blue; font-weight: bold; display: none;"),
-                         
-                         # Full-width interactive plot
-                         withSpinner(
-                           div(id = "interactivePlot", 
-                               plotlyOutput("interactivePlot", height = "600px", width = "100%"))
-                         ),
-                         
-                         br(), tags$hr(), br(),
-                         
-                         # Tabs for dataframes
-                         box(
-                           title = "Associated data",
+                  column(9,
+                         tabBox(
                            width = 12,
-                           solidHeader = TRUE,
-                           status = "primary",
-                           tabBox(
-                             width = 12,
-                             id = "data_tabs",
-                             tabPanel("🔵 Peaks", 
-                                      tags$h4("Table of detected or manually added peaks"),
-                                      DTOutput("centroid_table")
-                             ),
-                             tabPanel("🟦 Bounding boxes", 
-                                      tags$h4("Table of bounding boxes"),
-                                      DTOutput("bbox_table")
-                             )
+                           id = "main_plot_tabs",
+                           
+                           # Onglet 1 : Spectre interactif
+                           tabPanel("📊 Spectrum",
+                                    div(id = "loading_message", 
+                                        "Generating plot, please wait...", 
+                                        style = "font-size: 18px; color: blue; font-weight: bold; display: none;"),
+                                    div(id = "export_loading_message", 
+                                        "Exporting centroids, please wait...", 
+                                        style = "font-size: 18px; color: blue; font-weight: bold; display: none;"),
+                                    
+                                    withSpinner(
+                                      div(id = "interactivePlot", 
+                                          plotlyOutput("interactivePlot", height = "600px", width = "100%"))
+                                    )
+                           ),
+                           
+                           # Onglet 2 : Tableaux de données
+                           tabPanel("🧾 Associated Data",
+                                    tabBox(
+                                      width = 12,
+                                      id = "data_tabs",
+                                      tabPanel("🔴 Peaks", 
+                                               tags$h4("Table of detected or manually added peaks"),
+                                               DTOutput("centroid_table")
+                                      ),
+                                      tabPanel("🟦 Bounding boxes", 
+                                               tags$h4("Table of bounding boxes"),
+                                               DTOutput("bbox_table")
+                                      )
+                                    )
                            )
                          )
                   )
+                  
                 )
         ),
         
@@ -568,7 +635,7 @@ server <- function(input, output, session) {
       plot <- plot +
         geom_point(data = centroids, aes(x = F2_ppm, y = F1_ppm, color = as.numeric(stain_intensity)),
                    size = 1.2, inherit.aes = FALSE) +
-        scale_color_gradient(low = "blue", high = "red")  # Color gradient based on intensity
+        scale_color_gradient(low = "blue", high = "red", name = "Intensity")  # Color gradient based on intensity
     }
     
     # Store the final plot in the reactive value nmr_plot()
@@ -928,6 +995,12 @@ server <- function(input, output, session) {
       # Show an empty message or placeholder plot
       ggplotly(ggplot() + theme_void() + ggtitle("No spectrum displayed"))
     } else {
+      plot_obj <- plot_obj + 
+        theme(
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 9),
+        legend.key.size = unit(0.4, "cm")
+      )
       ggplotly(plot_obj, source = "nmr_plot")
     }
   })
@@ -956,33 +1029,20 @@ server <- function(input, output, session) {
   
   # --- Centroids Export Handler ---
   
-  observeEvent(input$export_centroids, {
-    shinyjs::show("loading_message")  # Show a loading message to inform user the export is in progress
-    
-    req(main_directory())  # Ensure the main directory is set before proceeding
-    
-    print(main_directory())  # Print the path to console for debugging
-    
-    export_path <- file.path(main_directory(), "exported_centroids.csv")  # Define full path for export file
-    
-    tryCatch({
-      # Check if there are any centroids to export
-      if (nrow(centroids_data()) > 0) {
-        write.csv(centroids_data(), export_path, row.names = FALSE)  # Save centroid data as CSV without row names
-        
-        # Notify user that export succeeded and show file location
-        showNotification(paste("Centroids exported to", export_path), type = "message")
+  output$export_centroids <- downloadHandler(
+    filename = function() {
+      paste0("centroids_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      df <- centroids_data()
+      if (!is.null(df) && nrow(df) > 0) {
+        write.csv(df, file, row.names = FALSE)
       } else {
-        # Warn user if there are no centroids to export
-        showNotification("No centroids to export", type = "warning")
+        # Create empty file or with NA to avoid error
+        write.csv(data.frame(), file)
       }
-    }, error = function(e) {
-      # Handle any error during export and notify user with error message
-      showNotification(paste("Error during export:", e$message), type = "error")
-    })
-    
-    shinyjs::hide("loading_message")  # Hide the loading message after export completes
-  })
+    }
+  )
   
   # --- Bounding Boxes Export Handler ---
   
@@ -1051,122 +1111,55 @@ server <- function(input, output, session) {
   
 
   
-  ## Batch ( Not implemented yet ) ----
-  observeEvent(input$run_batch, {
-    req(save_directory())  # Ensure output directory is set
-    
-    # Check if necessary data for batch processing is available
-    if (is.null(bounding_boxes_data()) || is.null(centroids_data()) || is.null(spectra_list())) {
-      showNotification("❌ Missing data for batch processing.", type = "error")
-      return(NULL)
-    }
-    
-    box_ref <- bounding_boxes_data()
-    print("box_ref:")
-    print(box_ref)
-    
-    centroids_ref <- centroids_data()
-    
-    spectra <- spectra_list()
-    n <- length(spectra)
-    
-    if (n == 0) {
-      showNotification("❌ No spectra loaded.", type = "error")
-      return(NULL)
-    }
-    
-    dir.create("results_batch", showWarnings = FALSE)  # Create output folder if it doesn't exist
-    
-    withProgress(message = "Running batch processing...", value = 0, {
-      lapply(seq_along(spectra), function(i) {
-        incProgress(1 / n, detail = paste("Spectrum", names(spectra)[i]))
-        spectre_name <- names(spectra)[i]
-        data <- spectra[[i]]
-        mat <- data$spectrumData  # Matrix of spectral data
-        
-        ppm_x <- as.numeric(colnames(mat))
-        ppm_y <- as.numeric(rownames(mat))
-        
-        boxes <- box_ref
-        
-        # Calculate intensity within each bounding box on the spectrum
-        boxes$stain_intensity <- apply(boxes, 1, function(box) {
-          x_idx <- which(ppm_y <= box["xmax"] & ppm_y >= box["xmin"])  # Indices on x-axis within box limits
-          print("ppm_x_idx :")
-          print(x_idx)
-          y_idx <- which(ppm_x <= box["ymax"] & ppm_x >= box["ymin"])  # Indices on y-axis within box limits
-          # print("ppm_y_idx :")
-          # print(y_idx)
-          
-          # Sum intensity values inside the bounding box, ignoring NA
-          sum(mat[x_idx, y_idx], na.rm = TRUE)
-        })
-        
-        # Add box ID if it doesn't exist
-        if (is.null(boxes$box_id)) {
-          boxes$box_id <- paste0("box", seq_len(nrow(boxes)))
-        }
-        
-        # Select columns to export
-        result_data <- boxes[, c("box_id", "xmin", "xmax", "ymin", "ymax", "stain_intensity")]
-        
-        # Save results CSV per spectrum
-        write.csv(result_data, file.path(save_directory(), paste0(basename(spectre_name), "_results.csv")), row.names = FALSE)
-      })
-    })
-    
-    showNotification("✅ Batch processing complete. Results saved in 'results_batch/' folder.", type = "message")
-  })
-  
+  # Batch ( Not implemented yet ) ----
   ## Test ----
-  
-  # Function to project reference centroids on contour data and calculate intensity around each centroid
-  project_centroids_with_intensity <- function(reference_centroids, result_list, output_dir = "centroid_exports", eps = input$eps_value/2) {
-    if (!dir.exists(output_dir)) dir.create(output_dir)  # Create output directory if missing
-    
-    for (name in names(result_list)) {
-      result <- result_list[[name]]
-      if (is.null(result$contour_data)) next  # Skip if no contour data
+  output$download_projected_centroids <- downloadHandler(
+    filename = function() {
+      paste0("projected_centroids_", Sys.Date(), ".zip")
+    },
+    content = function(zipfile) {
+      req(centroids_data())
+      req(result_data_list())
       
-      contour_data <- result$contour_data
+      # Dossier temporaire pour les fichiers CSV
+      tmp_dir <- tempdir()
+      csv_files <- c()
       
-      # Calculate intensity near each centroid by summing contour levels within eps distance
-      projected_centroids <- reference_centroids %>%
-        dplyr::rowwise() %>%
-        dplyr::mutate(
-          stain_intensity = {
-            local_points <- contour_data %>%
-              dplyr::filter(
-                abs(-x - F2_ppm) <= eps,
-                abs(-y - F1_ppm) <= eps
-              )
-            sum(local_points$level, na.rm = TRUE)
-          }
-        ) %>%
-        dplyr::ungroup()
+      eps_val <- input$eps_value %||% 0.04
       
-      # Extract folder/spectrum name to use in output filename
-      subfolder_name <- basename(name)
-      output_file <- file.path(output_dir, paste0(subfolder_name, "_projected_centroids.csv"))
+      # Boucle sur chaque spectre pour créer un CSV
+      for (name in names(result_data_list())) {
+        result <- result_data_list()[[name]]
+        if (is.null(result$contour_data)) next
+        
+        contour_data <- result$contour_data
+        reference_centroids <- centroids_data()
+        
+        # Calcul des intensités autour de chaque centroïde
+        projected_centroids <- reference_centroids %>%
+          dplyr::rowwise() %>%
+          dplyr::mutate(
+            stain_intensity = {
+              local_points <- contour_data %>%
+                dplyr::filter(
+                  sqrt((-x - F2_ppm)^2 + (-y - F1_ppm)^2) <= eps_val / 2
+                )
+              sum(local_points$level, na.rm = TRUE)
+            }
+          ) %>%
+          dplyr::ungroup()
+        
+        subfolder_name <- basename(name)
+        output_csv <- file.path(tmp_dir, paste0(subfolder_name, "_projected_centroids.csv"))
+        readr::write_csv(projected_centroids, output_csv)
+        csv_files <- c(csv_files, output_csv)
+      }
       
-      # Export projected centroids with intensity to CSV
-      readr::write_csv(projected_centroids, output_file)
+      # Création d'un zip avec tous les CSV
+      zip(zipfile, files = csv_files, flags = "-j")  # -j = no folder structure
     }
-    
-    showNotification("✅ Centroids projected and exported with intensity.", type = "message")
-  }
+  )
   
-  observeEvent(input$export_projected_centroids, {
-    req(centroids_data())  # Reference centroids required
-    req(result_data_list())  # List of processed results with contour data
-    
-    project_centroids_with_intensity(
-      reference_centroids = centroids_data(),
-      result_list = result_data_list(),
-      output_dir = "centroid_exports",  # Output folder for exported files
-      eps = input$eps_value %||% 0.04  # Epsilon radius for projection (default fallback)
-    )
-  })
 
   
   # Allow user to select output directory via a folder chooser dialog
