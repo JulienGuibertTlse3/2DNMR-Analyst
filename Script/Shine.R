@@ -304,6 +304,7 @@ server <- function(input, output, session) {
   
   ## Reactive Values ----
   
+  modifiable_boxes <- reactiveVal(data.frame())
   progress_bar <- reactiveVal(NULL)
   result_data_list <- reactiveVal(list())
   reference_boxes <- reactiveVal()
@@ -363,9 +364,8 @@ server <- function(input, output, session) {
   
   
   bounding_boxes_data <- reactive({
-    req(fixed_boxes(), bruker_data())
+    req(modifiable_boxes(), bruker_data())
     
-    # Save the data matrix
     mat <- bruker_data()$spectrumData
     if (is.null(mat)) {
       warning("La matrice du spectre est NULL")
@@ -375,18 +375,14 @@ server <- function(input, output, session) {
     ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
     ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
     
-    # Chechk the ppm values
     if (any(is.na(ppm_x)) || any(is.na(ppm_y))) {
-      warning("ppm_x ou ppm_y contient des NA (conversion ratée ?)")
+      warning("ppm_x ou ppm_y contient des NA")
       return(NULL)
     }
     
-    boxes <- fixed_boxes()
-    if (nrow(boxes) == 0) {
-      return(boxes)
-    }
+    boxes <- modifiable_boxes()
+    if (nrow(boxes) == 0) return(boxes)
     
-    # Add intensity
     boxes$stain_intensity <- NA_real_
     for (i in seq_len(nrow(boxes))) {
       xmin <- as.numeric(boxes$xmin[i])
@@ -404,6 +400,7 @@ server <- function(input, output, session) {
     
     boxes
   })
+  
   
   reference_boxes <- reactiveVal()
   reference_centroids <- reactiveVal()
@@ -738,6 +735,7 @@ server <- function(input, output, session) {
         peak_pick_2d_nt2(
           bruker_data = selected_spectrum,
           threshold_value = input$contour_start,
+          neighborhood_size = 3,
           f2_exclude_range = c(4.7, 5.0)
         )
       }, error = function(e) {
@@ -752,6 +750,7 @@ server <- function(input, output, session) {
       centroids_data(result_peaks$peaks)  # <- ici on accède bien au data.frame
       box_coords_only <- result_peaks$bounding_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
       fixed_boxes(box_coords_only)
+      modifiable_boxes(fixed_boxes())
       reference_boxes(fixed_boxes())
       contour_plot_base(selected_result$plot + labs(title = ""))
 
@@ -788,6 +787,7 @@ server <- function(input, output, session) {
         centroids_data(result1$centroids)
         box_coords_only <- result1$bounding_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
         fixed_boxes(box_coords_only)
+        modifiable_boxes(fixed_boxes())
         reference_boxes(fixed_boxes())
         contour_plot_base(selected_result$plot + labs(title = ""))
         refresh_nmr_plot()
@@ -858,19 +858,17 @@ server <- function(input, output, session) {
       ymax = input$manual_ymax
     )
     
-    current_boxes <- bounding_boxes_data()
+    current_boxes <- modifiable_boxes()
     
-    # Check that existing boxes have the correct format
     if (nrow(current_boxes) > 0 && !all(c("xmin", "xmax", "ymin", "ymax") %in% names(current_boxes))) {
-      showNotification("❌ Error: existing bounding box format is invalid.", type = "error")
+      showNotification("❌ Format invalide des boîtes existantes.", type = "error")
       return()
     }
     
     updated_boxes <- bind_rows(current_boxes, new_box)
-    bounding_boxes_data(updated_boxes)
-    
+    modifiable_boxes(updated_boxes)
     refresh_nmr_plot()
-    showNotification("🟦 Manual bounding box added.", type = "message")
+    showNotification("🟦 Boîte ajoutée manuellement.", type = "message")
   })
   
   
@@ -892,12 +890,12 @@ server <- function(input, output, session) {
   observeEvent(input$delete_bbox, {
     selected <- input$bbox_table_rows_selected
     if (length(selected) > 0) {
-      current <- bounding_boxes_data()
-      bounding_boxes_data(current[-selected, ])
+      current <- modifiable_boxes()
+      modifiable_boxes(current[-selected, ])
       refresh_nmr_plot()
-      showNotification("🗑️ Bounding box deleted", type = "message")
+      showNotification("🗑️ Boîte supprimée", type = "message")
     } else {
-      showNotification("⚠️ Please select a bounding box to delete", type = "warning")
+      showNotification("⚠️ Sélectionnez une boîte à supprimer", type = "warning")
     }
   })
   
