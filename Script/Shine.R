@@ -14,6 +14,7 @@ source("C://Users//juguibert//Documents//Function_test//Read_2DNMR_spectrum.R")
 source("C://Users//juguibert//Documents//Function_test//Vizualisation.R")
 source("C://Users//juguibert//Documents//Function_test//Integration.R")
 source("C://Users//juguibert//Documents//Function_test//Pping.R")
+Rcpp::sourceCpp("C://Users//juguibert//Documents//Function_test//petit_test.cpp")
 
 
 # Interface ----
@@ -234,6 +235,7 @@ h5 {
                            # Third panel : Used to manually modify automated peak picking result
                            
                            tabPanel("✋ Manual Editing",
+                                    
                                     hidden(div(
                                       id = "centroid_section",
                                       tags$h4("➕ Manually add a Peak"),
@@ -302,7 +304,9 @@ h5 {
                                     withSpinner(
                                       div(id = "interactivePlot", 
                                           plotlyOutput("interactivePlot", height = "600px", width = "100%"))
-                                    )
+                                    ),
+                                    verbatimTextOutput("clickedCoords"),
+                                    
                            ),
                            
                            # Onglet 2 : Tableaux de données
@@ -371,6 +375,7 @@ server <- function(input, output, session) {
   
   ## Reactive Values ----
   
+  last_click_coords <- reactiveVal(NULL)
   modifiable_boxes <- reactiveVal(data.frame())
   progress_bar <- reactiveVal(NULL)
   result_data_list <- reactiveVal(list())
@@ -606,7 +611,7 @@ server <- function(input, output, session) {
 
     # ⚠️ Force evaluation of the reactive bounding_boxes_data to update intensity values
     boxes <- bounding_boxes_data()
-
+    bbox_path_df <- make_bbox_outline(boxes)
     
     # Start with the base contour plot
     plot <- contour_plot_base()
@@ -615,8 +620,8 @@ server <- function(input, output, session) {
     # If bounding boxes exist, overlay them on the plot as red dashed rectangles
     if (!is.null(boxes) && nrow(boxes) > 0) {
       plot <- plot +
-        geom_rect(data = boxes, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-                  color = "red", fill = NA, linetype = "dashed", inherit.aes = FALSE)
+        geom_path(data = bbox_path_df, aes(x = x, y = y, group = group), color = "red",
+                  linewidth = 0.5)
     }
 
     
@@ -997,14 +1002,45 @@ server <- function(input, output, session) {
     } else {
       plot_obj <- plot_obj + 
         theme(
-        legend.text = element_text(size = 8),
-        legend.title = element_text(size = 9),
-        legend.key.size = unit(0.4, "cm")
-      )
+          legend.text = element_text(size = 8),
+          legend.title = element_text(size = 9),
+          legend.key.size = unit(0.4, "cm")
+        )
       ggplotly(plot_obj, source = "nmr_plot")
     }
   })
   
+  ## Click event ----
+  
+  observeEvent(event_data("plotly_click", source = "nmr_plot"), {
+    click_data <- event_data("plotly_click", source = "nmr_plot")
+    
+    # Vérification : x et y doivent exister et ne pas être NA
+    if (!is.null(click_data) &&
+        !is.null(click_data$x) && !is.null(click_data$y) &&
+        !is.na(click_data$x) && !is.na(click_data$y)) {
+      
+      coords <- list(F2_ppm = click_data$x, F1_ppm = click_data$y)
+      last_click_coords(coords)
+      message("Clic détecté : x=", -click_data$x, " y=", -click_data$y)
+      
+    } else {
+      message("Clic ignoré : pas de coordonnées valides.")
+    }
+  })
+  
+  
+  output$clickedCoords <- renderPrint({
+    coords <- last_click_coords()
+    if (is.null(coords)) {
+      "Cliquez sur un point du spectre pour afficher les coordonnées."
+    } else {
+      paste0("F2_ppm = ", round(-coords$F2_ppm, 9), ", F1_ppm = ", round(-coords$F1_ppm, 9))
+    }
+  })
+  
+  
+  ## Numeric params ----
   
   observeEvent(input$spectrum_type, {
     params <- switch(input$spectrum_type,

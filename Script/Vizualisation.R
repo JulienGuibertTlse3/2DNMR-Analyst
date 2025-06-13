@@ -373,3 +373,18 @@ modulate_threshold <- function(VI) {
   b <- 1.2
   a * VI^b
 }
+
+
+make_bbox_outline <- function(bbox_df) {
+  do.call(rbind, lapply(1:nrow(bbox_df), function(i) {
+    row <- bbox_df[i, ]
+    data.frame(
+      stain_id = row$stain_id,
+      x = c(row$xmin, row$xmax, row$xmax, row$xmin, row$xmin),
+      y = c(row$ymin, row$ymin, row$ymax, row$ymax, row$ymin),
+      group = row$stain_id,
+      intensity = row$stain_intensity,
+      stringsAsFactors = FALSE
+    )
+  }))
+}

@@ -3,8 +3,10 @@ library(zoo)
 library(matrixStats)
 library(minpack.lm)  # For Gaussian fitting
 library(dplyr)
+library(imager)
 
 
+## R Function ----
 peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
                              prominence_factor = 0.02, adaptive_peak_threshold = 0.01,
                              threshold_value = NULL, f2_exclude_range = NULL,
@@ -106,34 +108,49 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
     dplyr::mutate(stain_id = paste0("peak", seq_len(n()))) %>%
     dplyr::select(stain_id, F1_ppm, F2_ppm, stain_intensity)
   
-  # Compute bounding boxes
-  max_intensity <- max(peak_list$stain_intensity, na.rm = TRUE)
-  min_box_size_ppm <- 0.05  # taille minimale en ppm
-  max_box_size_ppm <- 0.5   # taille maximale en ppm
   
+  # Environnement rapide pour suivre les labels utilisés
+  used_labels <- new.env(hash = TRUE, parent = emptyenv())
+  
+  nrow_data <- nrow(bruker_data)
+  ncol_data <- ncol(bruker_data)
+ 
   bounding_boxes <- lapply(seq_len(nrow(peak_list)), function(i) {
     peak <- peak_list[i, ]
+    cx_ppm <- peak$F1_ppm
+    cy_ppm <- peak$F2_ppm
+    intensity <- peak$stain_intensity
     
-    # Échelle de taille (exponentielle douce)
-    scale_factor <- (peak$stain_intensity / max_intensity)^0.5
-    half_size_ppm <- min_box_size_ppm + scale_factor * (max_box_size_ppm - min_box_size_ppm)
+    max_width <- 0.25
+    min_width <- 0.01
+    max_height <- 0.10
+    min_height <- 0.01
     
-    # Centrage autour du pic
-    center_x <- peak$F1_ppm
-    center_y <- peak$F2_ppm
+    stretch_intensity <- function(x, power = 0.5, max_factor = 0.9) {
+      stretched <- (x^power)
+      stretched <- max_factor * stretched + (1 - max_factor)  # augmente les petites valeurs
+      return(stretched)
+    }
+    
+    intensity_norm <- intensity / max(peak_list$stain_intensity)
+    
+    factor <- stretch_intensity(intensity_norm, power = 0.3, max_factor = 0.8)
+    
+    width  <- min_width  + (max_width  - min_width)  * factor
+    height <- (min_height + (max_height - min_height) * factor) / 1.6
     
     data.frame(
       stain_id = peak$stain_id,
-      xmin = center_y - half_size_ppm,
-      xmax = center_y + half_size_ppm,
-      ymin = center_x - half_size_ppm/2,
-      ymax = center_x + half_size_ppm/2
+      xmin = cy_ppm - width / 2,
+      xmax = cy_ppm + width / 2,
+      ymin = cx_ppm - height / 2,
+      ymax = cx_ppm + height / 2
     )
   })
   
   
-  bounding_boxes <- do.call(rbind, bounding_boxes)
   
+  
+  bounding_boxes <- do.call(rbind, bounding_boxes)
   return(list(peaks = peak_list, bounding_boxes = bounding_boxes))
 }
-
