@@ -220,7 +220,12 @@ h5 {
                                       width = 12,
                                       actionButton("generate_centroids", "🔴 Find Peaks"),
                                       checkboxInput("disable_clustering", "🔍 No clustering", value = FALSE),
-                                      numericInput("eps_value", "Clustering epsilon:", value = 0.01, min = 0, step = 0.001)),
+                                      numericInput("eps_value", "Clustering epsilon:", value = 0.01, min = 0, step = 0.001),
+                                      textAreaInput("keep_peak_ranges_text", 
+                                                    "Plages de pics à conserver (ex: 0.5,-0.5; 1,0.8; 3.27,3.26)", 
+                                                    value = "0.5,-0.5; 1,0.8; 1.55,1.45; 3.397,3.38; 3.27,3.26; 1.28,1.26; 5.367,5.353; 4.47,4.45; 4.385,4.375",
+                                                    rows = 5)
+                                    ),
                                     
                                     div(
                                       style = "background-color: #eaf4fc; padding: 10px; border-left: 5px solid #007bff; margin-bottom: 10px;",
@@ -281,7 +286,7 @@ h5 {
                                     downloadButton("export_boxes", "Export bounding boxes"),
                                     br(),
                                     br(),
-                                    downloadButton("download_projected_centroids", "Export Projected Centroids")
+                                    downloadButton("download_projected_centroids", "Export Projected Peaks")
                                     
                            )
                          )
@@ -802,13 +807,16 @@ server <- function(input, output, session) {
     
     if (input$disable_clustering) {
 
+      keep_ranges <- parse_keep_peak_ranges(input$keep_peak_ranges_text)
+      
       ### 🔹 UTILISATION de `peak_pick_2d_nt2` (pas de clustering) ----
       result_peaks <- tryCatch({
         peak_pick_2d_nt2(
           bruker_data = selected_spectrum,
           threshold_value = input$contour_start,
           neighborhood_size = 3,
-          f2_exclude_range = c(4.7, 5.0)
+          f2_exclude_range = c(4.7, 5.0),
+          keep_peak_ranges = keep_ranges
         )
       }, error = function(e) {
         showNotification(paste("❌ peak_pick_2d_nt2 error:", e$message), type = "error")
@@ -834,7 +842,13 @@ server <- function(input, output, session) {
 
       
     } else {
-      ### 🔹 UTILISATION de `process_nmr_centroids` (avec clustering) ----
+      
+      ### 🔹 UTILISATION de `process_nmr_centroids` (clustering) ----
+      
+      
+      keep_ranges <- parse_keep_peak_ranges(input$keep_peak_ranges_text)
+      
+      
       result1 <- tryCatch({
         process_nmr_centroids(
           rr_data = selected_spectrum,
@@ -843,16 +857,12 @@ server <- function(input, output, session) {
           contour_num = params$contour_num,
           contour_factor = params$contour_factor,
           eps_value = input$eps_value,
-          keep_peak_ranges = list(
-            c(0.5, -0.5), c(1, 0.8), c(1.55, 1.45), c(3.397, 3.38),
-            c(1.28, 1.26), c(5.367, 5.353), c(4.47, 4.45), c(4.385, 4.375)
-          )
+          keep_peak_ranges = keep_ranges
         )
       }, error = function(e) {
-        showNotification(paste("❌ Processing error:", e$message), type = "error")
-        print(paste("Caught error:", e$message))
-        shinyjs::hide("loading_message")
-        return(NULL)
+        # Gestion d’erreur
+        showNotification(paste("Erreur :", e$message), type = "error")
+        NULL
       })
       
       if (!is.null(result1)) {
@@ -1157,28 +1167,49 @@ server <- function(input, output, session) {
       req(centroids_data())
       req(result_data_list())
       
-      # Dossier temporaire pour les fichiers CSV
       tmp_dir <- tempdir()
       csv_files <- c()
       
       eps_val <- input$eps_value %||% 0.04
       
-      # Boucle sur chaque spectre pour créer un CSV
+      # Reference centroids from the base spectrum (e.g., first TOCSY)
+      reference_centroids <- centroids_data()
+      
       for (name in names(result_data_list())) {
         result <- result_data_list()[[name]]
         if (is.null(result$contour_data)) next
         
         contour_data <- result$contour_data
-        reference_centroids <- centroids_data()
         
-        # Calcul des intensités autour de chaque centroïde
-        projected_centroids <- reference_centroids %>%
+        # --- Estimate 2D shift by cross-correlation of contour coordinates ---
+        # Default shifts in case cross-correlation fails
+        delta_F2 <- 0
+        delta_F1 <- 0
+        
+        # Attempt shift estimation
+        try({
+          ref_hist <- with(reference_centroids, MASS::kde2d(F2_ppm, F1_ppm, n = 200))
+          spec_hist <- with(contour_data, MASS::kde2d(-x, -y, n = 200))
+          corr <- stats::convolve2d(ref_hist$z, spec_hist$z, type = "open")
+          max_idx <- which(corr == max(corr, na.rm = TRUE), arr.ind = TRUE)
+          delta_F2 <- (max_idx[1] - nrow(ref_hist$z)) * mean(diff(ref_hist$x))
+          delta_F1 <- (max_idx[2] - ncol(ref_hist$z)) * mean(diff(ref_hist$y))
+        }, silent = TRUE)
+        
+        shifted_centroids <- reference_centroids %>%
+          dplyr::mutate(
+            F2_ppm = F2_ppm + delta_F2,
+            F1_ppm = F1_ppm + delta_F1
+          )
+        
+        # Recalculate intensities at shifted positions
+        projected_centroids <- shifted_centroids %>%
           dplyr::rowwise() %>%
           dplyr::mutate(
             stain_intensity = {
               local_points <- contour_data %>%
                 dplyr::filter(
-                  sqrt((-x - F2_ppm)^2 + (-y - F1_ppm)^2) <= eps_val / 2
+                  sqrt((-x - F2_ppm)^2 + (-y - F1_ppm)^2) <= eps_val * 10
                 )
               sum(local_points$level, na.rm = TRUE)
             }
@@ -1191,10 +1222,10 @@ server <- function(input, output, session) {
         csv_files <- c(csv_files, output_csv)
       }
       
-      # Création d'un zip avec tous les CSV
-      zip(zipfile, files = csv_files, flags = "-j")  # -j = no folder structure
+      zip(zipfile, files = csv_files, flags = "-j")
     }
   )
+  
   
 
   
@@ -1246,6 +1277,21 @@ server <- function(input, output, session) {
     HTML(paste0("<span style='font-size:16px; font-weight:bold; color:green;'>✅ Spectrum selected: <code>", 
                 basename(input$selected_subfolder), "</code></span>"))
   })
+  
+  
+  parse_keep_peak_ranges <- function(input_string) {
+    if (is.null(input_string) || input_string == "") return(NULL)
+    
+    pairs <- strsplit(input_string, ";")[[1]]
+    
+    parsed <- lapply(pairs, function(p) {
+      nums <- as.numeric(trimws(unlist(strsplit(p, ","))))
+      if (length(nums) == 2 && all(!is.na(nums))) nums else NULL
+    })
+    
+    parsed[!sapply(parsed, is.null)]
+  }
+  
   
 }
 

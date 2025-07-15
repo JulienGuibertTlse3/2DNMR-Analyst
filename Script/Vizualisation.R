@@ -83,27 +83,50 @@ find_nmr_peak_centroids <- function(rr_data, spectrum_type = NULL,
 }
 
 ## Identify peaks ----
-
 process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, contour_factor = NULL, 
-                                  intensity_threshold = NULL, keep_peak_ranges = NULL, eps_value = NULL) {
+                                  intensity_threshold = NULL, keep_peak_ranges = NULL, eps_value = NULL,
+                                  min_cluster_intensity = 0.03) {
   
-  # Check if contour data is available and well-formed
+  # Check contour validity
   if (nrow(contour_data) == 0 || !"group" %in% colnames(contour_data)) {
     stop("No contours data available for processing.")
   }
   
-  # Normalize contour coordinates for clustering
+  # Normalisation
   contour_data <- contour_data %>%
     mutate(
       x_scaled = (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE),
       y_scaled = (y - mean(y, na.rm = TRUE)) / sd(y, na.rm = TRUE)
     )
   
-  # Apply DBSCAN clustering to contour points
+  # Clustering DBSCAN
   clusters <- dbscan::dbscan(contour_data[, c("x_scaled", "y_scaled")], eps = eps_value, minPts = 0)
   contour_data$stain_id <- as.character(clusters$cluster)
   
-  # Calculate centroids for each cluster
+  # Supprimer les clusters bruités (stain_id == 0)
+  contour_data <- contour_data %>% filter(stain_id != "0")
+  
+  # Filtrage : supprimer les clusters avec très faible intensité ou très faible surface
+  cluster_stats <- contour_data %>%
+    group_by(stain_id) %>%
+    summarise(
+      intensity = sum(level, na.rm = TRUE),
+      x_span = max(x, na.rm = TRUE) - min(x, na.rm = TRUE),
+      y_span = max(y, na.rm = TRUE) - min(y, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      elongation = pmax(x_span / y_span, y_span / x_span)
+    )
+  
+  # Critères : intensité minimale + forme raisonnable (évite des traces bruitées très allongées)
+  valid_ids <- cluster_stats %>%
+    filter(intensity >= min_cluster_intensity & elongation <= 10) %>%
+    pull(stain_id)
+  
+  contour_data <- contour_data %>% filter(stain_id %in% valid_ids)
+  
+  # Calcul des centroïdes
   centroids <- contour_data %>%
     group_by(stain_id) %>%
     summarise(
@@ -113,11 +136,10 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       .groups = "drop"
     )
   
-  # Invert ppm axes to match NMR convention
   centroids$F2_ppm <- -centroids$F2_ppm
   centroids$F1_ppm <- -centroids$F1_ppm
   
-  # Create bounding boxes for each cluster
+  # Boîtes englobantes
   bounding_boxes <- contour_data %>%
     group_by(stain_id) %>%
     summarise(
@@ -129,7 +151,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       .groups = "drop"
     )
   
-  # Remove weaker centroids that fall inside bounding boxes of stronger ones
+  # Suppression des centroïdes faibles inclus dans des boîtes plus fortes
   if (nrow(centroids) > 1) {
     centroids_with_boxes <- centroids %>%
       left_join(bounding_boxes, by = "stain_id")
@@ -138,10 +160,8 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     
     for (i in seq_len(nrow(centroids_with_boxes))) {
       current <- centroids_with_boxes[i, ]
-      
       for (j in seq_len(nrow(centroids_with_boxes))) {
         if (i == j) next
-        
         compare <- centroids_with_boxes[j, ]
         
         inside_box <- current$F2_ppm >= compare$xmin & current$F2_ppm <= compare$xmax &
@@ -159,56 +179,34 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     bounding_boxes <- bounding_boxes %>% filter(!stain_id %in% to_remove)
   }
   
-  # Optional: Keep only strongest peaks in user-defined ppm regions
+  # Sélection optionnelle des pics par région
   if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
     for (i in seq_along(keep_peak_ranges)) {
       range <- keep_peak_ranges[[i]]
-      
       if (length(range) == 2) {
-        centroids_in_range <- centroids %>%
-          filter(F2_ppm >= range[2] & F2_ppm <= range[1])
+        centroids_in_range <- centroids %>% filter(F2_ppm >= range[2] & F2_ppm <= range[1])
+        num_peaks_to_keep <- if (i <= 1) 1 else 4
+        top_peaks <- centroids_in_range %>% arrange(desc(stain_intensity)) %>% slice_head(n = num_peaks_to_keep)
+        centroids <- centroids %>% filter(!(F2_ppm >= range[2] & F2_ppm <= range[1])) %>% bind_rows(top_peaks)
         
-        num_peaks_to_keep <- if (i <= 3) 2 else 10
-        
-        top_peaks_in_range <- centroids_in_range %>%
-          arrange(desc(stain_intensity)) %>%
-          slice_head(n = num_peaks_to_keep)
-        
-        centroids <- centroids %>%
-          filter(!(F2_ppm >= range[2] & F2_ppm <= range[1])) %>%
-          bind_rows(top_peaks_in_range)
+        boxes_in_range <- bounding_boxes %>% filter(xmin >= range[2] & xmax <= range[1])
+        top_boxes <- boxes_in_range %>% arrange(desc(intensity)) %>% slice_head(n = num_peaks_to_keep)
+        bounding_boxes <- bounding_boxes %>% filter(!(xmin >= range[2] & xmax <= range[1])) %>% bind_rows(top_boxes)
       }
     }
   }
   
-  # Optional: Keep only strongest boxes in defined regions
-  if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
-    for (i in seq_along(keep_peak_ranges)) {
-      range <- keep_peak_ranges[[i]]
-      
-      if (length(range) == 2) {
-        boxes_in_range <- bounding_boxes %>%
-          filter(xmin >= range[2] & xmax <= range[1])
-        
-        num_boxes_to_keep <- if (i <= 3) 2 else 10
-        
-        top_boxes_in_range <- boxes_in_range %>%
-          arrange(desc(intensity)) %>%
-          slice_head(n = num_boxes_to_keep)
-        
-        bounding_boxes <- bounding_boxes %>%
-          filter(!(xmin >= range[2] & xmax <= range[1])) %>%
-          bind_rows(top_boxes_in_range)
-      }
-    }
-  }
+  # Renommer les centroïdes
+  centroids <- centroids %>%
+    mutate(stain_id = paste0("peak", seq_len(n()))) %>%
+    select(stain_id, F2_ppm, F1_ppm, stain_intensity)
   
-  # Return centroids and their bounding boxes
   return(list(
     centroids = centroids,
     bounding_boxes = bounding_boxes
   ))
 }
+
 
 ## Identify local maxima ----
 

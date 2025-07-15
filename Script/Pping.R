@@ -7,8 +7,8 @@ library(imager)
 
 
 ## R Function ----
-peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
-                             prominence_factor = 0.02, adaptive_peak_threshold = 0.01,
+peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
+                             prominence_factor = 0.01, adaptive_peak_threshold = 0.001,
                              threshold_value = NULL, f2_exclude_range = NULL,
                              keep_peak_ranges = NULL, box_window_size = 11,
                              intensity_fraction = 0.5) {
@@ -57,8 +57,8 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
   }
   
   peak_list <- data.frame(
-    F1_ppm = ppm_x[peaks[, 1]],
     F2_ppm = ppm_y[peaks[, 2]],
+    F1_ppm = ppm_x[peaks[, 1]],
     stain_intensity = bruker_data[peaks]
   )
   
@@ -79,7 +79,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
         peaks_in_range <- peak_list %>%
           dplyr::filter(F2_ppm >= lower_bound & F2_ppm <= upper_bound)
         
-        num_peaks_to_keep <- if (i <= 3) 2 else 10
+        num_peaks_to_keep <- if (i <= 1) 1 else 4
         
         top_peaks_in_range <- peaks_in_range %>%
           dplyr::arrange(desc(stain_intensity)) %>%
@@ -105,8 +105,9 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
   }
   
   peak_list <- peak_list %>%
+    filter_noise_peaks(min_neighbors = 1, neighbor_radius = 0.005, min_relative_intensity = 0.005) %>%
     dplyr::mutate(stain_id = paste0("peak", seq_len(n()))) %>%
-    dplyr::select(stain_id, F1_ppm, F2_ppm, stain_intensity)
+    dplyr::select(stain_id, F2_ppm, F1_ppm, stain_intensity)
   
   
   # Environnement rapide pour suivre les labels utilisés
@@ -114,7 +115,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
   
   nrow_data <- nrow(bruker_data)
   ncol_data <- ncol(bruker_data)
- 
+  
   bounding_boxes <- lapply(seq_len(nrow(peak_list)), function(i) {
     peak <- peak_list[i, ]
     cx_ppm <- peak$F1_ppm
@@ -139,6 +140,10 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
     width  <- min_width  + (max_width  - min_width)  * factor
     height <- (min_height + (max_height - min_height) * factor) / 1.6
     
+    
+    width  <- 0.02
+    height <- 0.002
+    
     data.frame(
       stain_id = peak$stain_id,
       xmin = cy_ppm - width / 2,
@@ -153,4 +158,30 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 3,
   
   bounding_boxes <- do.call(rbind, bounding_boxes)
   return(list(peaks = peak_list, bounding_boxes = bounding_boxes))
+}
+
+# ---- Filtrage des pics de bruit résiduel dans les spectres TOCSY ----
+filter_noise_peaks <- function(peaks, min_neighbors = 2, neighbor_radius = 0.015, min_relative_intensity = 0.03) {
+  if (nrow(peaks) < 2) return(peaks)  # Aucun filtrage nécessaire
+  
+  peaks <- peaks %>%
+    dplyr::mutate(
+      keep = sapply(seq_len(n()), function(i) {
+        x <- peaks$F2_ppm[i]
+        y <- peaks$F1_ppm[i]
+        intensity <- peaks$stain_intensity[i]
+        max_intensity <- max(peaks$stain_intensity)
+        
+        # Distance aux autres pics
+        dist <- sqrt((peaks$F2_ppm - x)^2 + (peaks$F1_ppm - y)^2)
+        neighbors <- sum(dist < neighbor_radius) - 1  # Exclure soi-même
+        
+        # Critères de rejet : isolement + intensité trop faible
+        neighbors >= min_neighbors || (intensity / max_intensity > min_relative_intensity)
+      })
+    ) %>%
+    dplyr::filter(keep) %>%
+    dplyr::select(-keep)
+  
+  return(peaks)
 }
