@@ -401,10 +401,10 @@ server <- function(input, output, session) {
   # bounding_boxes_data <- reactiveVal(data.frame(xmin = numeric(0), xmax = numeric(0), ymin = numeric(0), ymax = numeric(0)))
   spectrum_params <- reactive({
     switch(input$spectrum_type,
-           "TOCSY" = list(intensity_threshold = 80000, contour_num = 20, contour_factor = 1.3, eps_value = 0.0068),
-           "HSQC"  = list(intensity_threshold = 30000,  contour_num = 30,  contour_factor = 1.3, eps_value = 0.0068),
-           "COSY"  = list(intensity_threshold = 60000,  contour_num = 30,  contour_factor = 1.3, eps_value = 0.0068),
-           "UFCOSY"  = list(intensity_threshold = 50000,  contour_num = 70,  contour_factor = 1.3, eps_value = 0.014)
+           "TOCSY" = list(intensity_threshold = 80000, contour_num = 20, contour_factor = 1.3, eps_value = 0.0068, neighborhood_size = 9),
+           "HSQC"  = list(intensity_threshold = 30000,  contour_num = 20,  contour_factor = 1.3, eps_value = 0.002, neighborhood_size = 3),
+           "COSY"  = list(intensity_threshold = 60000,  contour_num = 30,  contour_factor = 1.3, eps_value = 0.0068, neighborhood_size = 9),
+           "UFCOSY"  = list(intensity_threshold = 50000,  contour_num = 70,  contour_factor = 1.3, eps_value = 0.014, neighborhood_size = 3)
     )
   })
   output$matrix_dim <- renderPrint({ req(bruker_data()); dim(bruker_data()$spectrumData) })
@@ -814,7 +814,7 @@ server <- function(input, output, session) {
         peak_pick_2d_nt2(
           bruker_data = selected_spectrum,
           threshold_value = input$contour_start,
-          neighborhood_size = 3,
+          neighborhood_size = params$neighborhood_size,
           f2_exclude_range = c(4.7, 5.0),
           keep_peak_ranges = keep_ranges
         )
@@ -857,7 +857,8 @@ server <- function(input, output, session) {
           contour_num = params$contour_num,
           contour_factor = params$contour_factor,
           eps_value = input$eps_value,
-          keep_peak_ranges = keep_ranges
+          keep_peak_ranges = keep_ranges,
+          spectrum_type = input$spectrum_type
         )
       }, error = function(e) {
         # Gestion d’erreur
@@ -1215,6 +1216,13 @@ server <- function(input, output, session) {
             }
           ) %>%
           dplyr::ungroup()
+        
+            noise_est <- median(projected_centroids$stain_intensity[projected_centroids$stain_intensity > 0], na.rm = TRUE) / 10
+            projected_centroids$VolumeAUC <- pmax(projected_centroids$stain_intensity - noise_est, 0)
+
+            projected_centroids$VolumeEllipsoid <- sapply(1:nrow(projected_centroids), function(i) {
+              calculate_ellipsoid_volume(projected_centroids[i, ], contour_data, eps_val * 10)
+            })
         
         subfolder_name <- basename(name)
         output_csv <- file.path(tmp_dir, paste0(subfolder_name, "_projected_centroids.csv"))

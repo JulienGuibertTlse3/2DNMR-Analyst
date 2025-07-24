@@ -1,6 +1,21 @@
 ### Integration ----
 library(pracma) # For numerical integration
 
+
+# --- Calcul du volume ellipsoïde ---
+calculate_ellipsoid_volume <- function(centroid, contour_data, eps) {
+  local_points <- contour_data %>%
+    dplyr::filter(sqrt((-x - centroid$F2_ppm)^2 + (-y - centroid$F1_ppm)^2) <= eps)
+  if (nrow(local_points) < 3) return(NA)
+  coords <- cbind(-local_points$x, -local_points$y)
+  cov_mat <- cov(coords)
+  eig <- eigen(cov_mat)
+  axes <- sqrt(eig$values)
+  volume <- pi * prod(axes)  # surface ellipse
+  volume_weighted <- volume * sum(local_points$level, na.rm = TRUE)
+  return(volume_weighted)
+}
+
 peakVolume <- function(inFile, gran = 200, c.vol = FALSE, baselineCorr = FALSE) {
   if (!inherits(inFile, "matrix")) {
     stop("Input file must be a matrix with ppm values as row and column names.")
@@ -44,6 +59,8 @@ calculate_peak_volumes <- function(spectrum, peaks, gran = 200, c.vol = TRUE) {
     stop("Spectrum must be a matrix with ppm values as row and column names.")
   }
   
+  peaks <- as.data.frame(peaks)
+  
   ppm_F1 <- as.numeric(rownames(spectrum))
   ppm_F2 <- as.numeric(colnames(spectrum))
   
@@ -52,9 +69,11 @@ calculate_peak_volumes <- function(spectrum, peaks, gran = 200, c.vol = TRUE) {
   size_multiplier <- 5
   
   roi_list <- apply(peaks, 1, function(peak) {
+    F2 <- as.numeric(peak["F2_ppm"])
+    F1 <- as.numeric(peak["F1_ppm"])
     list(
-      x = c(peak["F2_ppm"] - resolution_f2 * size_multiplier, peak["F2_ppm"] + resolution_f2 * size_multiplier),
-      y = c(peak["F1_ppm"] - resolution_f1 * size_multiplier, peak["F1_ppm"] + resolution_f1 * size_multiplier)
+      x = c(F2 - resolution_f2 * size_multiplier, F2 + resolution_f2 * size_multiplier),
+      y = c(F1 - resolution_f1 * size_multiplier, F1 + resolution_f1 * size_multiplier)
     )
   })
   
@@ -64,27 +83,37 @@ calculate_peak_volumes <- function(spectrum, peaks, gran = 200, c.vol = TRUE) {
     y_min <- which.min(abs(ppm_F1 - roi$y[1]))
     y_max <- which.min(abs(ppm_F1 - roi$y[2]))
     
+    if (any(is.na(c(x_min, x_max, y_min, y_max))) || x_min >= x_max || y_min >= y_max)
+      return(NULL)
+    
     subset_data <- data[y_min:y_max, x_min:x_max]
-    if (nrow(subset_data) < 2 || ncol(subset_data) < 2) {
-      stop("Subset matrix must have at least 2 rows and 2 columns.")
-    }
+    if (nrow(subset_data) < 2 || ncol(subset_data) < 2)
+      return(NULL)
     
     return(subset_data)
   }
   
-  volumes <- sapply(roi_list, function(roi) {
-    roi_data <- subsetROI(spectrum, roi)
-    peakVolume(roi_data, gran = gran, c.vol = c.vol)
-  })
+  volumes <- numeric(length(roi_list))
+  volumesAUC <- numeric(length(roi_list))
   
-  volumesAUC <- sapply(roi_list, function(roi) {
-    roi_data <- subsetROI(spectrum, roi)
-    noise_est <- median(roi_data[roi_data > 0]) / 10
-    sum(pmax(roi_data - noise_est, 0), na.rm = TRUE)
-  })
+  for (i in seq_along(roi_list)) {
+    roi_data <- subsetROI(spectrum, roi_list[[i]])
+    if (is.null(roi_data)) {
+      volumes[i] <- NA
+      volumesAUC[i] <- NA
+    } else {
+      volumes[i] <- tryCatch(
+        peakVolume(roi_data, gran = gran, c.vol = c.vol),
+        error = function(e) NA
+      )
+      noise_est <- median(roi_data[roi_data > 0], na.rm = TRUE) / 10
+      volumesAUC[i] <- sum(pmax(roi_data - noise_est, 0), na.rm = TRUE)
+    }
+  }
   
   peaks$Volume <- volumes
   peaks$VolumeAUC <- volumesAUC
+  
   return(peaks)
 }
 
