@@ -105,7 +105,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
   }
   
   peak_list <- peak_list %>%
-    filter_noise_peaks(min_neighbors = 1, neighbor_radius = 0.005, min_relative_intensity = 0.005) %>%
+    filter_noise_peaks(min_neighbors = 1, neighbor_radius = 0.01, min_relative_intensity = 0.02) %>%
     dplyr::mutate(stain_id = paste0("peak", seq_len(n()))) %>%
     dplyr::select(stain_id, F2_ppm, F1_ppm, stain_intensity)
   

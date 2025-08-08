@@ -270,7 +270,14 @@ h5 {
                                       id = "delete_box_section",
                                       tags$h4("❌ Remove a bounding box"),
                                       actionButton("delete_bbox", "Delete selected box 🗑️")
-                                    ))
+                                    )),
+                                    
+                                    br(),
+                                    br(),
+                                    
+                                    # ✅ Bouton toujours visible pour fusion
+                                    tags$h4("🔗 Fusion peaks & boxes"),
+                                    actionButton("fuse_btn", "Fusionner sélection ✅", class = "btn btn-success")
                            ),
                            
                            
@@ -311,6 +318,7 @@ h5 {
                                           plotlyOutput("interactivePlot", height = "600px", width = "100%"))
                                     ),
                                     verbatimTextOutput("clickedCoords"),
+                                    
                                     
                            ),
                            
@@ -1017,7 +1025,10 @@ server <- function(input, output, session) {
           legend.title = element_text(size = 9),
           legend.key.size = unit(0.4, "cm")
         )
-      ggplotly(plot_obj, source = "nmr_plot")
+      ggplotly(plot_obj, source = "A") %>% 
+        layout(dragmode = "select") %>%
+        config(modeBarButtonsToAdd = list("select2d", "lasso2d")) %>%
+        event_register("plotly_selected")
     }
   })
   
@@ -1234,8 +1245,85 @@ server <- function(input, output, session) {
     }
   )
   
+  observeEvent(input$fuse_btn, {
+    req(centroids_data())
+    
+    sel <- event_data("plotly_selected")
+    if (is.null(sel) || nrow(sel) < 2) {
+      showNotification("⚠️ Need at least 2 points selected.", type = "error")
+      return()
+    }
+    
+    sel$x <- -sel$x
+    sel$y <- -sel$y
+    
+    # Récupère les points sélectionnés
+    brushed <- dplyr::semi_join(centroids_data(),
+                                sel,
+                                by = c("F2_ppm" = "x", "F1_ppm" = "y"))
+    
+    if (nrow(brushed) < 2) {
+      showNotification("⚠️ Selection did not match enough points.", type = "error")
+      return()
+    }
+    
+    # Extraire le numéro du premier pic fusionné
+    first_peak_id <- brushed$stain_id[1]  # "peak1"
+    peak_number <- gsub("[^0-9]", "", first_peak_id)
+    
+    fused_point <- data.frame(
+      stain_id = paste0("fused_point", peak_number),
+      F2_ppm = mean(brushed$F2_ppm),
+      F1_ppm = mean(brushed$F1_ppm),
+      stain_intensity = sum(as.numeric(brushed$stain_intensity), na.rm = TRUE)
+    )
+    
+    remaining <- dplyr::anti_join(centroids_data(), brushed, 
+                                  by = c("F2_ppm", "F1_ppm"))
+    
+    centroids_data(rbind(remaining, fused_point))
+    
+    # Suppression des boxes correspondantes
+    if (!is.null(modifiable_boxes()) && nrow(modifiable_boxes()) > 0) {
+      boxes <- modifiable_boxes()
+      
+      selected_boxes <- which(
+        boxes$xmin <= max(brushed$F2_ppm) &
+          boxes$xmax >= min(brushed$F2_ppm) &
+          boxes$ymin <= max(brushed$F1_ppm) &
+          boxes$ymax >= min(brushed$F1_ppm)
+      )
+      
+      # Récupérer les boîtes supprimées
+      removed_boxes <- boxes[selected_boxes, ]
+      
+      # Supprimer ces boîtes
+      boxes <- boxes[-selected_boxes, ]
+      
+      # Créer une nouvelle boîte englobante basée sur les extremums des boîtes supprimées
+      if (nrow(removed_boxes) > 0) {
+        new_box <- data.frame(
+          xmin = min(removed_boxes$xmin),
+          xmax = max(removed_boxes$xmax),
+          ymin = min(removed_boxes$ymin),
+          ymax = max(removed_boxes$ymax),
+          stain_id = paste0("bbox_fused_point", peak_number)
+        )
+        boxes <- rbind(boxes, new_box)
+      }
+      
+      modifiable_boxes(boxes)
+      fixed_boxes(boxes)
+    }
+    
+    refresh_nmr_plot()
+    showNotification("✅ Points fused successfully", type = "message")
+  })
   
-
+  
+  observe({
+    print(event_data("plotly_selected"))
+  })
   
   # Allow user to select output directory via a folder chooser dialog
   # 'save_roots' defines root folders accessible for navigation: user home and root "/"
