@@ -10,6 +10,9 @@ library(dplyr)
 library(gridExtra)
 library(dbscan)
 library(stats)
+library(readr)
+load("C:/Users/norouchon/Downloads/BdDReference_CPMG_2025-08-28.Rdata")
+load("C:/Users/norouchon/Downloads/BdDReference_C13_2025-08-28.Rdata")
 
 source("spectrum_generator_random.R")
 
@@ -115,7 +118,27 @@ plot_four_spectra <- function(X, y_class, indices = c(1, 2, 3, 4)) {
   }
 }
 
-#data <- generate_spectrum_labels_full()
+plot_four_spectra <- function(X, y_class, ppm = seq(12, 0, length.out = ncol(X)), 
+                              indices = c(1, 2, 3, 4)) {
+  par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))  # 2x2 layout
+  
+  for (i in indices) {
+    spectrum <- X[i, ]
+    labels <- y_class[i, ]
+    
+    plot(ppm, spectrum, type = "l", col = "black", lwd = 1,
+         main = paste("Spectre", i),
+         xlab = "Déplacement chimique (ppm)", ylab = "Intensité",
+         xlim = c(12, 0))  # axe décroissant comme en RMN
+    
+    points(ppm[labels == 1], spectrum[labels == 1], col = "red", pch = 19, cex = 1)
+    points(ppm[labels == 2], spectrum[labels == 2], col = "blue", pch = 19, cex = 1)
+    
+    legend("topright", legend = c("pic faible (1)", "pic fort (2)"),
+           col = c("blue", "red"), pch = 19, cex = 0.8)
+  }
+}
+
 data <- generate_spectrum_labels_full_mixed(n_spectra = 1000, mix_ratio = 0.5)
 
 set.seed(42)
@@ -123,6 +146,20 @@ plot_four_spectra(data$X, data$y_class, indices = c(sample(1:1000,1), sample(1:1
 
 
 #======================ENTRAINEMENT DU RESEAU DE NEURONES==================================================
+
+focal_loss <- function(gamma = 3.0, alpha = 1.5) {
+  function(y_true, y_pred) {
+    y_true <- k_cast(y_true, "int32")
+    y_true_one_hot <- k_one_hot(y_true, num_classes = 3)
+    epsilon <- k_epsilon()
+    y_pred <- k_clip(y_pred, epsilon, 1.0 - epsilon)
+    cross_entropy <- -y_true_one_hot * k_log(y_pred)
+    weight <- alpha * k_pow(1 - y_pred, gamma)
+    loss <- weight * cross_entropy
+    k_sum(loss, axis = -1)
+  }
+}
+
 
 build_peak_predictor <- function() {
   input <- layer_input(shape = c(n_points, 1), name = "input")
@@ -205,24 +242,36 @@ model %>% fit(
   validation_split = 0.2
 )
 
+save_model_weights_tf(model, "saved_model/weights")
+# recharger
+new_model <- build_peak_predictor()
+load_model_weights_tf(new_model, "saved_model/weights")
+
+
 #=================================PREPARATION DES VRAIES DONNEES BRUKER, STATS POUR MIEUX ANALYSER==============
 
-resss <- read_bruker(dir = "C:/Users/norouchon/Documents/Test_N/UFCOSY/pdata/1", dim = "2D")
-resss <- read_bruker(dir = "C:/Users/norouchon/Documents/2DNMR-Analyst-main/240302193_MTH_interlabo2024_AXIOM_2D/8/pdata/1", dim = "2D")
+resss <- read_bruker(dir = "C:/Users/norouchon/Documents/Test_N/TOCSY/pdata/1", dim = "2D")
+resss <- read_bruker(dir = "C:/Users/norouchon/Documents/2DNMR-Analyst-main/240302193_MTH_interlabo2024_AXIOM_2D/6/pdata/1", dim = "2D")
 resss <- read_bruker(dir = "C:/Users/norouchon/Documents/Tocs/MTH_Melange_1.25mM/5/pdata/1", dim="2D")
 resss <- read_bruker(dir = "C:/Users/norouchon/Documents/Tocs/MTH_Melange_2.5mM/6/pdata/1", dim="2D")
 resss <- read_bruker(dir = "C:/Users/norouchon/Documents/Tocs/MTH_Melange_5mM/7/pdata/1", dim="2D")
-resss <- read_bruker(dir = "C:/Users/norouchon/Documents/transfer_10448437_files_523289e5/201/pdata/1", dim="2D")
+resss <- read_bruker(dir = "C:/Users/norouchon/Documents/transfer_10448437_files_523289e5/203/pdata/1", dim="2D")
 rr <- resss$spectrumData
 str(rr)
 
 get_spectrum_params <- function(spectrum_type) {
   switch(spectrum_type,
          "TOCSY" = list(
-           int_thres = 0.001,
+           int_thres = 0.01,
            int_prop = 0.001,
            eps_value = 0.0068,
            pred_class_thres = 0.00001
+         ),
+         "TOCSY_COMPLEX" = list(  #fonctionne pour les spectres complexes type 201, 203 ou issu de MTH interlabo
+           int_thres = 0.1,
+           int_prop = 0.001,
+           eps_value = 0.0068,
+           pred_class_thres = 0.01
          ),
          "HSQC" = list(
            int_thres = 0.001,
@@ -239,14 +288,14 @@ get_spectrum_params <- function(spectrum_type) {
          "UFCOSY" = list(
            int_thres = 0.001,
            int_prop = 0.5,
-           eps_value = 0.0068,
+           eps_value = 0.02,
            pred_class_thres = 0.001
          ),
          stop("Type de spectre inconnu")
   )
 }
 
-params <- get_spectrum_params("UFCOSY")
+params <- get_spectrum_params("TOCSY")
 
 # === Normalisation globale du spectre 2D ===
 rr_abs <- abs(rr)
@@ -257,9 +306,7 @@ rr_log <- rr_log / max(rr_log)  # renormaliser entre 0 et 1
 rownames(rr) <- as.numeric(rownames(rr))  # F2 (lignes)
 colnames(rr) <- as.numeric(colnames(rr))  # F1 (colonnes)
 
-#=================================TENTATIVE DE RECONSTRUCTION DU SPECTRE==================================
-
-# ======= Prédiction complète sur les lignes et colonnes du spectre 2D =========
+# ======= Prédiction complète sur les lignes et colonnes du spectre 2D =================================
 
 #===Affichage===
 n_row <- nrow(rr_norm)
@@ -345,8 +392,7 @@ get_detected_peaks_with_intensity <- function(rr_norm, model, target_length = 20
   detected_peaks <- unique(detected_peaks)
   return(detected_peaks)
 }
-detected_peaks <- get_detected_peaks_with_intensity(rr_norm, model, target_length = 2048)
-#write.csv(detected_peaks, file = "detected_peaks.csv", row.names = FALSE)
+detected_peaks <- get_detected_peaks_with_intensity(rr_norm, new_model, target_length = 2048)
 
 p <- ggplot(rr_melt, aes(x = F1, y = F2, fill = Intensity)) +
   geom_raster(interpolate = TRUE) +
@@ -383,6 +429,9 @@ p <- ggplot(rr_melt, aes(x = F1, y = F2, fill = Intensity)) +
 ggplotly(p, tooltip = "text")
 
 #==========================================GENERALISATION A TOUT TYPE DE SPECTRES===============================
+
+#si nécessaire dans le cas de tocsy complexes, sinon passer la ligne
+rr_norm <- rr_log
 
 predict_peaks_1D_batch <- function(spectrum_mat, model, axis = c("rows", "columns"),
                                    threshold_class = NULL, batch_size = NULL, verbose = TRUE) {
@@ -471,10 +520,8 @@ predict_peaks_1D_batch <- function(spectrum_mat, model, axis = c("rows", "column
 
 #prédiction classique et nettoyage :
 start <- Sys.time()
-peaks_rows <- predict_peaks_1D_batch(rr_log, model, axis = "rows", threshold_class = 0.01, batch_size = 64)
-peaks_cols <- predict_peaks_1D_batch(rr_log, model, axis = "columns", threshold_class = 0.01, batch_size = 64)
-# peaks_rows <- predict_peaks_1D_batch(rr_log, model, axis = "rows", threshold_class = 0.00001, batch_size = 64) #test pour la tocsy cheloue
-# peaks_cols <- predict_peaks_1D_batch(rr_log, model, axis = "columns", threshold_class = 0.00001, batch_size = 64)
+peaks_rows <- predict_peaks_1D_batch(rr_norm, model, axis = "rows", threshold_class = params$pred_class_thres, batch_size = 64)
+peaks_cols <- predict_peaks_1D_batch(rr_norm, model, axis = "columns", threshold_class = params$pred_class_thres, batch_size = 64)
 end <- Sys.time()
 elapsed <- end - start
 print(elapsed)
@@ -515,7 +562,7 @@ filter_peaks_by_proportion <- function(peaks_clean, threshold = NULL, intensity_
     removed_rows = rows_to_remove
   ))
 }
-filter_noisy_columns <- function(peaks_df, threshold_ratio = 0.999, min_col_max = NULL) {
+filter_noisy_columns <- function(peaks_df, threshold_ratio = 0.9, min_col_max = NULL) {
   # max en valeur absolue par colonne F1
   max_per_col <- aggregate(Intensity ~ F1, data = peaks_df,
                            FUN = function(x) max(abs(x)))
@@ -597,7 +644,7 @@ remove_peaks_ppm_range <- function(peaks, rr_norm, axis = "F1", ppm_min, ppm_max
   return(peaks[!mask, , drop = FALSE])
 }
 
-result <- filter_peaks_by_proportion(peaks_clean, threshold = 0.5, intensity_threshold = 0.2) # intensity_threshold à 0.001 de base
+result <- filter_peaks_by_proportion(peaks_clean, threshold = 0.5, intensity_threshold = params$int_thres) # intensity_threshold à 0.001 de base
 peaks_clean_filtered <- result$filtered_peaks
 peaks_clean_filtered <- filter_noisy_columns(peaks_clean_filtered)
 
@@ -696,7 +743,7 @@ plot_peaks_ppm_plotly_clean <- function(peaks,
   return(p)
 }
 
-p_filtered <- plot_peaks_ppm_plotly_clean(peaks_clean_filtered, rr_norm = rr_log,
+p_filtered <- plot_peaks_ppm_plotly_clean(peaks_clean_filtered, rr_norm = rr_norm,
                                            intensity_threshold = params$int_thres, ratio = 1)
 p_filtered
 
@@ -744,8 +791,7 @@ plot_random_1D_grid(rr_log, type = "rows", n_extract = 4)
 plot_random_1D_grid(rr_log, type = "columns", n_extract = 4)
 
 #====================================TEST D'AFFICHAGE DES CONTOURS + CLUSTERING==================================
-#si on est dans le cas d'une TOCSY complexe type données MTH (pas nécessaire sinon)
-rr_norm <- rr_log
+
 # === Fonctions utilitaires ===
 downsample_matrix <- function(mat, step = 4) {
   mat[seq(1, nrow(mat), by = step),
@@ -781,7 +827,7 @@ peaks_norm <- peaks_clean_filtered %>%
 
 # --- 2) DBSCAN (sur coordonnées normalisées) ---
 db <- dbscan::dbscan(peaks_norm[, c("F1_scaled", "F2_scaled")],
-                     eps = 0.02, minPts = 2)
+                     eps = params$eps_value, minPts = 2)
 
 # Ajouter cluster_db à peaks_clean_filtered (fusion option 2)
 peaks_clean_filtered <- peaks_clean_filtered %>%
@@ -901,7 +947,7 @@ library(dplyr)
 library(readr)
 
 # Charger les deux CSV
-tocs <- read_csv("C:/Users/norouchon/Documents/2DNMR-Analyst-main/Script/centroid_exports/5_projected_centroids.csv")
+tocs <- read_csv("C:/Users/norouchon/Documents/2DNMR-Analyst-main/Script/centroid_exports/6_projected_centroids.csv")
 boxes <- read_csv("bounding_box_centers.csv")
 
 # Harmoniser les colonnes avec labels fixes
@@ -921,12 +967,12 @@ all_points <- bind_rows(tocs_points, boxes_points) %>%
   select(point_id, source, F1_ppm, F2_ppm)
 
 # Sauvegarde
-write_csv(all_points, "merged_points_named_5.csv")
+write_csv(all_points, "merged_points_named_6.csv")
 
 #==========================================TEST STATISTIQUES SUR LES RESSEMBLANCES=========================
 
 #Charger les données
-points <- read.csv("merged_points_named_5.csv")
+points <- read.csv("merged_points_named_6.csv")
 
 #Définir le seuil de proximité (en ppm)
 tol <- 0.1
@@ -966,14 +1012,14 @@ print(summary_points)
 
 
 # Charger les données
-merged_points <- read.csv("merged_points_named_5.csv")
+merged_points <- read.csv("merged_points_named_6.csv")
 
 # Trier par F2_ppm croissant
 merged_points_sorted <- merged_points[order(merged_points$F2_ppm), ]
 
 # Sauvegarder le fichier trié
-write.csv(merged_points_sorted, "merged_points_sorted_5.csv", row.names = FALSE)
+write.csv(merged_points_sorted, "merged_points_sorted_6.csv", row.names = FALSE)
 
-df <- read.csv("merged_points_sorted_5.csv", sep = ",")  # lecture classique
-write.csv2(df, "merged_points_sorted_clean_5.csv", row.names = FALSE)  
+df <- read.csv("merged_points_sorted_6.csv", sep = ",")  # lecture classique
+write.csv2(df, "merged_points_sorted_clean_6.csv", row.names = FALSE)  
 
