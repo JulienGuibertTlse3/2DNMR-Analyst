@@ -10,11 +10,12 @@ library(shinyjs)
 library(dplyr)
 library(sp)
 
-source("C://Users//juguibert//Documents//Function_test//Read_2DNMR_spectrum.R")
-source("C://Users//juguibert//Documents//Function_test//Vizualisation.R")
-source("C://Users//juguibert//Documents//Function_test//Integration.R")
-source("C://Users//juguibert//Documents//Function_test//Pping.R")
-Rcpp::sourceCpp("C://Users//juguibert//Documents//Function_test//petit_test.cpp")
+source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/Read_2DNMR_spectrum.R")
+source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/Vizualisation.R")
+source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/Integration.R")
+source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/Pping.R")
+source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/CNN_shiny.R")
+#Rcpp::sourceCpp("C://Users//juguibert//Documents//Function_test//petit_test.cpp")
 
 
 # Interface ----
@@ -218,7 +219,22 @@ h5 {
                                       collapsible = TRUE,
                                       collapsed = TRUE,  # facultatif : pour que la boîte soit repliée par défaut
                                       width = 12,
-                                      actionButton("generate_centroids", "🔴 Find Peaks"),
+                                      #actionButton("generate_centroids", "🔴 Find Peaks"),
+                                      fluidRow(
+                                        column(
+                                          width = 6,
+                                          actionButton("generate_centroids", "🔴 Peak Picking Max")
+                                        ),
+                                        column(
+                                          width = 6,
+                                          actionButton("generate_centroids_cnn", "🟢 Peak Picking CNN"),
+                                          radioButtons("detection_method", "Méthode de détection :",
+                                                       choices = c("Classique" = "classique",
+                                                                   "Batch CNN" = "batch"),
+                                                       selected = "batch")
+                                          
+                                        )
+                                      ),
                                       checkboxInput("disable_clustering", "🔍 No clustering", value = FALSE),
                                       numericInput("eps_value", "Clustering epsilon:", value = 0.01, min = 0, step = 0.001),
                                       textAreaInput("keep_peak_ranges_text", 
@@ -415,6 +431,36 @@ server <- function(input, output, session) {
            "UFCOSY"  = list(intensity_threshold = 50000,  contour_num = 70,  contour_factor = 1.3, eps_value = 0.014, neighborhood_size = 3)
     )
   })
+  spectrum_params_CNN <- reactive({
+    switch(input$spectrum_type,
+           "TOCSY" = list(
+             int_thres = 0.01,
+             int_prop = 0.001,
+             eps_value = 0.0068,
+             pred_class_thres = 0.00001,
+             batch_size = 64,
+             step = 4
+           ),
+           "UFCOSY" = list(
+             int_thres = 0.001,
+             int_prop = 0.5,
+             eps_value = 0.02,
+             pred_class_thres = 0.001,
+             batch_size = 64,
+             step = 4
+           ),
+           "HSQC" = list(
+             int_thres = 0.001,
+             int_prop = 0.5,
+             eps_value = 0.014,
+             pred_class_thres = 0.001,
+             batch_size = 64,
+             step = 4
+           ),
+           stop("Type de spectre inconnu pour CNN")
+    )
+  })
+  
   output$matrix_dim <- renderPrint({ req(bruker_data()); dim(bruker_data()$spectrumData) })
   output$status_message <- renderText({ status_msg() })
   
@@ -889,82 +935,102 @@ server <- function(input, output, session) {
     
     shinyjs::hide("loading_message")
   })
+
   
+  ## Generate Centroids & Bounding Boxes AVEC UN CNN ----
   
-  
-  
-  ## Manually Add Centroids / BBs ----
-  
-  observeEvent(input$add_manual_centroid, {
-    req(input$manual_f2, input$manual_f1)
-    current <- centroids_data()
-    
-    if (is.null(current)) {
-      current <- data.frame(
-        F2_ppm = numeric(0),
-        F1_ppm = numeric(0),
-        stain_intensity = numeric(0),
-        stain_id = character(0)
-      )
-    }
-    
-    existing_ids <- current$stain_id[grepl("^man", current$stain_id)]
-    man_number <- if (length(existing_ids) == 0) 1 else max(as.integer(sub("man", "", existing_ids)), na.rm = TRUE) + 1
-    
-    # === Estimate intensity from contour_data
-    contour_data <- result_data()$contour_data
-    eps <- input$eps_value
-    
-    local_points <- contour_data %>%
-      dplyr::filter(
-        abs(-x - input$manual_f2) <= eps,
-        abs(-y - input$manual_f1) <= eps
-      )
-    
-    estimated_intensity <- sum(local_points$level, na.rm = TRUE)
-    
-    new_point <- data.frame(
-      F2_ppm = input$manual_f2,
-      F1_ppm = input$manual_f1,
-      stain_intensity = estimated_intensity,
-      stain_id = paste0("man", man_number)
-    )
-    
-    centroids_data(rbind(current, new_point))
-    refresh_nmr_plot()
-    showNotification(
-      paste("✅ Manual peak added:", new_point$stain_id, "- Intensity =", round(estimated_intensity)),
-      type = "message"
-    )
-  })
-  
-  
-  observeEvent(input$add_manual_bbox, {
-    req(input$manual_xmin, input$manual_xmax, input$manual_ymin, input$manual_ymax)
-    
-    new_box <- data.frame(
-      xmin = input$manual_xmin,
-      xmax = input$manual_xmax,
-      ymin = input$manual_ymin,
-      ymax = input$manual_ymax
-    )
-    
-    current_boxes <- modifiable_boxes()
-    
-    if (nrow(current_boxes) > 0 && !all(c("xmin", "xmax", "ymin", "ymax") %in% names(current_boxes))) {
-      showNotification("❌ Format invalide des boîtes existantes.", type = "error")
+  observeEvent(input$generate_centroids_cnn, {
+
+    req(bruker_data())
+    req(input$selected_subfolder)
+
+    shinyjs::show("loading_message")
+    status_msg("🔄 Détection des pics avec CNN en cours...")
+
+    # --- 1. Récupérer et normaliser le spectre ---
+    selected_spectrum <- bruker_data()$spectrumData
+    if (is.null(selected_spectrum)) {
+      showNotification("⚠️ Spectrum not found", type = "error")
+      shinyjs::hide("loading_message")
       return()
     }
-    
-    updated_boxes <- bind_rows(current_boxes, new_box)
-    modifiable_boxes(updated_boxes)
+
+    rr_abs <- abs(selected_spectrum)
+    rr_norm <- (rr_abs - min(rr_abs)) / (max(rr_abs) - min(rr_abs))
+
+    # --- 2. Lancer la détection CNN ---
+    result_peaks <- tryCatch({
+      run_cnn_peak_picking(
+        rr_norm = rr_norm,
+        method = input$detection_method,
+        model = new_model,
+        params = spectrum_params_CNN(),
+        threshold_class = spectrum_params_CNN()$pred_class_thres,
+        batch_size = spectrum_params_CNN()$batch_size,
+        step = 4
+      )
+    }, error = function(e) {
+      showNotification(paste("❌ CNN peak picking error:", e$message), type = "error")
+      shinyjs::hide("loading_message")
+      return(NULL)
+    })
+
+    if (is.null(result_peaks)) return()
+
+    # --- 3. Vérifier et préparer les centres des bounding boxes ---
+    if (!is.null(result_peaks$boxes) && nrow(result_peaks$boxes) > 0) {
+
+      # Ajouter colonne pour compatibilité avec pipeline original
+      result_peaks$peaks <- result_peaks$boxes %>%
+        dplyr::transmute(
+          F1 = as.integer(round(cx_ppm)),
+          F2 = as.integer(round(cy_ppm)),
+          F1_ppm = cx_ppm,
+          F2_ppm = cy_ppm,
+          stain_intensity = intensity,
+          cluster_db = cluster_db
+        )
+
+      # Créer un identifiant pour chaque box
+      result_peaks$boxes$stain_id <- seq_len(nrow(result_peaks$boxes))
+      result_peaks$boxes$stain_intensity <- result_peaks$boxes$intensity
+      result_peaks$boxes$xmin <- result_peaks$boxes$xmin_ppm
+      result_peaks$boxes$xmax <- result_peaks$boxes$xmax_ppm
+      result_peaks$boxes$ymin <- result_peaks$boxes$ymin_ppm
+      result_peaks$boxes$ymax <- result_peaks$boxes$ymax_ppm
+      result_peaks$boxes$cx <- result_peaks$boxes$cx_ppm
+      result_peaks$boxes$cy <- result_peaks$boxes$cy_ppm
+
+      # Garder seulement les coordonnées utiles pour manipulation/affichage
+      result_peaks$boxes$stain_id <- seq_len(nrow(result_peaks$boxes))
+      
+      # Garder seulement les coordonnées utiles pour manipulation/affichage
+      box_coords_only <- result_peaks$boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
+      fixed_boxes(box_coords_only)
+      modifiable_boxes(fixed_boxes())
+      reference_boxes(fixed_boxes())
+    }
+
+    # --- 4. Préparer les shapes Plotly ---
+    if (!is.null(result_peaks$shapes) && length(result_peaks$shapes) > 0) {
+      shapes_list <- result_peaks$shapes
+    }
+
+    # --- 5. Rafraîchir le plot avec contours et shapes ---
+    contour_plot_base(
+      result_data_list()[[input$selected_subfolder]]$plot + labs(title = "")
+    )
     refresh_nmr_plot()
-    showNotification("🟦 Boîte ajoutée manuellement.", type = "message")
+
+    showNotification("✅ Peak picking CNN terminé", type = "message")
+    status_msg("✅ CNN peak picking terminé")
+
+    shinyjs::hide("loading_message")
   })
   
-  
+
   ## Manually Delete centroids / BBs ----
-  
+
   observeEvent(input$delete_centroid, {
     selected <- input$centroid_table_rows_selected
     if (length(selected) > 0) {
@@ -976,8 +1042,8 @@ server <- function(input, output, session) {
       showNotification("⚠️ Please select a centroid to delete", type = "warning")
     }
   })
-  
-  
+
+
   observeEvent(input$delete_bbox, {
     selected <- input$bbox_table_rows_selected
     if (length(selected) > 0) {
@@ -990,7 +1056,6 @@ server <- function(input, output, session) {
     }
   })
   
-
   
   ## Dataframes ----
   
