@@ -10,11 +10,11 @@ library(shinyjs)
 library(dplyr)
 library(sp)
 
-source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/Read_2DNMR_spectrum.R")
-source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/Vizualisation.R")
-source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/Integration.R")
-source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/Pping.R")
-source("C:/Users/norouchon/Documents/merge_CNN_max/2DNMR-Analyst/Script/CNN_shiny.R")
+source("C:/Users/norouchon/Documents/git_final/2DNMR-Analyst/Script/Read_2DNMR_spectrum.R")
+source("C:/Users/norouchon/Documents/git_final/2DNMR-Analyst/Script/Vizualisation.R")
+source("C:/Users/norouchon/Documents/git_final/2DNMR-Analyst/Script/Integration.R")
+source("C:/Users/norouchon/Documents/git_final/2DNMR-Analyst/Script/Pping.R")
+source("C:/Users/norouchon/Documents/git_final/2DNMR-Analyst/Script/CNN_shiny.R")
 #Rcpp::sourceCpp("C://Users//juguibert//Documents//Function_test//petit_test.cpp")
 
 
