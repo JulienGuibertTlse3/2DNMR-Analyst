@@ -162,55 +162,46 @@ get_detected_peaks_with_intensity <- function(rr_norm, model, target_length = 20
 #=================================DETECTION DE PICS SUR SPECTRE TYPE TOCSY=========================================================
 
 predict_peaks_1D_batch <- function(spectrum_mat, model, axis = c("rows", "columns"),
-                                   threshold_class = NULL, batch_size = NULL, verbose = TRUE) {
+                                         threshold_class = 0.01, batch_size = 64, target_length = 2048,
+                                         verbose = TRUE) {
   axis <- match.arg(axis)
-  
-  if (verbose) {
-    cat("Dimension spectre input :", dim(spectrum_mat), "\n")
-  }
-  
-  # Si axis = "columns", on transpose pour avoir vecteurs 1D en lignes
-  mat <- if(axis == "columns") t(spectrum_mat) else spectrum_mat
-  n_vectors <- nrow(mat)  # nombre de vecteurs (lignes ou colonnes)
+
+  # Transpose si on veut prédire sur les colonnes
+  mat <- if (axis == "columns") t(spectrum_mat) else spectrum_mat
+  n_vectors <- nrow(mat)
   n_points <- ncol(mat)
-  
-  if (verbose) {
-    cat("Nombre de vecteurs :", n_vectors, " - Points par vecteur :", n_points, "\n")
-  }
-  
-  # On suppose que le modèle attend un input shape = (n_vectors, 2048, 1)
-  # Si la taille diffère, essayer d'ajuster ou avertir
-  if (n_points != 2048) {
-    warning(sprintf("Attention: nombre de points par vecteur = %d ≠ 2048, on va donxc s'apprêter à formater", n_points))
-  }
-  
-  # Formatage input pour le modèle : [n_vectors, n_points, 1]
-  input_array <- array(mat, dim = c(n_vectors, n_points, 1))
-  
+
+  if (verbose) cat("Nombre de vecteurs :", n_vectors, "- Points par vecteur :", n_points, "\n")
+
   detected_list <- vector("list", length = ceiling(n_vectors / batch_size))
-  
   pb <- txtProgressBar(min = 0, max = n_vectors, style = 3)
-  
   idx_list <- 1
+
   for (start_idx in seq(1, n_vectors, by = batch_size)) {
     end_idx <- min(start_idx + batch_size - 1, n_vectors)
-    batch <- input_array[start_idx:end_idx,,,drop=FALSE]
-    
-    preds <- predict(model, batch, batch_size = batch_size)
-    probs <- preds[[1]]  # shape: [batch_size, n_points, nb_classes]
-    regs <- preds[[2]]   # shape: [batch_size, n_points, nb_classes]
-    
-    # Affichage debug
-    if (verbose) {
-      max_prob <- max(probs[,,2])
-      mean_prob <- mean(probs[,,2])
-      cat(sprintf("\nBatch %d-%d : max prob pic = %.3f, mean prob pic = %.3f\n",
-                  start_idx, end_idx, max_prob, mean_prob))
-    }
-    
-    prob_peak <- probs[,,2]  # probabilité classe pic (index 2)
-    reg_intensity <- regs[,,2]  # intensité associée
-    
+    batch_raw <- mat[start_idx:end_idx,,drop=FALSE]
+
+    #adapter chaque vecteur à target_length (padding ou downsampling si nécessaire)
+    batch_prepared <- t(apply(batch_raw, 1, function(x) {
+      if (length(x) > target_length) {
+        # downsample à target_length
+        idx <- round(seq(1, length(x), length.out = target_length))
+        x[idx]
+      } else {
+        # padding à droite si trop court
+        c(x, rep(0, target_length - length(x)))
+      }
+    }))
+
+    input_array <- array(batch_prepared, dim = c(nrow(batch_prepared), target_length, 1))
+
+    preds <- predict(model, input_array, batch_size = batch_size)
+    probs <- preds[[1]]
+    regs  <- preds[[2]]
+
+    prob_peak <- probs[,,2]
+    reg_intensity <- regs[,,2]
+
     detected_batch <- list()
     for (i in seq_len(nrow(prob_peak))) {
       idxs <- which(prob_peak[i, ] > threshold_class)
@@ -223,26 +214,17 @@ predict_peaks_1D_batch <- function(spectrum_mat, model, axis = c("rows", "column
         detected_batch[[length(detected_batch) + 1]] <- df
       }
     }
-    
-    if (length(detected_batch) > 0) {
-      detected_list[[idx_list]] <- do.call(rbind, detected_batch)
-    } else {
-      detected_list[[idx_list]] <- NULL
-    }
-    
+
+    detected_list[[idx_list]] <- if (length(detected_batch) > 0) do.call(rbind, detected_batch) else NULL
     setTxtProgressBar(pb, end_idx)
     idx_list <- idx_list + 1
   }
-  
+
   close(pb)
-  
   detected <- do.call(rbind, detected_list)
   if (is.null(detected)) detected <- data.frame(F1=numeric(), F2=numeric(), Intensity=numeric())
-  
-  if (verbose) {
-    cat("Nombre total de pics détectés :", nrow(detected), "\n")
-  }
-  
+
+  if (verbose) cat("Nombre total de pics détectés :", nrow(detected), "\n")
   return(detected)
 }
 
@@ -362,395 +344,43 @@ remove_peaks_ppm_range <- function(peaks, rr_norm, axis = "F1", ppm_min, ppm_max
   return(peaks[!mask, , drop = FALSE])
 }
 
+
 #===============================GENERATION DE CLUSTER ET DE BOUNDING BOXES========================================================
-
-# process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, step = 4) {
-#   
-#   downsample_matrix <- function(mat, step = 4) {
-#     mat[seq(1, nrow(mat), by = step),
-#         seq(1, ncol(mat), by = step)]
-#   }
-#   downsample_axis <- function(axis_vals, step = 4) {
-#     axis_vals[seq(1, length(axis_vals), by = step)]
-#   }
-#   # === Matrice et axes ===
-#   z_matrix <- rr_norm
-#   x_vals   <- as.numeric(colnames(rr_norm))  # F1 (ppm)
-#   y_vals   <- as.numeric(rownames(rr_norm))  # F2 (ppm)
-#   
-#   # Downsampling pour contour/affichage
-#   z_small <- downsample_matrix(z_matrix, step = step)
-#   x_small <- downsample_axis(x_vals, step = step)
-#   y_small <- downsample_axis(y_vals, step = step)
-#   
-#   # === 1) Normalisation z-score pour clustering ===
-#   peaks_norm <- peaks_clean_filtered %>%
-#     mutate(
-#       F1_scaled = (F1 - mean(F1, na.rm = TRUE)) / sd(F1, na.rm = TRUE),
-#       F2_scaled = (F2 - mean(F2, na.rm = TRUE)) / sd(F2, na.rm = TRUE)
-#     )
-#   
-#   # === 2) DBSCAN ===
-#   db <- dbscan::dbscan(peaks_norm[, c("F1_scaled", "F2_scaled")],
-#                        eps = params$eps_value, minPts = 2)
-#   
-#   peaks_clean_filtered <- peaks_clean_filtered %>%
-#     mutate(cluster_db = db$cluster)
-#   
-#   # === 3) Bounding boxes ===
-#   bounding_boxes <- peaks_clean_filtered %>%
-#     dplyr::filter(cluster_db > 0) %>%
-#     group_by(cluster_db) %>%
-#     summarise(
-#       xmin = min(F1, na.rm = TRUE),
-#       xmax = max(F1, na.rm = TRUE),
-#       ymin = min(F2, na.rm = TRUE),
-#       ymax = max(F2, na.rm = TRUE),
-#       cx   = (min(F1, na.rm = TRUE) + max(F1, na.rm = TRUE)) / 2,
-#       cy   = (min(F2, na.rm = TRUE) + max(F2, na.rm = TRUE)) / 2,
-#       intensity = sum(Intensity, na.rm = TRUE),
-#       .groups = "drop"
-#     )
-#   
-#   # === 4) Conversion indices → ppm ===
-#   peaks_clean_filtered <- peaks_clean_filtered %>%
-#     mutate(
-#       F1_ppm = x_vals[F1],
-#       F2_ppm = y_vals[F2]
-#     )
-#   
-#   bounding_boxes <- bounding_boxes %>%
-#     mutate(
-#       xmin_ppm = x_vals[xmin],
-#       xmax_ppm = x_vals[xmax],
-#       ymin_ppm = y_vals[ymin],
-#       ymax_ppm = y_vals[ymax],
-#       cx_ppm   = x_vals[cx],
-#       cy_ppm   = y_vals[cy]
-#     )
-#   
-#   # === 5) Suppression doublons (pics contenus dans un autre plus intense) ===
-#   if (nrow(bounding_boxes) > 1) {
-#     to_remove <- c()
-#     for (i in seq_len(nrow(bounding_boxes))) {
-#       current <- bounding_boxes[i, ]
-#       for (j in seq_len(nrow(bounding_boxes))) {
-#         if (i == j) next
-#         compare <- bounding_boxes[j, ]
-#         
-#         inside_box <- current$cx_ppm >= compare$xmin_ppm & current$cx_ppm <= compare$xmax_ppm &
-#           current$cy_ppm >= compare$ymin_ppm & current$cy_ppm <= compare$ymax_ppm
-#         
-#         # maintenant comparaison sur la somme des intensités
-#         lower_intensity <- current$intensity < compare$intensity  
-#         
-#         if (inside_box && lower_intensity) {
-#           to_remove <- c(to_remove, current$cluster_db)
-#           break
-#         }
-#       }
-#     }
-#     bounding_boxes <- bounding_boxes %>%
-#       dplyr::filter(!cluster_db %in% to_remove)
-#   }
-#   
-#   # === 6) Rectangles pour plotly ===
-#   shapes_list <- lapply(seq_len(nrow(bounding_boxes)), function(i) {
-#     list(
-#       type = "rect",
-#       x0 = bounding_boxes$xmin_ppm[i], x1 = bounding_boxes$xmax_ppm[i],
-#       y0 = bounding_boxes$ymin_ppm[i], y1 = bounding_boxes$ymax_ppm[i],
-#       line = list(color = "red", dash = "dot", width = 2),
-#       fillcolor = "rgba(0,0,0,0)",
-#       xref = "x", yref = "y",
-#       layer = "above"
-#     )
-#   })
-#   
-#   bounding_boxes <- bounding_boxes %>%
-#     dplyr::mutate(stain_intensity = intensity)
-#   
-#   
-#   return(list(
-#     peaks = peaks_clean_filtered,
-#     boxes = bounding_boxes,
-#     shapes = shapes_list
-#   ))
-# }
-
-# process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, step = 4) {
-#   
-#   downsample_matrix <- function(mat, step = 4) {
-#     mat[seq(1, nrow(mat), by = step),
-#         seq(1, ncol(mat), by = step)]
-#   }
-#   downsample_axis <- function(axis_vals, step = 4) {
-#     axis_vals[seq(1, length(axis_vals), by = step)]
-#   }
-#   
-#   # === Matrice et axes ===
-#   z_matrix <- rr_norm
-#   x_vals   <- as.numeric(colnames(rr_norm))  # F1 (ppm)
-#   y_vals   <- as.numeric(rownames(rr_norm))  # F2 (ppm)
-#   
-#   # Downsampling pour affichage
-#   z_small <- downsample_matrix(z_matrix, step = step)
-#   x_small <- downsample_axis(x_vals, step = step)
-#   y_small <- downsample_axis(y_vals, step = step)
-#   
-#   # === 1) Normalisation z-score pour clustering ===
-#   peaks_norm <- peaks_clean_filtered %>%
-#     mutate(
-#       F1_scaled = (F1 - mean(F1, na.rm = TRUE)) / sd(F1, na.rm = TRUE),
-#       F2_scaled = (F2 - mean(F2, na.rm = TRUE)) / sd(F2, na.rm = TRUE)
-#     )
-#   
-#   # === 2) DBSCAN ===
-#   db <- dbscan::dbscan(peaks_norm[, c("F1_scaled", "F2_scaled")],
-#                        eps = params$eps_value, minPts = 2)
-#   peaks_clean_filtered <- peaks_clean_filtered %>%
-#     mutate(cluster_db = db$cluster)
-#   
-#   # === 3) Bounding boxes ===
-#   bounding_boxes <- peaks_clean_filtered %>%
-#     dplyr::filter(cluster_db > 0) %>%
-#     group_by(cluster_db) %>%
-#     summarise(
-#       xmin = min(F1, na.rm = TRUE),
-#       xmax = max(F1, na.rm = TRUE),
-#       ymin = min(F2, na.rm = TRUE),
-#       ymax = max(F2, na.rm = TRUE),
-#       cx   = (min(F1, na.rm = TRUE) + max(F1, na.rm = TRUE)) / 2,
-#       cy   = (min(F2, na.rm = TRUE) + max(F2, na.rm = TRUE)) / 2,
-#       intensity = sum(Intensity, na.rm = TRUE),  # somme des intensités
-#       .groups = "drop"
-#     )
-#   
-#   # === 4) Conversion indices → ppm ===
-#   peaks_clean_filtered <- peaks_clean_filtered %>%
-#     mutate(
-#       F1_ppm = x_vals[F1],
-#       F2_ppm = y_vals[F2]
-#     )
-#   
-#   bounding_boxes <- bounding_boxes %>%
-#     mutate(
-#       xmin_ppm = x_vals[xmin],
-#       xmax_ppm = x_vals[xmax],
-#       ymin_ppm = y_vals[ymin],
-#       ymax_ppm = y_vals[ymax],
-#       cx_ppm   = x_vals[cx],
-#       cy_ppm   = y_vals[cy]
-#     )
-#   
-#   # === 5) Suppression doublons (pics contenus dans un autre plus intense) ===
-#   if (nrow(bounding_boxes) > 1) {
-#     to_remove <- c()
-#     for (i in seq_len(nrow(bounding_boxes))) {
-#       current <- bounding_boxes[i, ]
-#       for (j in seq_len(nrow(bounding_boxes))) {
-#         if (i == j) next
-#         compare <- bounding_boxes[j, ]
-#         
-#         inside_box <- current$cx_ppm >= compare$xmin_ppm & current$cx_ppm <= compare$xmax_ppm &
-#           current$cy_ppm >= compare$ymin_ppm & current$cy_ppm <= compare$ymax_ppm
-#         lower_intensity <- current$intensity < compare$intensity
-#         
-#         if (inside_box && lower_intensity) {
-#           to_remove <- c(to_remove, current$cluster_db)
-#           break
-#         }
-#       }
-#     }
-#     bounding_boxes <- bounding_boxes %>%
-#       dplyr::filter(!cluster_db %in% to_remove)
-#   }
-#   
-#   # === 6) Rectangles pour plotly ===
-#   shapes_list <- lapply(seq_len(nrow(bounding_boxes)), function(i) {
-#     list(
-#       type = "rect",
-#       x0 = bounding_boxes$xmin_ppm[i], x1 = bounding_boxes$xmax_ppm[i],
-#       y0 = bounding_boxes$ymin_ppm[i], y1 = bounding_boxes$ymax_ppm[i],
-#       line = list(color = "red", dash = "dot", width = 2),
-#       fillcolor = "rgba(0,0,0,0)",
-#       xref = "x", yref = "y",
-#       layer = "above"
-#     )
-#   })
-#   
-#   bounding_boxes <- bounding_boxes %>%
-#     dplyr::mutate(stain_intensity = intensity)
-#   
-#   # === 7) Construire peaks basé sur centres de bounding boxes ===
-#   peaks_from_boxes <- bounding_boxes %>%
-#     dplyr::transmute(
-#       F1 = as.integer(round(cx)),           # index entier
-#       F2 = as.integer(round(cy)),           # index entier
-#       stain_intensity = stain_intensity,    # somme des intensités
-#       cluster_db = cluster_db,
-#       F1_ppm = cx_ppm,
-#       F2_ppm = cy_ppm,
-#       Intensity = stain_intensity            # colonne pour compatibilité rename()
-#     )
-#   
-#   # === 8) Retour ===
-#   return(list(
-#     peaks  = peaks_from_boxes,    # remplace les pics bruts par centres
-#     boxes  = bounding_boxes,
-#     shapes = shapes_list
-#   ))
-# }
-
-# process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, step = 4) {
-#   
-#   downsample_matrix <- function(mat, step = 4) {
-#     mat[seq(1, nrow(mat), by = step),
-#         seq(1, ncol(mat), by = step)]
-#   }
-#   downsample_axis <- function(axis_vals, step = 4) {
-#     axis_vals[seq(1, length(axis_vals), by = step)]
-#   }
-#   
-#   # === Matrice et axes ===
-#   z_matrix <- rr_norm
-#   x_vals   <- as.numeric(colnames(rr_norm))  # F1 (ppm)
-#   y_vals   <- as.numeric(rownames(rr_norm))  # F2 (ppm)
-#   
-#   # Downsampling pour affichage
-#   z_small <- downsample_matrix(z_matrix, step = step)
-#   x_small <- downsample_axis(x_vals, step = step)
-#   y_small <- downsample_axis(y_vals, step = step)
-#   
-#   # === 1) Normalisation z-score pour clustering ===
-#   peaks_norm <- peaks_clean_filtered %>%
-#     mutate(
-#       F1_scaled = (F1 - mean(F1, na.rm = TRUE)) / sd(F1, na.rm = TRUE),
-#       F2_scaled = (F2 - mean(F2, na.rm = TRUE)) / sd(F2, na.rm = TRUE)
-#     )
-#   
-#   # === 2) DBSCAN ===
-#   db <- dbscan::dbscan(peaks_norm[, c("F1_scaled", "F2_scaled")],
-#                        eps = params$eps_value, minPts = 2)
-#   peaks_clean_filtered <- peaks_clean_filtered %>%
-#     mutate(cluster_db = db$cluster)
-#   
-#   # === 3) Bounding boxes ===
-#   bounding_boxes <- peaks_clean_filtered %>%
-#     dplyr::filter(cluster_db > 0) %>%
-#     group_by(cluster_db) %>%
-#     summarise(
-#       xmin = min(F1, na.rm = TRUE),
-#       xmax = max(F1, na.rm = TRUE),
-#       ymin = min(F2, na.rm = TRUE),
-#       ymax = max(F2, na.rm = TRUE),
-#       cx   = (min(F1, na.rm = TRUE) + max(F1, na.rm = TRUE)) / 2,
-#       cy   = (min(F2, na.rm = TRUE) + max(F2, na.rm = TRUE)) / 2,
-#       intensity = sum(Intensity, na.rm = TRUE),  # somme des intensités
-#       .groups = "drop"
-#     )
-#   
-#   # === 4) Conversion indices → ppm ===
-#   peaks_clean_filtered <- peaks_clean_filtered %>%
-#     mutate(
-#       F1_ppm = x_vals[F1],
-#       F2_ppm = y_vals[F2]
-#     )
-#   
-#   bounding_boxes <- bounding_boxes %>%
-#     mutate(
-#       xmin_ppm = x_vals[xmin],
-#       xmax_ppm = x_vals[xmax],
-#       ymin_ppm = y_vals[ymin],
-#       ymax_ppm = y_vals[ymax],
-#       cx_ppm   = x_vals[cx],
-#       cy_ppm   = y_vals[cy]
-#     )
-#   
-#   # === 5) Suppression doublons (pics contenus dans un autre plus intense) ===
-#   if (nrow(bounding_boxes) > 1) {
-#     to_remove <- c()
-#     for (i in seq_len(nrow(bounding_boxes))) {
-#       current <- bounding_boxes[i, ]
-#       for (j in seq_len(nrow(bounding_boxes))) {
-#         if (i == j) next
-#         compare <- bounding_boxes[j, ]
-#         
-#         inside_box <- current$cx_ppm >= compare$xmin_ppm & current$cx_ppm <= compare$xmax_ppm &
-#           current$cy_ppm >= compare$ymin_ppm & current$cy_ppm <= compare$ymax_ppm
-#         lower_intensity <- current$intensity < compare$intensity
-#         
-#         if (inside_box && lower_intensity) {
-#           to_remove <- c(to_remove, current$cluster_db)
-#           break
-#         }
-#       }
-#     }
-#     bounding_boxes <- bounding_boxes %>%
-#       dplyr::filter(!cluster_db %in% to_remove)
-#   }
-#   
-#   # === 6) Rectangles pour plotly ===
-#   shapes_list <- lapply(seq_len(nrow(bounding_boxes)), function(i) {
-#     list(
-#       type = "rect",
-#       x0 = bounding_boxes$xmin_ppm[i], x1 = bounding_boxes$xmax_ppm[i],
-#       y0 = bounding_boxes$ymin_ppm[i], y1 = bounding_boxes$ymax_ppm[i],
-#       line = list(color = "red", dash = "dot", width = 2),
-#       fillcolor = "rgba(0,0,0,0)",
-#       xref = "x", yref = "y",
-#       layer = "above"
-#     )
-#   })
-#   
-#   bounding_boxes <- bounding_boxes %>%
-#     dplyr::mutate(stain_intensity = intensity)
-#   
-#   # === 7) Construire peaks basé sur centres de bounding boxes ===
-#   peaks_from_boxes <- bounding_boxes %>%
-#     dplyr::transmute(
-#       F1 = as.integer(round(cx)),           # index entier
-#       F2 = as.integer(round(cy)),           # index entier
-#       stain_intensity = stain_intensity,    # somme des intensités
-#       cluster_db = cluster_db,
-#       F1_ppm = cx_ppm,
-#       F2_ppm = cy_ppm,
-#       Intensity_copy = stain_intensity            # colonne pour compatibilité rename()
-#     )
-#   
-#   # === 8) Retour ===
-#   return(list(
-#     peaks  = peaks_from_boxes,    # remplace les pics bruts par centres
-#     boxes  = bounding_boxes,
-#     shapes = shapes_list
-#   ))
-#}
 
 process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, step = 4) {
   
-  downsample_matrix <- function(mat, step = 4) mat[seq(1, nrow(mat), by = step),
-                                                   seq(1, ncol(mat), by = step)]
-  downsample_axis <- function(axis_vals, step = 4) axis_vals[seq(1, length(axis_vals), by = step)]
+  downsample_matrix <- function(mat, step = 4) {
+    mat[seq(1, nrow(mat), by = step),
+        seq(1, ncol(mat), by = step)]
+  }
+  downsample_axis <- function(axis_vals, step = 4) {
+    axis_vals[seq(1, length(axis_vals), by = step)]
+  }
   
-  # matrices / axes
+  # --- Matrice et axes ---
   z_matrix <- rr_norm
-  x_vals <- as.numeric(colnames(rr_norm))  # F1 (ppm)
-  y_vals <- as.numeric(rownames(rr_norm))  # F2 (ppm)
+  x_vals   <- as.numeric(colnames(rr_norm))  # F1 (ppm)
+  y_vals   <- as.numeric(rownames(rr_norm))  # F2 (ppm)
   
-  # 1) Normalisation pour DBSCAN
+  # Downsampling pour affichage
+  z_small <- downsample_matrix(z_matrix, step = step)
+  x_small <- downsample_axis(x_vals, step = step)
+  y_small <- downsample_axis(y_vals, step = step)
+  
+  # --- 1) Normalisation z-score pour clustering ---
   peaks_norm <- peaks_clean_filtered %>%
     mutate(
       F1_scaled = (F1 - mean(F1, na.rm = TRUE)) / sd(F1, na.rm = TRUE),
       F2_scaled = (F2 - mean(F2, na.rm = TRUE)) / sd(F2, na.rm = TRUE)
     )
   
-  # 2) DBSCAN
+  # --- 2) DBSCAN ---
   db <- dbscan::dbscan(peaks_norm[, c("F1_scaled", "F2_scaled")],
                        eps = params$eps_value, minPts = 2)
   peaks_clean_filtered <- peaks_clean_filtered %>%
     mutate(cluster_db = db$cluster)
   
-  # 3) Bounding boxes (une ligne par cluster)
+  # --- 3) Bounding boxes ---
   bounding_boxes <- peaks_clean_filtered %>%
     dplyr::filter(cluster_db > 0) %>%
     group_by(cluster_db) %>%
@@ -761,83 +391,47 @@ process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, ste
       ymax = max(F2, na.rm = TRUE),
       cx   = (min(F1, na.rm = TRUE) + max(F1, na.rm = TRUE)) / 2,
       cy   = (min(F2, na.rm = TRUE) + max(F2, na.rm = TRUE)) / 2,
-      intensity = sum(Intensity, na.rm = TRUE),  # somme des intensités du cluster
+      intensity = sum(Intensity, na.rm = TRUE),
       .groups = "drop"
     )
   
-  # 4) Conversion indices -> ppm
-  # use round() when indexing x_vals/y_vals to avoid OOB/NA if cx/cy non-entiers
-  peaks_clean_filtered <- peaks_clean_filtered %>%
-    mutate(F1_ppm = x_vals[F1], F2_ppm = y_vals[F2])
-  
+  # --- 4) Conversion indices → ppm ---
   bounding_boxes <- bounding_boxes %>%
     mutate(
       xmin_ppm = x_vals[xmin],
       xmax_ppm = x_vals[xmax],
       ymin_ppm = y_vals[ymin],
       ymax_ppm = y_vals[ymax],
-      cx_ppm = x_vals[pmax(1, pmin(length(x_vals), round(cx)))],
-      cy_ppm = y_vals[pmax(1, pmin(length(y_vals), round(cy)))]
+      cx_ppm   = x_vals[as.integer(round(cx))],
+      cy_ppm   = y_vals[as.integer(round(cy))],
+      stain_intensity = intensity
     )
   
-  # 5) Supprimer boxes contenues dans une autre plus intense
-  if (nrow(bounding_boxes) > 1) {
-    to_remove <- integer(0)
-    for (i in seq_len(nrow(bounding_boxes))) {
-      current <- bounding_boxes[i, ]
-      for (j in seq_len(nrow(bounding_boxes))) {
-        if (i == j) next
-        compare <- bounding_boxes[j, ]
-        
-        inside_box <- current$cx_ppm >= compare$xmin_ppm & current$cx_ppm <= compare$xmax_ppm &
-          current$cy_ppm >= compare$ymin_ppm & current$cy_ppm <= compare$ymax_ppm
-        
-        lower_intensity <- current$intensity < compare$intensity
-        
-        if (inside_box && lower_intensity) {
-          to_remove <- c(to_remove, current$cluster_db)
-          break
-        }
-      }
-    }
-    if (length(to_remove) > 0) {
-      bounding_boxes <- bounding_boxes %>% dplyr::filter(!cluster_db %in% to_remove)
-    }
-  }
+  # --- 5) Rectangles pour plotly ---
+  shapes_list <- lapply(seq_len(nrow(bounding_boxes)), function(i) {
+    list(
+      type = "rect",
+      x0 = bounding_boxes$xmin_ppm[i], x1 = bounding_boxes$xmax_ppm[i],
+      y0 = bounding_boxes$ymin_ppm[i], y1 = bounding_boxes$ymax_ppm[i],
+      line = list(color = "red", dash = "dot", width = 2),
+      fillcolor = "rgba(0,0,0,0)",
+      xref = "x", yref = "y",
+      layer = "above"
+    )
+  })
   
-  # 6) Shapes pour Plotly
-  shapes_list <- if (nrow(bounding_boxes) > 0) {
-    lapply(seq_len(nrow(bounding_boxes)), function(i) {
-      list(
-        type = "rect",
-        x0 = bounding_boxes$xmin_ppm[i], x1 = bounding_boxes$xmax_ppm[i],
-        y0 = bounding_boxes$ymin_ppm[i], y1 = bounding_boxes$ymax_ppm[i],
-        line = list(color = "red", dash = "dot", width = 2),
-        fillcolor = "rgba(0,0,0,0)",
-        xref = "x", yref = "y",
-        layer = "above"
-      )
-    })
-  } else list()
-  
-  # 7) Préparer une seule colonne d'intensité dans bounding_boxes (source de vérité)
-  bounding_boxes <- bounding_boxes %>%
-    dplyr::mutate(stain_intensity = intensity)
-  
-  # 8) Construire peaks_from_boxes (centres). On fournit à la fois stain_intensity ET Intensity
-  #    pour compatibilité en aval (rename ou anciennes attentes)
+  # --- 6) Construire peaks basé sur centres de bounding boxes ---
   peaks_from_boxes <- bounding_boxes %>%
     dplyr::transmute(
-      F1 = as.integer(round(cx)),
-      F2 = as.integer(round(cy)),
-      stain_intensity = intensity,   # nom principal utilisé dans l'app
-      #Intensity = intensity,         # copie pour compatibilité avec ancien code
-      cluster_db = cluster_db,
+      F1 = as.integer(round(cx)),           
+      F2 = as.integer(round(cy)),           
       F1_ppm = cx_ppm,
-      F2_ppm = cy_ppm
+      F2_ppm = cy_ppm,
+      stain_intensity = stain_intensity,
+      cluster_db = cluster_db
     )
   
-  # 9) Retour
+  # --- 7) Retour ---
   return(list(
     peaks  = peaks_from_boxes,
     boxes  = bounding_boxes,
