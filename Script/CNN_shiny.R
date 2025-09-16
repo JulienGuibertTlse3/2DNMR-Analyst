@@ -161,72 +161,158 @@ get_detected_peaks_with_intensity <- function(rr_norm, model, target_length = 20
 
 #=================================DETECTION DE PICS SUR SPECTRE TYPE TOCSY=========================================================
 
-predict_peaks_1D_batch <- function(spectrum_mat, model, axis = c("rows", "columns"),
-                                         threshold_class = 0.01, batch_size = 64, target_length = 2048,
-                                         verbose = TRUE) {
-  axis <- match.arg(axis)
+# predict_peaks_1D_batch <- function(spectrum_mat, model, axis = c("rows", "columns"),
+#                                          threshold_class = 0.01, batch_size = 64, target_length = 2048,
+#                                          verbose = TRUE) {
+#   axis <- match.arg(axis)
+# 
+#   # Transpose si on veut prédire sur les colonnes
+#   mat <- if (axis == "columns") t(spectrum_mat) else spectrum_mat
+#   n_vectors <- nrow(mat)
+#   n_points <- ncol(mat)
+# 
+#   if (verbose) cat("Nombre de vecteurs :", n_vectors, "- Points par vecteur :", n_points, "\n")
+# 
+#   detected_list <- vector("list", length = ceiling(n_vectors / batch_size))
+#   pb <- txtProgressBar(min = 0, max = n_vectors, style = 3)
+#   idx_list <- 1
+# 
+#   for (start_idx in seq(1, n_vectors, by = batch_size)) {
+#     end_idx <- min(start_idx + batch_size - 1, n_vectors)
+#     batch_raw <- mat[start_idx:end_idx,,drop=FALSE]
+# 
+#     #adapter chaque vecteur à target_length (padding ou downsampling si nécessaire)
+#     batch_prepared <- t(apply(batch_raw, 1, function(x) {
+#       if (length(x) > target_length) {
+#         # downsample à target_length
+#         idx <- round(seq(1, length(x), length.out = target_length))
+#         x[idx]
+#       } else {
+#         # padding à droite si trop court
+#         c(x, rep(0, target_length - length(x)))
+#       }
+#     }))
+# 
+#     input_array <- array(batch_prepared, dim = c(nrow(batch_prepared), target_length, 1))
+# 
+#     preds <- predict(model, input_array, batch_size = batch_size)
+#     probs <- preds[[1]]
+#     regs  <- preds[[2]]
+# 
+#     prob_peak <- probs[,,2]
+#     reg_intensity <- regs[,,2]
+# 
+#     detected_batch <- list()
+#     for (i in seq_len(nrow(prob_peak))) {
+#       idxs <- which(prob_peak[i, ] > threshold_class)
+#       if (length(idxs) > 0) {
+#         df <- data.frame(
+#           F1 = if (axis == "rows") idxs else (start_idx + i - 1),
+#           F2 = if (axis == "rows") (start_idx + i - 1) else idxs,
+#           Intensity = reg_intensity[i, idxs]
+#         )
+#         detected_batch[[length(detected_batch) + 1]] <- df
+#       }
+#     }
+# 
+#     detected_list[[idx_list]] <- if (length(detected_batch) > 0) do.call(rbind, detected_batch) else NULL
+#     setTxtProgressBar(pb, end_idx)
+#     idx_list <- idx_list + 1
+#   }
+# 
+#   close(pb)
+#   detected <- do.call(rbind, detected_list)
+#   if (is.null(detected)) detected <- data.frame(F1=numeric(), F2=numeric(), Intensity=numeric())
+# 
+#   if (verbose) cat("Nombre total de pics détectés :", nrow(detected), "\n")
+#   return(detected)
+# }
 
-  # Transpose si on veut prédire sur les colonnes
+predict_peaks_1D_batch <- function(spectrum_mat, model,
+                                   axis = c("rows", "columns"),
+                                   threshold_class = 0.01, batch_size = 64,
+                                   model_input_length = 2048, verbose = TRUE) {
+  axis <- match.arg(axis)
+  
   mat <- if (axis == "columns") t(spectrum_mat) else spectrum_mat
   n_vectors <- nrow(mat)
   n_points <- ncol(mat)
-
+  
   if (verbose) cat("Nombre de vecteurs :", n_vectors, "- Points par vecteur :", n_points, "\n")
-
+  
   detected_list <- vector("list", length = ceiling(n_vectors / batch_size))
   pb <- txtProgressBar(min = 0, max = n_vectors, style = 3)
   idx_list <- 1
-
+  
   for (start_idx in seq(1, n_vectors, by = batch_size)) {
     end_idx <- min(start_idx + batch_size - 1, n_vectors)
     batch_raw <- mat[start_idx:end_idx,,drop=FALSE]
-
-    #adapter chaque vecteur à target_length (padding ou downsampling si nécessaire)
-    batch_prepared <- t(apply(batch_raw, 1, function(x) {
-      if (length(x) > target_length) {
-        # downsample à target_length
-        idx <- round(seq(1, length(x), length.out = target_length))
-        x[idx]
+    
+    batch_prepared <- matrix(0, nrow = nrow(batch_raw), ncol = model_input_length)
+    idx_map_list <- vector("list", nrow(batch_raw))
+    
+    for (i in seq_len(nrow(batch_raw))) {
+      x <- batch_raw[i, ]
+      if (length(x) > model_input_length) {
+        idx_map <- round(seq(1, length(x), length.out = model_input_length))
+        batch_prepared[i, ] <- x[idx_map]
       } else {
-        # padding à droite si trop court
-        c(x, rep(0, target_length - length(x)))
+        idx_map <- seq_len(length(x))
+        batch_prepared[i, 1:length(x)] <- x
       }
-    }))
-
-    input_array <- array(batch_prepared, dim = c(nrow(batch_prepared), target_length, 1))
-
+      idx_map_list[[i]] <- idx_map
+    }
+    
+    input_array <- array(batch_prepared, dim = c(nrow(batch_prepared), model_input_length, 1))
+    
     preds <- predict(model, input_array, batch_size = batch_size)
     probs <- preds[[1]]
     regs  <- preds[[2]]
-
+    
     prob_peak <- probs[,,2]
     reg_intensity <- regs[,,2]
-
+    
     detected_batch <- list()
     for (i in seq_len(nrow(prob_peak))) {
       idxs <- which(prob_peak[i, ] > threshold_class)
       if (length(idxs) > 0) {
-        df <- data.frame(
-          F1 = if (axis == "rows") idxs else (start_idx + i - 1),
-          F2 = if (axis == "rows") (start_idx + i - 1) else idxs,
-          Intensity = reg_intensity[i, idxs]
-        )
-        detected_batch[[length(detected_batch) + 1]] <- df
+        idxs_orig <- idx_map_list[[i]][idxs]
+        
+        # Filtrer les indices hors spectre réel (padding)
+        valid <- idxs_orig <= n_points
+        idxs <- idxs[valid]
+        idxs_orig <- idxs_orig[valid]
+        
+        if (length(idxs_orig) > 0) {
+          # Reconstruct ppm-like axis (normalized index)
+          ppm_vals <- seq(from = 0, to = 1, length.out = n_points)[idxs_orig]
+          
+          df <- data.frame(
+            F1 = if (axis == "rows") idxs_orig else (start_idx + i - 1),
+            F2 = if (axis == "rows") (start_idx + i - 1) else idxs_orig,
+            Intensity = reg_intensity[i, idxs],
+            ppm = if (axis == "rows") ppm_vals else NA
+          )
+          detected_batch[[length(detected_batch) + 1]] <- df
+        }
       }
     }
-
+    
     detected_list[[idx_list]] <- if (length(detected_batch) > 0) do.call(rbind, detected_batch) else NULL
     setTxtProgressBar(pb, end_idx)
     idx_list <- idx_list + 1
   }
-
+  
   close(pb)
   detected <- do.call(rbind, detected_list)
-  if (is.null(detected)) detected <- data.frame(F1=numeric(), F2=numeric(), Intensity=numeric())
-
+  if (is.null(detected)) detected <- data.frame(F1=numeric(), F2=numeric(), Intensity=numeric(), ppm=numeric())
+  
+  detected <- unique(detected)
+  
   if (verbose) cat("Nombre total de pics détectés :", nrow(detected), "\n")
   return(detected)
 }
+
 
 filter_peaks_by_proportion <- function(peaks_clean, threshold = NULL, intensity_threshold = NULL) {
   # Optionnel : filtrage initial par intensité
