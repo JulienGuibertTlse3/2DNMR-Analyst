@@ -220,21 +220,26 @@ h5 {
                                       collapsed = TRUE,  # facultatif : pour que la boîte soit repliée par défaut
                                       width = 12,
                                       #actionButton("generate_centroids", "🔴 Find Peaks"),
+                                      # fluidRow(
+                                      #   column(
+                                      #     width = 2,
+                                      #     actionButton("generate_centroids", "🔴 Max method")
+                                      #   ),
+                                      #   column(
+                                      #     width = 2,
+                                      #     actionButton("generate_centroids_cnn", "🟢 CNN method")
+                                      #     
+                                      #   )
+                                      # ),
                                       fluidRow(
                                         column(
-                                          width = 6,
-                                          actionButton("generate_centroids", "🔴 Peak Picking Max")
-                                        ),
-                                        column(
-                                          width = 6,
-                                          actionButton("generate_centroids_cnn", "🟢 Peak Picking CNN"),
-                                          radioButtons("detection_method", "Méthode de détection :",
-                                                       choices = c("Classique" = "classique",
-                                                                   "Batch CNN" = "batch"),
-                                                       selected = "batch")
-                                          
+                                          width = 2,
+                                          actionButton("generate_centroids", "🔴 Max method"),
+                                          br(),  # saut de ligne
+                                          actionButton("generate_centroids_cnn", "🟢 CNN method")
                                         )
                                       ),
+                                      
                                       checkboxInput("disable_clustering", "🔍 No clustering", value = FALSE),
                                       numericInput("eps_value", "Clustering epsilon:", value = 0.01, min = 0, step = 0.001),
                                       textAreaInput("keep_peak_ranges_text", 
@@ -962,7 +967,7 @@ server <- function(input, output, session) {
     result_peaks <- tryCatch({
       run_cnn_peak_picking(
         rr_norm = rr_norm,
-        method = input$detection_method,
+        method = "batch",
         model = new_model,
         params = spectrum_params_CNN(),
         threshold_class = spectrum_params_CNN()$pred_class_thres,
