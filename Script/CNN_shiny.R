@@ -365,40 +365,40 @@ remove_peaks_ppm_range <- function(peaks, rr_norm, axis = "F1", ppm_min, ppm_max
 
 
 #===============================GENERATION DE CLUSTER ET DE BOUNDING BOXES========================================================
+# 
+process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, step = NULL) {
 
-process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, step = 4) {
-  
-  downsample_matrix <- function(mat, step = 4) {
+  downsample_matrix <- function(mat, step = step) {
     mat[seq(1, nrow(mat), by = step),
         seq(1, ncol(mat), by = step)]
   }
-  downsample_axis <- function(axis_vals, step = 4) {
+  downsample_axis <- function(axis_vals, step = step) {
     axis_vals[seq(1, length(axis_vals), by = step)]
   }
-  
+
   # --- Matrice et axes ---
   z_matrix <- rr_norm
   x_vals   <- as.numeric(colnames(rr_norm))  # F1 (ppm)
   y_vals   <- as.numeric(rownames(rr_norm))  # F2 (ppm)
-  
+
   # Downsampling pour affichage
   z_small <- downsample_matrix(z_matrix, step = step)
   x_small <- downsample_axis(x_vals, step = step)
   y_small <- downsample_axis(y_vals, step = step)
-  
+
   # --- 1) Normalisation z-score pour clustering ---
   peaks_norm <- peaks_clean_filtered %>%
     mutate(
       F1_scaled = (F1 - mean(F1, na.rm = TRUE)) / sd(F1, na.rm = TRUE),
       F2_scaled = (F2 - mean(F2, na.rm = TRUE)) / sd(F2, na.rm = TRUE)
     )
-  
+
   # --- 2) DBSCAN ---
   db <- dbscan::dbscan(peaks_norm[, c("F1_scaled", "F2_scaled")],
                        eps = params$eps_value, minPts = 2)
   peaks_clean_filtered <- peaks_clean_filtered %>%
     mutate(cluster_db = db$cluster)
-  
+
   # --- 3) Bounding boxes ---
   bounding_boxes <- peaks_clean_filtered %>%
     dplyr::filter(cluster_db > 0) %>%
@@ -408,24 +408,28 @@ process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, ste
       xmax = max(F1, na.rm = TRUE),
       ymin = min(F2, na.rm = TRUE),
       ymax = max(F2, na.rm = TRUE),
-      cx   = (min(F1, na.rm = TRUE) + max(F1, na.rm = TRUE)) / 2,
-      cy   = (min(F2, na.rm = TRUE) + max(F2, na.rm = TRUE)) / 2,
+      # cx   = (min(F1, na.rm = TRUE) + max(F1, na.rm = TRUE)) / 2, #là c'est les coordonnées en indice (1=>512, 1=>1024,...) ATTENTION peut ne pas être entier
+      # cy   = (min(F2, na.rm = TRUE) + max(F2, na.rm = TRUE)) / 2, #là c'est les coordonnées en indice (1=>512, 1=>1024,...)
+      cx =(xmin + xmax)/2,
+      cy = (ymin + ymax)/2,
       intensity = sum(Intensity, na.rm = TRUE),
       .groups = "drop"
     )
-  
-  # --- 4) Conversion indices → ppm ---
+
+  # --- 4) Conversion indices => ppm ---
   bounding_boxes <- bounding_boxes %>%
     mutate(
-      xmin_ppm = x_vals[xmin],
+      xmin_ppm = x_vals[xmin], #coordonnées en ppm (genre x_vals[425])
       xmax_ppm = x_vals[xmax],
       ymin_ppm = y_vals[ymin],
       ymax_ppm = y_vals[ymax],
-      cx_ppm   = x_vals[as.integer(round(cx))],
-      cy_ppm   = y_vals[as.integer(round(cy))],
+      # cx_ppm   = x_vals[round(cx)],
+      # cy_ppm   = y_vals[round(cy)],
+      cx_ppm   = (x_vals[xmin] + x_vals[xmax])/2,
+      cy_ppm   = (y_vals[ymin] + y_vals[ymax])/2,
       stain_intensity = intensity
     )
-  
+
   # --- 5) Rectangles pour plotly ---
   shapes_list <- lapply(seq_len(nrow(bounding_boxes)), function(i) {
     list(
@@ -438,18 +442,18 @@ process_peaks_with_dbscan <- function(peaks_clean_filtered, rr_norm, params, ste
       layer = "above"
     )
   })
-  
+
   # --- 6) Construire peaks basé sur centres de bounding boxes ---
   peaks_from_boxes <- bounding_boxes %>%
     dplyr::transmute(
-      F1 = as.integer(round(cx)),           
-      F2 = as.integer(round(cy)),           
-      F1_ppm = cx_ppm,
-      F2_ppm = cy_ppm,
+      F1 = as.integer(round(cy)),
+      F2 = as.integer(round(cx)),
+      F1_ppm = cy_ppm,
+      F2_ppm = cx_ppm,
       stain_intensity = stain_intensity,
       cluster_db = cluster_db
     )
-  
+
   # --- 7) Retour ---
   return(list(
     peaks  = peaks_from_boxes,
@@ -464,7 +468,7 @@ run_cnn_peak_picking <- function(rr_norm, model, params,
                                  method = c("batch", "classique"),
                                  target_length = 2048,
                                  threshold_class = params$pred_class_thres,
-                                 batch_size = 64, step = 4,
+                                 batch_size = 64, step = NULL,
                                  verbose = TRUE) {
   # Sécurité
   if (is.null(rr_norm) || !is.matrix(rr_norm)) {
@@ -473,12 +477,12 @@ run_cnn_peak_picking <- function(rr_norm, model, params,
   if (is.null(model)) {
     stop("❌ Le modèle CNN n’est pas chargé")
   }
-  
+
   method <- match.arg(method)  # sélection de la méthode
-  
+
   n_row <- nrow(rr_norm)
   n_col <- ncol(rr_norm)
-  
+
   # Fonction utilitaire de padding
   pad_sequence <- function(x, target_length) {
     current_length <- length(x)
@@ -488,58 +492,13 @@ run_cnn_peak_picking <- function(rr_norm, model, params,
       x
     }
   }
-  
+
   detected_peaks <- data.frame(F2 = numeric(0), F1 = numeric(0), Intensity = numeric(0))
-  
+
   # === Étape 1 : Détection des pics ===
-  if (method == "classique") {
-    if (verbose) cat("➡️ Méthode classique : détection ligne + colonne séquentielle\n")
-    
-    # Détection lignes
-    for (i in seq_len(n_row)) {
-      spec1D_row <- rr_norm[i, ]
-      spec1D_row_padded <- pad_sequence(spec1D_row, target_length)
-      input_tensor <- array(spec1D_row_padded, dim = c(1, target_length, 1))
-      
-      pred_row <- predict(model, input_tensor, batch_size = 1)
-      class_labels <- apply(pred_row[[1]][1, 1:length(spec1D_row), ], 1, which.max) - 1
-      reg_pred <- pred_row[[2]][1, 1:length(spec1D_row), ]
-      
-      idx <- which(class_labels %in% c(1,2))
-      if (length(idx) > 0) {
-        peaks <- data.frame(
-          F2 = as.numeric(rownames(rr_norm))[i],
-          F1 = as.numeric(colnames(rr_norm))[idx],
-          Intensity = reg_pred[idx, 2]
-        )
-        detected_peaks <- rbind(detected_peaks, peaks)
-      }
-    }
-    
-    # Détection colonnes
-    for (j in seq_len(n_col)) {
-      spec1D_col <- rr_norm[, j]
-      spec1D_col_padded <- pad_sequence(spec1D_col, target_length)
-      input_tensor <- array(spec1D_col_padded, dim = c(1, target_length, 1))
-      
-      pred_col <- predict(model, input_tensor, batch_size = 1)
-      class_labels <- apply(pred_col[[1]][1, 1:length(spec1D_col), ], 1, which.max) - 1
-      reg_pred <- pred_col[[2]][1, 1:length(spec1D_col), ]
-      
-      idx <- which(class_labels %in% c(1,2))
-      if (length(idx) > 0) {
-        peaks <- data.frame(
-          F2 = as.numeric(rownames(rr_norm))[idx],
-          F1 = as.numeric(colnames(rr_norm))[j],
-          Intensity = reg_pred[idx, 2]
-        )
-        detected_peaks <- rbind(detected_peaks, peaks)
-      }
-    }
-    
-  } else if (method == "batch") {
+  if (method == "batch") {
     if (verbose) cat("➡️ Méthode batch : prédiction via predict_peaks_1D_batch()\n")
-    
+
     peaks_rows <- predict_peaks_1D_batch(rr_norm, model,
                                          axis = "rows",
                                          threshold_class = threshold_class,
@@ -552,33 +511,30 @@ run_cnn_peak_picking <- function(rr_norm, model, params,
                                          verbose = verbose)
     detected_peaks <- rbind(peaks_rows, peaks_cols) %>% unique()
   }
-  
+
   if (verbose) {
     cat("✅ Nombre total de pics détectés (bruts) :", nrow(detected_peaks), "\n")
   }
-  
+
   # === Étape 2 : Filtres initiaux ===
   if (nrow(detected_peaks) == 0) {
     warning("⚠️ Aucun pic détecté")
     return(list(peaks = NULL, boxes = NULL, shapes = NULL))
   }
-  
+
   result <- filter_peaks_by_proportion(detected_peaks,
                                        threshold = 0.5,
                                        intensity_threshold = params$int_thres)
   peaks_clean_filtered <- result$filtered_peaks %>% filter_noisy_columns()
-  
+
   # === Étape 3 : DBSCAN + bounding boxes ===
   processed <- process_peaks_with_dbscan(peaks_clean_filtered, rr_norm, params, step)
-  
-  # Renommage final pour cohérence
-  #processed$peaks <- processed$peaks %>% dplyr::rename(stain_intensity = Intensity)
-  
+
   if (verbose) {
     cat("✅ Structure finale :\n")
     str(processed)
   }
-  
+
   return(processed)
 }
 

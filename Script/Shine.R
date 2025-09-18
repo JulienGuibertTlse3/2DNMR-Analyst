@@ -219,18 +219,6 @@ h5 {
                                       collapsible = TRUE,
                                       collapsed = TRUE,  # facultatif : pour que la boîte soit repliée par défaut
                                       width = 12,
-                                      #actionButton("generate_centroids", "🔴 Find Peaks"),
-                                      # fluidRow(
-                                      #   column(
-                                      #     width = 2,
-                                      #     actionButton("generate_centroids", "🔴 Max method")
-                                      #   ),
-                                      #   column(
-                                      #     width = 2,
-                                      #     actionButton("generate_centroids_cnn", "🟢 CNN method")
-                                      #     
-                                      #   )
-                                      # ),
                                       fluidRow(
                                         column(
                                           width = 2,
@@ -943,7 +931,7 @@ server <- function(input, output, session) {
 
   
   ## Generate Centroids & Bounding Boxes AVEC UN CNN ----
-  
+
   observeEvent(input$generate_centroids_cnn, {
 
     req(bruker_data())
@@ -972,7 +960,7 @@ server <- function(input, output, session) {
         params = spectrum_params_CNN(),
         threshold_class = spectrum_params_CNN()$pred_class_thres,
         batch_size = spectrum_params_CNN()$batch_size,
-        step = 4
+        step =1
       )
     }, error = function(e) {
       showNotification(paste("❌ CNN peak picking error:", e$message), type = "error")
@@ -988,13 +976,15 @@ server <- function(input, output, session) {
       # Ajouter colonne pour compatibilité avec pipeline original
       result_peaks$peaks <- result_peaks$boxes %>%
         dplyr::transmute(
-          F1 = as.integer(round(cx_ppm)),
-          F2 = as.integer(round(cy_ppm)),
-          F1_ppm = cx_ppm,
-          F2_ppm = cy_ppm,
+          F1 = cy_ppm,
+          F2 = cx_ppm,
+          F1_ppm = cy_ppm,
+          F2_ppm = cx_ppm,
           stain_intensity = intensity,
           cluster_db = cluster_db
         )
+
+      centroids_data(result_peaks$peaks)
 
       # Créer un identifiant pour chaque box
       result_peaks$boxes$stain_id <- seq_len(nrow(result_peaks$boxes))
@@ -1008,7 +998,7 @@ server <- function(input, output, session) {
 
       # Garder seulement les coordonnées utiles pour manipulation/affichage
       result_peaks$boxes$stain_id <- seq_len(nrow(result_peaks$boxes))
-      
+
       # Garder seulement les coordonnées utiles pour manipulation/affichage
       box_coords_only <- result_peaks$boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
       fixed_boxes(box_coords_only)
@@ -1025,6 +1015,7 @@ server <- function(input, output, session) {
     contour_plot_base(
       result_data_list()[[input$selected_subfolder]]$plot + labs(title = "")
     )
+
     refresh_nmr_plot()
 
     showNotification("✅ Peak picking CNN terminé", type = "message")
@@ -1032,8 +1023,8 @@ server <- function(input, output, session) {
 
     shinyjs::hide("loading_message")
   })
-  
 
+  
   ## Manually Delete centroids / BBs ----
 
   observeEvent(input$delete_centroid, {
