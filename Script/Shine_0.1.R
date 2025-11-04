@@ -1094,8 +1094,8 @@ server <- function(input, output, session) {
     eps <- input$eps_value
     local_points <- contour_data %>%
       dplyr::filter(
-        abs(-x - input$manual_f2) <= eps,
-        abs(-y - input$manual_f1) <= eps
+        abs(-x - input$manual_f2) <= eps*16,
+        abs(-y - input$manual_f1) <= eps*16
       )
     estimated_intensity <- sum(local_points$level, na.rm = TRUE)
     
@@ -1599,7 +1599,7 @@ observeEvent(input$delete_bbox, {
               stain_intensity = {
                 local_points <- contour_data %>%
                   dplyr::filter(
-                    sqrt((-x - F2_ppm)^2 + (-y - F1_ppm)^2) <= eps_val 
+                    sqrt((-x - F2_ppm)^2 + (-y - F1_ppm)^2) <= eps_val * 16
                   )
                 
                 if (nrow(local_points) > 3) {
