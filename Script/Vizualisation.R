@@ -20,7 +20,7 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
                                               contour_num = NULL, contour_factor = NULL, 
                                               zoom_xlim = NULL, zoom_ylim = NULL, 
                                               f2_exclude_range = NULL,
-                                              downsample_factor = 2.2) {  # Nouveau paramètre
+                                              downsample_factor = 2) {  # Nouveau paramètre
   
   if (is.null(rr_data) || !is.matrix(rr_data)) {
     stop("Invalid Bruker data. Ensure rr_data is a matrix with proper intensity values.")
