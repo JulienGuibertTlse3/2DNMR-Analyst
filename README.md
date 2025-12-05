@@ -126,75 +126,22 @@ stain_id, xmin, xmax, ymin, ymax, stain_intensity
 - R (>= 4.0)
 - RStudio (recommended)
 
-### Required R packages
+### Download
 
-```r
-install.packages(c(
-  "shiny",
-  "plotly",
-  "DT",
-  "dplyr",
-  "dbscan"
-  # Add other dependencies as needed
-))
-```
+- Option A : Direcly download it as a ZIP folder.
+      Click on the "Code" button and select Download ZIP
+  
+- Option B : Cloning with git : git clone https://github.com/JulienGuibertTlse3/2DNMR-Analyst.git
 
-### Run the application
+### Launch the app
 
-```r
-# Clone the repository
-# git clone https://github.com/your-username/SPIN.git
-
-# Open RStudio and set working directory to SPIN folder
-setwd("path/to/SPIN")
-
-# Run the app
-shiny::runApp()
-```
-
----
-
-## 📁 Project Structure
-
-```
-SPIN/
-├── app.R                 # Main Shiny application
-├── www/
-│   └── spin.png          # Logo
-├── R/
-│   ├── data_loading.R    # Data import functions
-│   ├── peak_detection.R  # Peak picking algorithms
-│   └── visualization.R   # Plotting functions
-├── models/
-│   └── cnn_model.h5      # Pre-trained CNN model (if applicable)
-└── README.md
-```
-
----
-
-## 📊 Screenshots
-
-<!-- Add screenshots of your application here -->
-<!-- ![Main Interface](screenshots/main.png) -->
-<!-- ![Peak Detection](screenshots/peaks.png) -->
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
+- Open RStudio
+- Open run_app.R file
+- Click on Source button or press Ctrl+Shift+Enter. The script will download anything necessary by itself.
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU GENERAL PUBLIC LICENSE
 
 ---
 
