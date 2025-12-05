@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="www/spin.png" alt="SPIN Logo" width="200"/>
+  <img src="2DNMR-Analyst/www/spin.png" alt="SPIN Logo" width="200"/>
 </p>
 <h1 align="center">SPIN</h1>
 <p align="center">
@@ -54,13 +54,18 @@ Fuse multiple peaks into one
 
 
 🧪 Supported Spectrum Types
-TypeDescriptionTOCSYTotal Correlation SpectroscopyHSQCHeteronuclear Single Quantum CoherenceCOSYCorrelation SpectroscopyUFCOSYUltra-Fast COSY
+TOCSY Total Correlation Spectroscopy
+HSQC Heteronuclear Single Quantum Coherence
+COSY Correlation Spectroscopy
+UFCOSY Ultra-Fast COSY
 
 📖 Detailed Workflow
 Step 1: Load Data
 Select a folder containing Bruker NMR data. The tool will automatically detect valid 2D spectra (folders containing acqus and ser or fid files). You can select which spectra to load using checkboxes.
+
 Step 2: Generate Plot
 Choose the spectrum type and adjust the intensity threshold. Click Auto to calculate an optimal threshold based on noise level or maximum intensity. Then click Generate Plot to create the contour visualization.
+
 Step 3: Peak Picking
 
 Local Max method: Uses local maxima detection followed by DBSCAN clustering to group nearby points. Adjust epsilon to control cluster size.
