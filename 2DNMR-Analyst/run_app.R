@@ -82,6 +82,14 @@ packages_required <- c(
   "Rcpp"
 )
 
+# Check and install required reticulate version
+required_reticulate <- "1.41.0"
+if (!requireNamespace("reticulate", quietly = TRUE) || 
+    packageVersion("reticulate") < required_reticulate) {
+  message("Installing/updating reticulate package...")
+  install.packages("reticulate")
+}
+
 # ----------------------------------------------------------------------------
 # 3. INSTALLATION DES PACKAGES MANQUANTS
 # ----------------------------------------------------------------------------
@@ -116,7 +124,6 @@ cat("\n🔍 Vérification des fichiers sources...\n")
 source_files <- c(
   "Function/Read_2DNMR_spectrum.R",
   "Function/Vizualisation.R",
-  "Function/Integration.R",
   "Function/Pping.R",
   "Function/CNN_shiny.R"
 )
