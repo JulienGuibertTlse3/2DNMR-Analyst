@@ -233,6 +233,98 @@ ui <- fluidPage(
         padding: 0;
         font-size: 14px;
       }
+      
+      /* Fix overflow issues in sidebar and panels */
+.panel-body {
+  overflow: visible !important;
+}
+
+.bsCollapsePanel .panel-body {
+  overflow: visible !important;
+}
+
+/* Fix sidebar overflow */
+.main-sidebar, .sidebar, .sidebar-menu {
+  overflow: visible !important;
+}
+
+.content-wrapper, .main-content {
+  overflow: visible !important;
+}
+
+/* Fix pour les boutons Peak Picking qui sont coupés */
+.panel-group .panel:nth-child(3) .panel-body {
+  overflow: visible !important;
+}
+
+/* Boutons Local Max et CNN plus compacts */
+.btn-peak-picking {
+  font-size: 11px !important;
+  padding: 5px 8px !important;
+  white-space: nowrap !important;
+}
+
+/* Fix pour le Step input qui est coupé */
+#move_box_step {
+  width: 100% !important;
+}
+
+/* Labels plus compacts */
+.form-group label {
+  margin-bottom: 2px !important;
+  font-size: 12px !important;
+}
+
+/* NumericInput plus compact dans Edit box */
+.edit-box-inputs .form-group {
+  margin-bottom: 5px !important;
+}
+
+.edit-box-inputs input[type='number'] {
+  padding: 4px 6px !important;
+  font-size: 12px !important;
+}
+
+/* Step input compact */
+.step-input-compact .form-group {
+  margin-bottom: 0 !important;
+}
+
+.step-input-compact label {
+  font-size: 11px !important;
+}
+
+.step-input-compact input {
+  font-size: 11px !important;
+  padding: 3px 5px !important;
+  height: 28px !important;
+}
+
+/* Move buttons grid fix */
+.move-btn-grid {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 28px);
+  grid-template-rows: repeat(3, 26px);
+  gap: 1px;
+  justify-items: center;
+  align-items: center;
+}
+
+.move-btn-grid .btn {
+  width: 26px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  line-height: 24px !important;
+}
+
+/* Shrink/Expand buttons */
+.move-btn-grid .btn-warning,
+.move-btn-grid .btn-success {
+  width: 12px !important;
+  font-size: 14px !important;
+  font-weight: bold !important;
+}
     "))
   ),
   
@@ -362,12 +454,15 @@ ui <- fluidPage(
                        value = "panel_peaks",
                        style = "primary",
                        
-                       fluidRow(
-                         column(6, actionButton("generate_centroids", "🔴 Local Max", class = "btn-success btn-sm btn-block")),
-                         column(6, actionButton("generate_centroids_cnn", "🟢 CNN", class = "btn-info btn-sm btn-block"))
+                       # Boutons sur une seule ligne avec texte plus court
+                       div(style = "display: flex; gap: 5px; margin-bottom: 10px;",
+                           actionButton("generate_centroids", "Local Max", 
+                                        class = "btn-success btn-sm", 
+                                        style = "flex: 1; font-size: 11px; padding: 5px 2px;"),
+                           actionButton("generate_centroids_cnn", "CNN", 
+                                        class = "btn-info btn-sm", 
+                                        style = "flex: 1; font-size: 11px; padding: 5px 2px;")
                        ),
-                       
-                       br(),
                        
                        tags$details(
                          tags$summary("⚙️ Options"),
@@ -408,41 +503,52 @@ ui <- fluidPage(
                        
                        br(),
                        
-                       # Edit box
+                       # Edit box - version compacte
                        tags$details(
                          tags$summary("📦 Edit selected box"),
                          div(
                            verbatimTextOutput("selected_box_info"),
-                           fluidRow(
-                             column(6, numericInput("edit_box_xmin", "xmin:", value = NA, step = 0.01)),
-                             column(6, numericInput("edit_box_xmax", "xmax:", value = NA, step = 0.01))
+                           
+                           # Coordonnées en 2 lignes compactes
+                           div(class = "edit-box-inputs",
+                               fluidRow(
+                                 column(6, numericInput("edit_box_xmin", "xmin:", value = NA, step = 0.01)),
+                                 column(6, numericInput("edit_box_xmax", "xmax:", value = NA, step = 0.01))
+                               ),
+                               fluidRow(
+                                 column(6, numericInput("edit_box_ymin", "ymin:", value = NA, step = 0.01)),
+                                 column(6, numericInput("edit_box_ymax", "ymax:", value = NA, step = 0.01))
+                               )
                            ),
-                           fluidRow(
-                             column(6, numericInput("edit_box_ymin", "ymin:", value = NA, step = 0.01)),
-                             column(6, numericInput("edit_box_ymax", "ymax:", value = NA, step = 0.01))
+                           
+                           # Step et Move buttons sur la même ligne
+                           div(style = "display: flex; align-items: flex-end; gap: 10px; margin-top: 10px;",
+                               
+                               # Step input compact
+                               div(class = "step-input-compact", style = "width: 70px;",
+                                   numericInput("move_box_step", "Step:", value = 0.01, min = 0.001, step = 0.005)
+                               ),
+                               
+                               # Move buttons grid
+                               div(class = "move-btn-grid",
+                                   # Ligne 1
+                                   div(),
+                                   actionButton("move_box_up", "↑", class = "btn-default btn-xs"),
+                                   div(),
+                                   # Ligne 2
+                                   actionButton("move_box_left", "←", class = "btn-default btn-xs"),
+                                   div(style = "display: flex; gap: 1px;",
+                                       actionButton("shrink_box", "−", class = "btn-warning btn-xs"),
+                                       actionButton("expand_box", "+", class = "btn-success btn-xs")
+                                   ),
+                                   actionButton("move_box_right", "→", class = "btn-default btn-xs"),
+                                   # Ligne 3
+                                   div(),
+                                   actionButton("move_box_down", "↓", class = "btn-default btn-xs"),
+                                   div()
+                               )
                            ),
-                           fluidRow(
-                             column(5, numericInput("move_box_step", "Step:", value = 0.01, min = 0.001, step = 0.005)),
-                             column(7,
-                                    div(class = "move-btn-grid", style = "margin-top: 20px;",
-                                        # Ligne 1: vide, haut, vide
-                                        div(),
-                                        actionButton("move_box_up", "⬆", class = "btn-default btn-xs"),
-                                        div(),
-                                        # Ligne 2: gauche, centre (shrink+expand), droite
-                                        actionButton("move_box_left", "⬅", class = "btn-default btn-xs"),
-                                        div(style = "display: flex; gap: 1px;",
-                                            actionButton("shrink_box", "−", class = "btn-warning btn-xs", style = "width: 15px; padding: 0;"),
-                                            actionButton("expand_box", "+", class = "btn-success btn-xs", style = "width: 15px; padding: 0;")
-                                        ),
-                                        actionButton("move_box_right", "➡", class = "btn-default btn-xs"),
-                                        # Ligne 3: vide, bas, vide
-                                        div(),
-                                        actionButton("move_box_down", "⬇", class = "btn-default btn-xs"),
-                                        div()
-                                    )
-                             )
-                           ),
+                           
                            br(),
                            actionButton("apply_box_edit", "Apply Edit", class = "btn-primary btn-sm btn-block")
                          )
@@ -673,27 +779,107 @@ server <- function(input, output, session) {
   ## 2.5 Calcul batch des intensités ----
   calculate_batch_box_intensities <- function(reference_boxes, spectra_list, apply_shift = FALSE) {
     
+    # ========== VALIDATIONS ==========
     if (is.null(reference_boxes) || nrow(reference_boxes) == 0) {
       stop("reference_boxes est vide ou NULL")
     }
     
-    if (!"stain_id" %in% names(reference_boxes)) {
-      reference_boxes$stain_id <- paste0("box_", seq_len(nrow(reference_boxes)))
+    # Copie pour ne pas modifier l'original
+    ref_boxes <- as.data.frame(reference_boxes)
+    
+    # Vérifier les colonnes requises
+    required_cols <- c("xmin", "xmax", "ymin", "ymax")
+    missing_cols <- setdiff(required_cols, names(ref_boxes))
+    if (length(missing_cols) > 0) {
+      stop(paste("Colonnes manquantes:", paste(missing_cols, collapse = ", ")))
     }
     
-    if (!all(c("F2_ppm", "F1_ppm") %in% names(reference_boxes))) {
-      reference_boxes <- reference_boxes %>%
-        dplyr::mutate(F2_ppm = (xmin + xmax) / 2, F1_ppm = (ymin + ymax) / 2)
+    # ========== NETTOYAGE DES BOXES ==========
+    
+    # Ajouter stain_id si manquant
+    if (!"stain_id" %in% names(ref_boxes)) {
+      ref_boxes$stain_id <- paste0("box_", seq_len(nrow(ref_boxes)))
     }
     
-    result_df <- reference_boxes %>%
-      dplyr::select(stain_id, F2_ppm, F1_ppm, xmin, xmax, ymin, ymax)
+    # Supprimer les lignes avec des coordonnées NA
+    ref_boxes <- ref_boxes[
+      !is.na(ref_boxes$xmin) & !is.na(ref_boxes$xmax) & 
+        !is.na(ref_boxes$ymin) & !is.na(ref_boxes$ymax), , drop = FALSE
+    ]
+    
+    if (nrow(ref_boxes) == 0) {
+      stop("Toutes les boxes ont des coordonnées NA")
+    }
+    
+    # Corriger les boxes inversées (xmin > xmax ou ymin > ymax)
+    for (i in seq_len(nrow(ref_boxes))) {
+      if (ref_boxes$xmin[i] > ref_boxes$xmax[i]) {
+        tmp <- ref_boxes$xmin[i]
+        ref_boxes$xmin[i] <- ref_boxes$xmax[i]
+        ref_boxes$xmax[i] <- tmp
+      }
+      if (ref_boxes$ymin[i] > ref_boxes$ymax[i]) {
+        tmp <- ref_boxes$ymin[i]
+        ref_boxes$ymin[i] <- ref_boxes$ymax[i]
+        ref_boxes$ymax[i] <- tmp
+      }
+    }
+    
+    # ========== GESTION DES DUPLICATS ==========
+    
+    # Vérifier les duplicats de stain_id
+    if (any(duplicated(ref_boxes$stain_id))) {
+      warning("Duplicats de stain_id détectés - renommage automatique")
+      # Renommer les duplicats
+      dup_ids <- ref_boxes$stain_id[duplicated(ref_boxes$stain_id)]
+      for (dup_id in unique(dup_ids)) {
+        idx <- which(ref_boxes$stain_id == dup_id)
+        if (length(idx) > 1) {
+          ref_boxes$stain_id[idx[-1]] <- paste0(dup_id, "_dup", seq_along(idx[-1]))
+        }
+      }
+    }
+    
+    # Vérifier les boxes avec coordonnées identiques
+    coord_signature <- paste(ref_boxes$xmin, ref_boxes$xmax, ref_boxes$ymin, ref_boxes$ymax, sep = "_")
+    if (any(duplicated(coord_signature))) {
+      warning("Boxes avec coordonnées identiques détectées - suppression des doublons")
+      ref_boxes <- ref_boxes[!duplicated(coord_signature), , drop = FALSE]
+    }
+    
+    # ========== CALCUL DES CENTRES ==========
+    
+    # Calculer F2_ppm et F1_ppm (centres des boxes)
+    ref_boxes$F2_ppm <- (ref_boxes$xmin + ref_boxes$xmax) / 2
+    ref_boxes$F1_ppm <- (ref_boxes$ymin + ref_boxes$ymax) / 2
+    
+    # ========== CONSTRUCTION DU DATAFRAME RÉSULTAT ==========
+    
+    # Nombre de boxes final
+    n_boxes <- nrow(ref_boxes)
+    message(sprintf("Processing %d boxes across %d spectra", n_boxes, length(spectra_list)))
+    
+    # Créer le dataframe résultat avec les colonnes de base
+    result_df <- data.frame(
+      stain_id = ref_boxes$stain_id,
+      F2_ppm = ref_boxes$F2_ppm,
+      F1_ppm = ref_boxes$F1_ppm,
+      xmin = ref_boxes$xmin,
+      xmax = ref_boxes$xmax,
+      ymin = ref_boxes$ymin,
+      ymax = ref_boxes$ymax,
+      stringsAsFactors = FALSE
+    )
+    
+    # ========== CALCUL DES INTENSITÉS PAR SPECTRE ==========
     
     for (spectrum_name in names(spectra_list)) {
       spectrum_data <- spectra_list[[spectrum_name]]
       
       if (is.null(spectrum_data) || is.null(spectrum_data$spectrumData)) {
-        warning(paste("Spectre", spectrum_name, "invalide"))
+        warning(paste("Spectre", spectrum_name, "invalide - colonne remplie de NA"))
+        col_name <- paste0("Intensity_", make.names(basename(spectrum_name)))
+        result_df[[col_name]] <- rep(NA_real_, n_boxes)
         next
       }
       
@@ -701,41 +887,68 @@ server <- function(input, output, session) {
       ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
       ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
       
-      shift_f2 <- 0; shift_f1 <- 0
+      # Vérifier que les ppm sont valides
+      if (any(is.na(ppm_x)) || any(is.na(ppm_y))) {
+        warning(paste("Spectre", spectrum_name, "a des ppm invalides"))
+        col_name <- paste0("Intensity_", make.names(basename(spectrum_name)))
+        result_df[[col_name]] <- rep(NA_real_, n_boxes)
+        next
+      }
       
-      if (apply_shift) {
+      # Calcul du shift si demandé
+      shift_f2 <- 0
+      shift_f1 <- 0
+      
+      if (apply_shift && n_boxes > 0) {
         max_idx <- which(mat == max(mat, na.rm = TRUE), arr.ind = TRUE)
-        if (length(max_idx) > 0) {
-          max_f2 <- ppm_x[max_idx[2]]
-          max_f1 <- ppm_y[max_idx[1]]
-          shift_f2 <- max_f2 - reference_boxes$F2_ppm[1]
-          shift_f1 <- max_f1 - reference_boxes$F1_ppm[1]
+        if (length(max_idx) > 0 && nrow(max_idx) > 0) {
+          max_f2 <- ppm_x[max_idx[1, 2]]
+          max_f1 <- ppm_y[max_idx[1, 1]]
+          shift_f2 <- max_f2 - ref_boxes$F2_ppm[1]
+          shift_f1 <- max_f1 - ref_boxes$F1_ppm[1]
+          # Limiter le shift à 0.5 ppm max
           if (abs(shift_f2) > 0.5) shift_f2 <- 0
           if (abs(shift_f1) > 0.5) shift_f1 <- 0
         }
       }
       
-      shifted_boxes <- reference_boxes %>%
-        dplyr::mutate(
-          xmin_shifted = xmin + shift_f2, xmax_shifted = xmax + shift_f2,
-          ymin_shifted = ymin + shift_f1, ymax_shifted = ymax + shift_f1
-        )
+      # Calculer les intensités pour chaque box
+      intensities <- numeric(n_boxes)
       
-      intensities <- vapply(seq_len(nrow(shifted_boxes)), FUN.VALUE = 0.0, FUN = function(i) {
-        box <- shifted_boxes[i, ]
-        x_idx <- which(ppm_x >= box$xmin_shifted & ppm_x <= box$xmax_shifted)
-        y_idx <- which(ppm_y >= box$ymin_shifted & ppm_y <= box$ymax_shifted)
-        if (length(x_idx) == 0 || length(y_idx) == 0) return(NA_real_)
-        sum(mat[y_idx, x_idx], na.rm = TRUE)
-      })
+      for (i in seq_len(n_boxes)) {
+        xmin_shifted <- ref_boxes$xmin[i] + shift_f2
+        xmax_shifted <- ref_boxes$xmax[i] + shift_f2
+        ymin_shifted <- ref_boxes$ymin[i] + shift_f1
+        ymax_shifted <- ref_boxes$ymax[i] + shift_f1
+        
+        x_idx <- which(ppm_x >= xmin_shifted & ppm_x <= xmax_shifted)
+        y_idx <- which(ppm_y >= ymin_shifted & ppm_y <= ymax_shifted)
+        
+        if (length(x_idx) == 0 || length(y_idx) == 0) {
+          intensities[i] <- NA_real_
+        } else {
+          intensities[i] <- sum(mat[y_idx, x_idx, drop = FALSE], na.rm = TRUE)
+        }
+      }
       
       col_name <- paste0("Intensity_", make.names(basename(spectrum_name)))
       result_df[[col_name]] <- intensities
     }
     
+    # ========== VÉRIFICATION FINALE ==========
+    
+    # Vérifier que le nombre de lignes est correct
+    if (nrow(result_df) != n_boxes) {
+      warning(sprintf("Anomalie: %d lignes attendues, %d obtenues", n_boxes, nrow(result_df)))
+    }
+    
+    # Log final
+    message(sprintf("Export: %d boxes, %d colonnes d'intensité", 
+                    nrow(result_df), 
+                    sum(grepl("^Intensity_", names(result_df)))))
+    
     return(result_df)
   }
-  
   
   # SECTION 3: VALEURS RÉACTIVES ----
   
@@ -1477,8 +1690,6 @@ server <- function(input, output, session) {
   
   
   # SECTION 8: GESTION MANUELLE (CENTROIDS, BOXES, CLICS) ----
-  
-  
   ## 8.1 Add manual centroid ----
   observeEvent(input$add_manual_centroid, {
     req(input$manual_f2, input$manual_f1)
@@ -1564,32 +1775,40 @@ server <- function(input, output, session) {
     if (length(selected) > 0) {
       current <- modifiable_boxes()
       to_delete <- current[selected, , drop = FALSE]
+      to_delete$status <- "delete"
       
-      # Retirer immédiatement de modifiable_boxes
-      updated_boxes <- current[-selected, , drop = FALSE]
-      modifiable_boxes(updated_boxes)
-      fixed_boxes(updated_boxes)
-      reference_boxes(updated_boxes)
+      # Ajouter aux pending au lieu de supprimer directement
+      pending_boxes(dplyr::bind_rows(pending_boxes(), to_delete))
       
-      # Invalider le cache et rafraîchir le plot
-      box_intensity_cache(list())
-      refresh_nmr_plot(force_recalc = TRUE)
-      
-      showNotification(paste("🗑️ Box deleted:", to_delete$stain_id[1]), type = "message")
+      showNotification(paste("🗑️ Box marked for deletion:", to_delete$stain_id[1]), type = "message")
     } else {
       showNotification("⚠️ Select a box first", type = "warning")
     }
   })
   
   ## 8.4b Edit/Move box ----
-  # Variable pour stocker la box en cours d'édition
+  # Variables pour stocker l'état de l'édition
   selected_box_for_edit <- reactiveVal(NULL)
-  selected_box_index <- reactiveVal(NULL)  # Index de la box sélectionnée
+  selected_box_index <- reactiveVal(NULL)
+  original_box_coords <- reactiveVal(NULL)  # Stocker les coordonnées originales
+  box_has_been_modified <- reactiveVal(FALSE)  # Flag pour savoir si modification
+  preview_trace_added <- reactiveVal(FALSE)  # Flag pour savoir si une trace preview existe
   
   # Fonction pour mettre à jour la preview de la box
   update_box_preview <- function() {
     box_idx <- selected_box_index()
     if (is.null(box_idx)) return()
+    
+    # Marquer comme modifié si les coordonnées ont changé
+    original <- original_box_coords()
+    if (!is.null(original)) {
+      if (input$edit_box_xmin != original$xmin ||
+          input$edit_box_xmax != original$xmax ||
+          input$edit_box_ymin != original$ymin ||
+          input$edit_box_ymax != original$ymax) {
+        box_has_been_modified(TRUE)
+      }
+    }
     
     # Coordonnées de preview (inversées pour le plot)
     x0 <- -input$edit_box_xmin
@@ -1602,27 +1821,41 @@ server <- function(input, output, session) {
     if (y0 > y1) { tmp <- y0; y0 <- y1; y1 <- tmp }
     
     # Mettre à jour la trace preview via plotlyProxy
-    plotlyProxy("interactivePlot", session) %>%
-      plotlyProxyInvoke(
-        "restyle",
-        list(
-          x = list(c(x0, x1, x1, x0, x0)),
-          y = list(c(y0, y0, y1, y1, y0)),
-          visible = TRUE
-        ),
-        list(0)  # Index de la trace preview (première trace ajoutée)
-      )
+    if (preview_trace_added()) {
+      plotlyProxy("interactivePlot", session) %>%
+        plotlyProxyInvoke(
+          "restyle",
+          list(
+            x = list(c(x0, x1, x1, x0, x0)),
+            y = list(c(y0, y0, y1, y1, y0))
+          ),
+          list(as.integer(preview_trace_index()))  
+        )
+    }
   }
+  
+  # Index de la trace preview dans le plot
+  preview_trace_index <- reactiveVal(NULL)
   
   # Quand une box est sélectionnée dans la table, charger ses valeurs
   observeEvent(input$bbox_table_rows_selected, {
     selected <- input$bbox_table_rows_selected
-    if (length(selected) > 0) {
+    
+    if (length(selected) > 0 && !is.null(selected)) {
       boxes <- bounding_boxes_data()
       if (!is.null(boxes) && nrow(boxes) >= selected) {
         box <- boxes[selected, ]
         selected_box_for_edit(box)
         selected_box_index(selected)
+        box_has_been_modified(FALSE)  # Reset le flag de modification
+        
+        # Stocker les coordonnées originales
+        original_box_coords(list(
+          xmin = box$xmin,
+          xmax = box$xmax,
+          ymin = box$ymin,
+          ymax = box$ymax
+        ))
         
         # Mettre à jour les inputs d'édition
         updateNumericInput(session, "edit_box_xmin", value = round(box$xmin, 4))
@@ -1630,7 +1863,7 @@ server <- function(input, output, session) {
         updateNumericInput(session, "edit_box_ymin", value = round(box$ymin, 4))
         updateNumericInput(session, "edit_box_ymax", value = round(box$ymax, 4))
         
-        # Afficher la preview (en vert pour différencier)
+        # Coordonnées pour la preview (en vert pour différencier)
         x0 <- -box$xmin
         x1 <- -box$xmax
         y0 <- -box$ymin
@@ -1638,6 +1871,7 @@ server <- function(input, output, session) {
         if (x0 > x1) { tmp <- x0; x0 <- x1; x1 <- tmp }
         if (y0 > y1) { tmp <- y0; y0 <- y1; y1 <- tmp }
         
+        # Ajouter la trace preview sur le plot EXISTANT
         plotlyProxy("interactivePlot", session) %>%
           plotlyProxyInvoke(
             "addTraces",
@@ -1648,22 +1882,35 @@ server <- function(input, output, session) {
               mode = "lines",
               line = list(color = "lime", width = 3, dash = "dash"),
               hoverinfo = "text",
-              text = "Preview",
+              text = paste("Preview:", box$stain_id),
               showlegend = FALSE,
               name = "preview_box"
             )
           )
+        
+        preview_trace_added(TRUE)
+        
+        # Calculer l'index de la trace (dernière trace ajoutée)
+        # On stocke qu'on a ajouté une trace, on utilisera -1 pour la supprimer
       }
     } else {
+      # Désélection - supprimer la preview SANS modifier le plot de base
+      if (isTRUE(preview_trace_added())) {
+        # Utiliser un délai pour s'assurer que la suppression s'exécute
+        plotlyProxy("interactivePlot", session) %>%
+          plotlyProxyInvoke("deleteTraces", -1L)  # -1L pour supprimer la dernière trace
+        preview_trace_added(FALSE)
+      }
+      
+      # Reset les variables d'état
       selected_box_for_edit(NULL)
       selected_box_index(NULL)
-      # Supprimer la preview
-      plotlyProxy("interactivePlot", session) %>%
-        plotlyProxyInvoke("deleteTraces", list(-1))
+      original_box_coords(NULL)
+      box_has_been_modified(FALSE)
     }
   })
   
-  # Appliquer les modifications à la box sélectionnée
+  # Ajouter la modification aux pending
   observeEvent(input$apply_box_edit, {
     box_to_edit <- selected_box_for_edit()
     if (is.null(box_to_edit)) {
@@ -1671,48 +1918,68 @@ server <- function(input, output, session) {
       return()
     }
     
-    current_boxes <- modifiable_boxes()
-    if (is.null(current_boxes) || nrow(current_boxes) == 0) return()
-    
-    # Trouver l'index de la box à modifier
-    box_idx <- which(current_boxes$stain_id == box_to_edit$stain_id)
-    if (length(box_idx) == 0) {
-      showNotification("⚠️ Box not found", type = "error")
+    # Vérifier si des modifications ont été faites
+    if (!box_has_been_modified()) {
+      showNotification("ℹ️ No changes to apply", type = "message")
+      # Supprimer la preview
+      if (preview_trace_added()) {
+        plotlyProxy("interactivePlot", session) %>%
+          plotlyProxyInvoke("deleteTraces", list(-1))
+        preview_trace_added(FALSE)
+      }
+      selected_box_for_edit(NULL)
+      selected_box_index(NULL)
+      original_box_coords(NULL)
+      box_has_been_modified(FALSE)
       return()
     }
     
-    # Mettre à jour les coordonnées
-    current_boxes[box_idx, "xmin"] <- input$edit_box_xmin
-    current_boxes[box_idx, "xmax"] <- input$edit_box_xmax
-    current_boxes[box_idx, "ymin"] <- input$edit_box_ymin
-    current_boxes[box_idx, "ymax"] <- input$edit_box_ymax
+    # Créer l'entrée pour la modification
+    edited_box <- data.frame(
+      xmin = input$edit_box_xmin,
+      xmax = input$edit_box_xmax,
+      ymin = input$edit_box_ymin,
+      ymax = input$edit_box_ymax,
+      stain_id = box_to_edit$stain_id,
+      stain_intensity = NA_real_,
+      status = "edit",
+      original_stain_id = box_to_edit$stain_id,
+      stringsAsFactors = FALSE
+    )
     
-    # Recalculer l'intensité
-    mat <- bruker_data()$spectrumData
-    if (!is.null(mat)) {
-      ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
-      ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
-      current_boxes[box_idx, "stain_intensity"] <- get_box_intensity(
-        mat, ppm_x, ppm_y, current_boxes[box_idx, , drop = FALSE]
-      )
-    }
-    
-    # Mettre à jour toutes les valeurs réactives
-    modifiable_boxes(current_boxes)
-    fixed_boxes(current_boxes)
-    reference_boxes(current_boxes)
+    # Ajouter aux pending
+    pending_boxes(dplyr::bind_rows(pending_boxes(), edited_box))
     
     # Supprimer la preview
-    plotlyProxy("interactivePlot", session) %>%
-      plotlyProxyInvoke("deleteTraces", list(-1))
+    if (isTRUE(preview_trace_added())) {
+      plotlyProxy("interactivePlot", session) %>%
+        plotlyProxyInvoke("deleteTraces", -1L)
+      preview_trace_added(FALSE)
+    }
     
-    # Invalider le cache et rafraîchir
-    box_intensity_cache(list())
+    # Reset
     selected_box_for_edit(NULL)
     selected_box_index(NULL)
-    refresh_nmr_plot(force_recalc = TRUE)
+    original_box_coords(NULL)
+    box_has_been_modified(FALSE)
     
-    showNotification(paste("✅ Box", box_to_edit$stain_id, "updated"), type = "message")
+    showNotification(paste("✏️ Box edit pending:", box_to_edit$stain_id), type = "message")
+  })
+  
+  # Bouton pour annuler l'édition en cours (sans appliquer)
+  observeEvent(input$cancel_box_edit, {
+    if (isTRUE(preview_trace_added())) {
+      plotlyProxy("interactivePlot", session) %>%
+        plotlyProxyInvoke("deleteTraces", -1L)
+      preview_trace_added(FALSE)
+    }
+    
+    selected_box_for_edit(NULL)
+    selected_box_index(NULL)
+    original_box_coords(NULL)
+    box_has_been_modified(FALSE)
+    
+    showNotification("❌ Edit cancelled", type = "warning", duration = 2)
   })
   
   # Déplacer la box (shift par delta) avec preview
@@ -1721,6 +1988,7 @@ server <- function(input, output, session) {
     delta <- input$move_box_step %||% 0.01
     updateNumericInput(session, "edit_box_ymin", value = input$edit_box_ymin - delta)
     updateNumericInput(session, "edit_box_ymax", value = input$edit_box_ymax - delta)
+    box_has_been_modified(TRUE)
   })
   
   observeEvent(input$move_box_down, {
@@ -1728,6 +1996,7 @@ server <- function(input, output, session) {
     delta <- input$move_box_step %||% 0.01
     updateNumericInput(session, "edit_box_ymin", value = input$edit_box_ymin + delta)
     updateNumericInput(session, "edit_box_ymax", value = input$edit_box_ymax + delta)
+    box_has_been_modified(TRUE)
   })
   
   observeEvent(input$move_box_left, {
@@ -1735,6 +2004,7 @@ server <- function(input, output, session) {
     delta <- input$move_box_step %||% 0.01
     updateNumericInput(session, "edit_box_xmin", value = input$edit_box_xmin + delta)
     updateNumericInput(session, "edit_box_xmax", value = input$edit_box_xmax + delta)
+    box_has_been_modified(TRUE)
   })
   
   observeEvent(input$move_box_right, {
@@ -1742,12 +2012,50 @@ server <- function(input, output, session) {
     delta <- input$move_box_step %||% 0.01
     updateNumericInput(session, "edit_box_xmin", value = input$edit_box_xmin - delta)
     updateNumericInput(session, "edit_box_xmax", value = input$edit_box_xmax - delta)
+    box_has_been_modified(TRUE)
   })
   
   # Observer les changements des inputs pour mettre à jour la preview
   observeEvent(c(input$edit_box_xmin, input$edit_box_xmax, input$edit_box_ymin, input$edit_box_ymax), {
     req(selected_box_index())
-    update_box_preview()
+    req(isTRUE(preview_trace_added()))
+    
+    # Coordonnées de preview
+    x0 <- -input$edit_box_xmin
+    x1 <- -input$edit_box_xmax
+    y0 <- -input$edit_box_ymin
+    y1 <- -input$edit_box_ymax
+    if (x0 > x1) { tmp <- x0; x0 <- x1; x1 <- tmp }
+    if (y0 > y1) { tmp <- y0; y0 <- y1; y1 <- tmp }
+    
+    # Supprimer et recréer la trace preview
+    plotlyProxy("interactivePlot", session) %>%
+      plotlyProxyInvoke("deleteTraces", -1L) %>%
+      plotlyProxyInvoke(
+        "addTraces",
+        list(
+          x = c(x0, x1, x1, x0, x0),
+          y = c(y0, y0, y1, y1, y0),
+          type = "scatter",
+          mode = "lines",
+          line = list(color = "lime", width = 3, dash = "dash"),
+          hoverinfo = "text",
+          text = "Preview (modified)",
+          showlegend = FALSE,
+          name = "preview_box"
+        )
+      )
+    
+    # Vérifier si modifié par rapport à l'original
+    original <- original_box_coords()
+    if (!is.null(original)) {
+      if (abs(input$edit_box_xmin - original$xmin) > 1e-6 ||
+          abs(input$edit_box_xmax - original$xmax) > 1e-6 ||
+          abs(input$edit_box_ymin - original$ymin) > 1e-6 ||
+          abs(input$edit_box_ymax - original$ymax) > 1e-6) {
+        box_has_been_modified(TRUE)
+      }
+    }
   }, ignoreInit = TRUE)
   
   # Redimensionner la box
@@ -1758,6 +2066,7 @@ server <- function(input, output, session) {
     updateNumericInput(session, "edit_box_xmax", value = input$edit_box_xmax + delta)
     updateNumericInput(session, "edit_box_ymin", value = input$edit_box_ymin - delta)
     updateNumericInput(session, "edit_box_ymax", value = input$edit_box_ymax + delta)
+    box_has_been_modified(TRUE)
   })
   
   observeEvent(input$shrink_box, {
@@ -1767,13 +2076,16 @@ server <- function(input, output, session) {
     updateNumericInput(session, "edit_box_xmax", value = input$edit_box_xmax - delta)
     updateNumericInput(session, "edit_box_ymin", value = input$edit_box_ymin + delta)
     updateNumericInput(session, "edit_box_ymax", value = input$edit_box_ymax - delta)
+    box_has_been_modified(TRUE)
   })
   
   # Output pour afficher quelle box est sélectionnée
   output$selected_box_info <- renderText({
     box <- selected_box_for_edit()
+    modified <- box_has_been_modified()
     if (is.null(box)) return("No box selected")
-    sprintf("Editing: %s", box$stain_id)
+    status <- if (modified) " (modified)" else ""
+    sprintf("Editing: %s%s", box$stain_id, status)
   })
   
   ## 8.5 Fuse points ----
@@ -1904,77 +2216,164 @@ server <- function(input, output, session) {
     current_boxes <- modifiable_boxes()
     pending_bxs <- pending_boxes()
     
+    # DEBUG
+    message("=== APPLY CHANGES DEBUG ===")
+    message("Current boxes count: ", if(is.null(current_boxes)) 0 else nrow(current_boxes))
+    message("Pending boxes count: ", if(is.null(pending_bxs)) 0 else nrow(pending_bxs))
     if (!is.null(pending_bxs) && nrow(pending_bxs) > 0) {
-      if (!"stain_id" %in% names(pending_bxs) || any(is.na(pending_bxs$stain_id))) {
-        pending_bxs$stain_id <- paste0("box_", seq_len(nrow(pending_bxs)))
+      message("Pending statuses: ", paste(pending_bxs$status, collapse = ", "))
+    }
+    
+    if (!is.null(pending_bxs) && nrow(pending_bxs) > 0) {
+      
+      # S'assurer que la colonne status existe
+      if (!"status" %in% names(pending_bxs)) {
+        pending_bxs$status <- "add"
       }
       
-      # Calculer les intensités
-      mat <- bruker_data()$spectrumData
-      ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
-      ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
-      pending_bxs$stain_intensity <- get_box_intensity(mat, ppm_x, ppm_y, pending_bxs)
+      # Remplacer NA par "add" dans status
+      pending_bxs$status[is.na(pending_bxs$status)] <- "add"
       
-      if (is.null(current_boxes) || nrow(current_boxes) == 0) {
-        current_boxes <- pending_bxs
-      } else {
-        all_cols <- unique(c(names(current_boxes), names(pending_bxs)))
+      # Séparer les différents types d'opérations
+      boxes_to_add <- pending_bxs[pending_bxs$status == "add", , drop = FALSE]
+      boxes_to_delete <- pending_bxs[pending_bxs$status == "delete", , drop = FALSE]
+      boxes_to_edit <- pending_bxs[pending_bxs$status == "edit", , drop = FALSE]
+      
+      message("To add: ", nrow(boxes_to_add))
+      message("To delete: ", nrow(boxes_to_delete))
+      message("To edit: ", nrow(boxes_to_edit))
+      
+      # Initialiser current_boxes si NULL
+      if (is.null(current_boxes)) {
+        current_boxes <- data.frame(
+          xmin = numeric(0), xmax = numeric(0),
+          ymin = numeric(0), ymax = numeric(0),
+          stain_id = character(0), stain_intensity = numeric(0),
+          stringsAsFactors = FALSE
+        )
+      }
+      
+      # 1. Traiter les suppressions
+      if (nrow(boxes_to_delete) > 0 && nrow(current_boxes) > 0) {
+        ids_to_delete <- boxes_to_delete$stain_id
+        message("Deleting IDs: ", paste(ids_to_delete, collapse = ", "))
+        current_boxes <- current_boxes[!current_boxes$stain_id %in% ids_to_delete, , drop = FALSE]
+        message("After delete, boxes count: ", nrow(current_boxes))
+      }
+      
+      # 2. Traiter les éditions (modifier les boxes existantes)
+      if (nrow(boxes_to_edit) > 0 && nrow(current_boxes) > 0) {
+        for (i in seq_len(nrow(boxes_to_edit))) {
+          edit_row <- boxes_to_edit[i, ]
+          original_id <- if ("original_stain_id" %in% names(edit_row) && !is.na(edit_row$original_stain_id)) {
+            edit_row$original_stain_id
+          } else {
+            edit_row$stain_id
+          }
+          
+          message("Editing box: ", original_id)
+          
+          # Trouver l'index de la box originale
+          box_idx <- which(current_boxes$stain_id == original_id)
+          
+          if (length(box_idx) > 0) {
+            message("Found at index: ", box_idx)
+            # Mettre à jour les coordonnées
+            current_boxes[box_idx, "xmin"] <- edit_row$xmin
+            current_boxes[box_idx, "xmax"] <- edit_row$xmax
+            current_boxes[box_idx, "ymin"] <- edit_row$ymin
+            current_boxes[box_idx, "ymax"] <- edit_row$ymax
+            
+            # Recalculer l'intensité
+            mat <- bruker_data()$spectrumData
+            if (!is.null(mat)) {
+              ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
+              ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
+              current_boxes[box_idx, "stain_intensity"] <- get_box_intensity(
+                mat, ppm_x, ppm_y, current_boxes[box_idx, , drop = FALSE]
+              )
+            }
+          } else {
+            message("WARNING: Box not found for editing: ", original_id)
+          }
+        }
+        message("After edit, boxes count: ", nrow(current_boxes))
+      }
+      
+      # 3. Traiter les ajouts
+      if (nrow(boxes_to_add) > 0) {
+        message("Adding ", nrow(boxes_to_add), " boxes")
+        
+        if (!"stain_id" %in% names(boxes_to_add) || any(is.na(boxes_to_add$stain_id))) {
+          boxes_to_add$stain_id <- paste0("box_", seq_len(nrow(boxes_to_add)))
+        }
+        
+        # Calculer les intensités
+        mat <- bruker_data()$spectrumData
+        if (!is.null(mat)) {
+          ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
+          ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
+          boxes_to_add$stain_intensity <- get_box_intensity(mat, ppm_x, ppm_y, boxes_to_add)
+        }
+        
+        # Nettoyer les colonnes de status avant merge
+        cols_to_remove <- c("status", "original_stain_id")
+        boxes_to_add <- boxes_to_add[, !names(boxes_to_add) %in% cols_to_remove, drop = FALSE]
+        
+        # Ajouter les colonnes manquantes
+        all_cols <- unique(c(names(current_boxes), names(boxes_to_add)))
         for (col in all_cols) {
           if (!col %in% names(current_boxes)) current_boxes[[col]] <- NA
-          if (!col %in% names(pending_bxs)) pending_bxs[[col]] <- NA
+          if (!col %in% names(boxes_to_add)) boxes_to_add[[col]] <- NA
         }
-        current_boxes <- dplyr::bind_rows(current_boxes, pending_bxs)
+        
+        # S'assurer que les colonnes sont dans le même ordre
+        boxes_to_add <- boxes_to_add[, names(current_boxes), drop = FALSE]
+        
+        current_boxes <- rbind(current_boxes, boxes_to_add)
+        message("After add, boxes count: ", nrow(current_boxes))
       }
       
+      # Nettoyer les colonnes de status dans current_boxes
+      cols_to_clean <- c("status", "original_stain_id")
+      for (col in cols_to_clean) {
+        if (col %in% names(current_boxes)) {
+          current_boxes[[col]] <- NULL
+        }
+      }
+      
+      message("Final boxes count: ", nrow(current_boxes))
+      message("Final box IDs: ", paste(current_boxes$stain_id, collapse = ", "))
+      
+      # Mettre à jour toutes les variables réactives
       modifiable_boxes(current_boxes)
       fixed_boxes(current_boxes)
       reference_boxes(current_boxes)
     }
     
     # Reset pending
-    pending_centroids(data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0),
-                                 stain_intensity = numeric(0), stain_id = character(0)))
-    pending_boxes(data.frame(xmin = numeric(0), xmax = numeric(0),
-                             ymin = numeric(0), ymax = numeric(0)))
-    pending_fusions(data.frame(stain_id = character(), F2_ppm = numeric(),
-                               F1_ppm = numeric(), stain_intensity = numeric()))
+    pending_centroids(data.frame(
+      F2_ppm = numeric(0), F1_ppm = numeric(0),
+      stain_intensity = numeric(0), stain_id = character(0),
+      stringsAsFactors = FALSE
+    ))
+    pending_boxes(data.frame(
+      xmin = numeric(0), xmax = numeric(0),
+      ymin = numeric(0), ymax = numeric(0),
+      stain_id = character(0), stain_intensity = numeric(0),
+      status = character(0),
+      stringsAsFactors = FALSE
+    ))
+    pending_fusions(data.frame(
+      stain_id = character(0), F2_ppm = numeric(0),
+      F1_ppm = numeric(0), stain_intensity = numeric(0),
+      stringsAsFactors = FALSE
+    ))
     
     box_intensity_cache(list())
     refresh_nmr_plot(force_recalc = TRUE)
     
     showNotification("✅ Changes applied", type = "message")
-  })
-  
-  observeEvent(input$discard_changes, {
-    pending_centroids(pending_centroids()[0, ])
-    pending_boxes(pending_boxes()[0, ])
-    pending_fusions(data.frame(stain_id = character(), F2_ppm = numeric(),
-                               F1_ppm = numeric(), stain_intensity = numeric()))
-    showNotification("❌ Changes discarded", type = "warning")
-  })
-  
-  observeEvent(input$discard_selected_centroid, {
-    selected <- input$pending_centroids_table_rows_selected
-    if (length(selected) > 0) {
-      pending_centroids(pending_centroids()[-selected, , drop = FALSE])
-      showNotification("🗑️ Pending centroid discarded", type = "message")
-    }
-  })
-  
-  observeEvent(input$discard_selected_box, {
-    selected <- input$pending_boxes_table_rows_selected
-    if (length(selected) > 0) {
-      pending_boxes(pending_boxes()[-selected, , drop = FALSE])
-      showNotification("🗑️ Pending box discarded", type = "message")
-    }
-  })
-  
-  observeEvent(input$discard_selected_fusion, {
-    selected <- input$pending_fusions_table_rows_selected
-    if (length(selected) > 0) {
-      pending_fusions(pending_fusions()[-selected, , drop = FALSE])
-      showNotification("🗑️ Pending fusion discarded", type = "message")
-    }
   })
   
   ## 8.9 Reset all ----
@@ -1989,7 +2388,6 @@ server <- function(input, output, session) {
     updateSelectInput(session, "selected_subfolder", selected = "")
     status_msg("🔁 Interface reset")
   })
-  
   
   # SECTION 9: IMPORT/EXPORT ----
   
@@ -2308,7 +2706,7 @@ server <- function(input, output, session) {
           ),
           p(
             style = "color: rgba(255,255,255,0.6); font-size: 13px; margin-top: 8px;",
-            HTML("<span style='color: #c44dff; font-weight: 600;'>S</span>ignal <span style='color: #c44dff; font-weight: 600;'>P</span>rocessing and <span style='color: #c44dff; font-weight: 600;'>I</span>ntegration for 2D <span style='color: #c44dff; font-weight: 600;'>N</span>MR")
+            HTML("<span style='color: #c44dff; font-weight: 600;'>S</span>harp <span style='color: #c44dff; font-weight: 600;'>P</span>eak <span style='color: #c44dff; font-weight: 600;'>I</span>dentification for 2D <span style='color: #c44dff; font-weight: 600;'>N</span>MR")
           )
         )
       ),

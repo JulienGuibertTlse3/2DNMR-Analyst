@@ -82,19 +82,49 @@ packages_required <- c(
   "Rcpp"
 )
 
-# Check and install required reticulate version
-required_reticulate <- "1.41.0"
-if (!requireNamespace("reticulate", quietly = TRUE) || 
-    packageVersion("reticulate") < required_reticulate) {
-  message("Installing/updating reticulate package...")
-  install.packages("reticulate")
+
+# ----------------------------------------------------------------------------
+# 3. VÉRIFICATION ET INSTALLATION DES VERSIONS REQUISES
+# ----------------------------------------------------------------------------
+
+# Versions minimales requises pour les packages critiques
+required_versions <- list(
+  reticulate = "1.41.0",
+  tensorflow = "2.9.0",
+  keras = "2.9.0",
+  shiny = "1.7.0"
+)
+
+cat("🔍 Vérification des packages critiques...\n\n")
+
+# Vérifier et installer/mettre à jour les packages avec versions spécifiques
+for (pkg_name in names(required_versions)) {
+  required_version <- required_versions[[pkg_name]]
+  needs_install <- FALSE
+  
+  if (!requireNamespace(pkg_name, quietly = TRUE)) {
+    cat("   📦", pkg_name, "non installé\n")
+    needs_install <- TRUE
+  } else {
+    current_version <- tryCatch(
+      as.character(packageVersion(pkg_name)),
+      error = function(e) "0.0.0"
+    )
+    if (package_version(current_version) < package_version(required_version)) {
+      cat("   ⚠️ ", pkg_name, current_version, "< version requise", required_version, "\n")
+      needs_install <- TRUE
+    } else {
+      cat("   ✅", pkg_name, current_version, "\n")
+    }
+  }
+  
+  if (needs_install) {
+    cat("      → Installation/mise à jour de", pkg_name, "...\n")
+    install.packages(pkg_name, dependencies = TRUE)
+  }
 }
 
-# ----------------------------------------------------------------------------
-# 3. INSTALLATION DES PACKAGES MANQUANTS
-# ----------------------------------------------------------------------------
-
-cat("🔍 Vérification des packages requis...\n\n")
+cat("\n🔍 Vérification des autres packages requis...\n\n")
 
 missing_packages <- packages_required[!sapply(packages_required, requireNamespace, quietly = TRUE)]
 
@@ -102,6 +132,7 @@ if (length(missing_packages) > 0) {
   cat("📦 Installation des packages manquants :", paste(missing_packages, collapse = ", "), "\n\n")
   install.packages(missing_packages, dependencies = TRUE)
 }
+
 
 # ----------------------------------------------------------------------------
 # 4. CHARGEMENT DES PACKAGES
