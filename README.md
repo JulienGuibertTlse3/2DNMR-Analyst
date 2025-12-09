@@ -5,7 +5,7 @@
 <h1 align="center">SPIN</h1>
 
 <p align="center">
-  <strong>S</strong>harp <strong>P</strong>eak and <strong>I</strong>dentification for 2D <strong>N</strong>MR
+  <strong>S</strong>harp <strong>P</strong>eak <strong>I</strong>dentification for 2D <strong>N</strong>MR
 </p>
 
 <p align="center">
