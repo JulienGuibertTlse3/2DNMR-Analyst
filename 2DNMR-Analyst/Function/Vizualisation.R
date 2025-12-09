@@ -141,8 +141,13 @@ find_nmr_peak_centroids_fast_preview <- function(rr_data, spectrum_type = NULL,
     intensity_df <- intensity_df[!(ppm_y >= f2_exclude_range[1] & ppm_y <= f2_exclude_range[2])]
   }
   
+  temp <- ppm_x
+  ppm_x <- ppm_y
+  ppm_y <- temp
+  
+  
   # Utiliser geom_raster (beaucoup plus rapide que geom_contour)
-  p <- ggplot(intensity_df, aes(x = ppm_y, y = ppm_x, fill = log10(intensity + 1))) +
+  p <- ggplot(intensity_df, aes(x = ppm_x, y = ppm_y, fill = log10(intensity + 1))) +
     geom_raster(interpolate = TRUE) +
     scale_fill_viridis_c(option = "magma") +
     scale_x_reverse() +
