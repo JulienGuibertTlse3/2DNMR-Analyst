@@ -5,7 +5,7 @@
 <h1 align="center">SPIN</h1>
 
 <p align="center">
-  <strong>S</strong>ignal <strong>P</strong>rocessing and <strong>IN</strong>tegration for 2D NMR
+  <strong>S</strong>harp <strong>P</strong>eak and <strong>I</strong>dentification for 2D <strong>N</strong>MR
 </p>
 
 <p align="center">
