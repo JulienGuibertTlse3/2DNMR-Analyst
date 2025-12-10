@@ -358,16 +358,22 @@ ui <- fluidPage(
           tabName = "guide",
           fluidRow(
             column(12,
-                   box(
-                     title = "README", 
-                     status = "primary", 
-                     solidHeader = TRUE,
-                     width = 12,
+                   div(
+                     class = "guide-container",
+                     style = "padding: 20px;",
                      
-                     
+                     # En-tête stylisé
                      div(
-                       class = "tool-description",
-                       uiOutput("toolDescription")  # Dynamically rendered content
+                       style = "display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #3c8dbc;",
+                       icon("book-open", class = "fa-2x", style = "color: #3c8dbc; margin-right: 15px;"),
+                       h2("Guide d'utilisation", style = "margin: 0; color: #333; font-weight: 600;")
+                     ),
+                     
+                     # Contenu avec style amélioré
+                     div(
+                       class = "guide-content",
+                       style = "background: #fff; border-radius: 8px; padding: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);",
+                       uiOutput("toolDescription")
                      )
                    )
             )
@@ -772,7 +778,7 @@ server <- function(input, output, session) {
   clean_centroids_df <- function(df) {
     df$F2_ppm <- as.numeric(gsub(",", ".", trimws(df$F2_ppm)))
     df$F1_ppm <- as.numeric(gsub(",", ".", trimws(df$F1_ppm)))
-    df$stain_intensity <- as.numeric(gsub(",", ".", trimws(df$stain_intensity)))
+    df$Volume <- as.numeric(gsub(",", ".", trimws(df$Volume)))
     df
   }
   
@@ -982,7 +988,7 @@ server <- function(input, output, session) {
   ## 3.5 Pending changes ----
   pending_centroids <- reactiveVal(data.frame(
     F2_ppm = numeric(0), F1_ppm = numeric(0),
-    stain_intensity = numeric(0), stain_id = character(0),
+    Volume = numeric(0), stain_id = character(0),
     stringsAsFactors = FALSE
   ))
   
@@ -993,7 +999,7 @@ server <- function(input, output, session) {
   
   pending_fusions <- reactiveVal(data.frame(
     stain_id = character(), F2_ppm = numeric(),
-    F1_ppm = numeric(), stain_intensity = numeric(),
+    F1_ppm = numeric(), Volume = numeric(),
     stringsAsFactors = FALSE
   ))
   
@@ -1258,7 +1264,7 @@ server <- function(input, output, session) {
     if (is.null(boxes) || nrow(boxes) == 0) {
       return(data.frame(xmin = numeric(0), xmax = numeric(0),
                         ymin = numeric(0), ymax = numeric(0),
-                        stain_id = character(0), stain_intensity = numeric(0)))
+                        stain_id = character(0), Volume = numeric(0)))
     }
     
     cache_key <- paste0(input$selected_subfolder, "_", 
@@ -1277,8 +1283,8 @@ server <- function(input, output, session) {
       boxes$stain_id <- paste0("box_", seq_len(nrow(boxes)))
     }
     
-    boxes$stain_intensity <- get_box_intensity(mat, ppm_x, ppm_y, boxes)
-    boxes$stain_intensity[is.na(boxes$stain_intensity)] <- 0
+    boxes$Volume <- get_box_intensity(mat, ppm_x, ppm_y, boxes)
+    boxes$Volume[is.na(boxes$Volume)] <- 0
     
     cached[[cache_key]] <- boxes
     box_intensity_cache(cached)
@@ -1325,8 +1331,8 @@ server <- function(input, output, session) {
       centrs_clean$F2_ppm <- as.numeric(centrs_clean$F2_ppm)
       centrs_clean$F1_ppm <- as.numeric(centrs_clean$F1_ppm)
       
-      if ("stain_intensity" %in% names(centrs_clean)) {
-        centrs_clean$intensity_plot <- as.numeric(centrs_clean$stain_intensity)
+      if ("Volume" %in% names(centrs_clean)) {
+        centrs_clean$intensity_plot <- as.numeric(centrs_clean$Volume)
         centrs_clean$intensity_plot[is.na(centrs_clean$intensity_plot)] <- 0
         centrs_clean$intensity_plot[is.infinite(centrs_clean$intensity_plot)] <- 0
         centrs_clean <- centrs_clean[!is.na(centrs_clean$F2_ppm) & !is.na(centrs_clean$F1_ppm), ]
@@ -1656,7 +1662,7 @@ server <- function(input, output, session) {
         dplyr::transmute(
           F1 = as.integer(round(cy_ppm)), F2 = as.integer(round(cx_ppm)),
           F1_ppm = cy_ppm, F2_ppm = cx_ppm,
-          stain_intensity = intensity, cluster_db = cluster_db
+          Volume = intensity, cluster_db = cluster_db
         )
       
       # IMPORTANT: Assigner les centroïdes pour qu'ils s'affichent sur le plot
@@ -1664,7 +1670,7 @@ server <- function(input, output, session) {
       
       # Préparer les bounding boxes
       result_peaks$boxes$stain_id <- seq_len(nrow(result_peaks$boxes))
-      result_peaks$boxes$stain_intensity <- result_peaks$boxes$intensity
+      result_peaks$boxes$Volume <- result_peaks$boxes$intensity
       result_peaks$boxes$xmin <- result_peaks$boxes$xmin_ppm
       result_peaks$boxes$xmax <- result_peaks$boxes$xmax_ppm
       result_peaks$boxes$ymin <- result_peaks$boxes$ymin_ppm
@@ -1697,7 +1703,7 @@ server <- function(input, output, session) {
     current <- centroids_data()
     if (is.null(current)) {
       current <- data.frame(F2_ppm = numeric(0), F1_ppm = numeric(0), 
-                            stain_intensity = numeric(0), stain_id = character(0))
+                            Volume = numeric(0), stain_id = character(0))
     }
     
     existing_ids <- current$stain_id[grepl("^man", current$stain_id)]
@@ -1718,7 +1724,7 @@ server <- function(input, output, session) {
     new_point <- data.frame(
       F2_ppm = as.numeric(input$manual_f2),
       F1_ppm = as.numeric(input$manual_f1),
-      stain_intensity = as.numeric(estimated_intensity),
+      Volume = as.numeric(estimated_intensity),
       stain_id = paste0("man", man_number),
       status = "add", stringsAsFactors = FALSE
     )
@@ -1747,7 +1753,7 @@ server <- function(input, output, session) {
       xmin = input$manual_xmin, xmax = input$manual_xmax,
       ymin = input$manual_ymin, ymax = input$manual_ymax,
       stain_id = paste0("manual_box", manual_number),
-      stain_intensity = NA_real_, status = "add", stringsAsFactors = FALSE
+      Volume = NA_real_, status = "add", stringsAsFactors = FALSE
     )
     
     pending_boxes(dplyr::bind_rows(pending_boxes(), new_box))
@@ -1941,7 +1947,7 @@ server <- function(input, output, session) {
       ymin = input$edit_box_ymin,
       ymax = input$edit_box_ymax,
       stain_id = box_to_edit$stain_id,
-      stain_intensity = NA_real_,
+      Volume = NA_real_,
       status = "edit",
       original_stain_id = box_to_edit$stain_id,
       stringsAsFactors = FALSE
@@ -2113,7 +2119,7 @@ server <- function(input, output, session) {
       stain_id = paste0("fused_point", peak_number),
       F2_ppm = mean(brushed$F2_ppm),
       F1_ppm = mean(brushed$F1_ppm),
-      stain_intensity = sum(as.numeric(brushed$stain_intensity), na.rm = TRUE),
+      Volume = sum(as.numeric(brushed$Volume), na.rm = TRUE),
       stringsAsFactors = FALSE
     )
     
@@ -2183,7 +2189,7 @@ server <- function(input, output, session) {
         ymin = min(first_click$f1, f1_ppm),
         ymax = max(first_click$f1, f1_ppm),
         stain_id = paste0("click_box_", format(Sys.time(), "%H%M%S")),
-        stain_intensity = NA_real_,
+        Volume = NA_real_,
         status = "add",
         stringsAsFactors = FALSE
       )
@@ -2248,7 +2254,7 @@ server <- function(input, output, session) {
         current_boxes <- data.frame(
           xmin = numeric(0), xmax = numeric(0),
           ymin = numeric(0), ymax = numeric(0),
-          stain_id = character(0), stain_intensity = numeric(0),
+          stain_id = character(0), Volume = numeric(0),
           stringsAsFactors = FALSE
         )
       }
@@ -2289,7 +2295,7 @@ server <- function(input, output, session) {
             if (!is.null(mat)) {
               ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
               ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
-              current_boxes[box_idx, "stain_intensity"] <- get_box_intensity(
+              current_boxes[box_idx, "Volume"] <- get_box_intensity(
                 mat, ppm_x, ppm_y, current_boxes[box_idx, , drop = FALSE]
               )
             }
@@ -2313,7 +2319,7 @@ server <- function(input, output, session) {
         if (!is.null(mat)) {
           ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
           ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
-          boxes_to_add$stain_intensity <- get_box_intensity(mat, ppm_x, ppm_y, boxes_to_add)
+          boxes_to_add$Volume <- get_box_intensity(mat, ppm_x, ppm_y, boxes_to_add)
         }
         
         # Nettoyer les colonnes de status avant merge
@@ -2354,19 +2360,19 @@ server <- function(input, output, session) {
     # Reset pending
     pending_centroids(data.frame(
       F2_ppm = numeric(0), F1_ppm = numeric(0),
-      stain_intensity = numeric(0), stain_id = character(0),
+      Volume = numeric(0), stain_id = character(0),
       stringsAsFactors = FALSE
     ))
     pending_boxes(data.frame(
       xmin = numeric(0), xmax = numeric(0),
       ymin = numeric(0), ymax = numeric(0),
-      stain_id = character(0), stain_intensity = numeric(0),
+      stain_id = character(0), Volume = numeric(0),
       status = character(0),
       stringsAsFactors = FALSE
     ))
     pending_fusions(data.frame(
       stain_id = character(0), F2_ppm = numeric(0),
-      F1_ppm = numeric(0), stain_intensity = numeric(0),
+      F1_ppm = numeric(0), Volume = numeric(0),
       stringsAsFactors = FALSE
     ))
     
@@ -2402,12 +2408,12 @@ server <- function(input, output, session) {
       error = function(e) { showNotification(paste("Import error:", e$message), type = "error"); NULL }
     )
     
-    if (!is.null(imported) && all(c("stain_id", "stain_intensity", "F2_ppm", "F1_ppm") %in% colnames(imported))) {
+    if (!is.null(imported) && all(c("stain_id", "Volume", "F2_ppm", "F1_ppm") %in% colnames(imported))) {
       centroids_data(clean_centroids_df(imported))
       refresh_nmr_plot()
       showNotification("✅ Centroids imported", type = "message")
     } else {
-      showNotification("❌ File must contain: stain_id, stain_intensity, F2_ppm, F1_ppm", type = "error")
+      showNotification("❌ File must contain: stain_id, Volume, F2_ppm, F1_ppm", type = "error")
     }
   })
   
@@ -2455,8 +2461,8 @@ server <- function(input, output, session) {
       return()
     }
     
-    # Garder seulement les colonnes requises (+ stain_intensity si présent)
-    cols_to_keep <- intersect(c(required_cols, "stain_intensity"), colnames(imported))
+    # Garder seulement les colonnes requises (+ Volume si présent)
+    cols_to_keep <- intersect(c(required_cols, "Volume"), colnames(imported))
     imported <- imported[, cols_to_keep, drop = FALSE]
     
     # Convertir les types - stain_id reste character !
@@ -2675,7 +2681,7 @@ server <- function(input, output, session) {
       
       div(
         style = "
-    background: rgba(15,15,25,0.9);
+    background: rgba(8, 8, 16, 1);
     border-radius: 20px;
     padding: 25px 35px;
     display: flex;
@@ -2893,7 +2899,7 @@ server <- function(input, output, session) {
                div(style = "background: #f5f5f5; padding: 15px; border-radius: 8px;",
                    h5("Peaks CSV"),
                    tags$code(style = "font-size: 11px;",
-                             "stain_id, F2_ppm, F1_ppm, stain_intensity"
+                             "stain_id, F2_ppm, F1_ppm, Volume"
                    )
                )
         ),
@@ -2901,7 +2907,7 @@ server <- function(input, output, session) {
                div(style = "background: #f5f5f5; padding: 15px; border-radius: 8px;",
                    h5("Boxes CSV"),
                    tags$code(style = "font-size: 11px;",
-                             "stain_id, xmin, xmax, ymin, ymax, stain_intensity"
+                             "stain_id, xmin, xmax, ymin, ymax, Volume"
                    )
                )
         )
