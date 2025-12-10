@@ -503,7 +503,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     summarise(
       F2_ppm = mean(x, na.rm = TRUE),
       F1_ppm = mean(y, na.rm = TRUE),
-      stain_intensity = sum(level, na.rm = TRUE),
+      Volume = sum(level, na.rm = TRUE),
       .groups = "drop"
     )
   
@@ -535,7 +535,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
         compare <- centroids_with_boxes[j, ]
         inside_box <- current$F2_ppm >= compare$xmin & current$F2_ppm <= compare$xmax &
           current$F1_ppm >= compare$ymin & current$F1_ppm <= compare$ymax
-        lower_intensity <- current$stain_intensity < compare$intensity
+        lower_intensity <- current$Volume < compare$intensity
         if (inside_box && lower_intensity) {
           to_remove <- c(to_remove, current$stain_id)
           break
@@ -553,7 +553,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       if (length(range) == 2) {
         centroids_in_range <- centroids %>% filter(F2_ppm >= range[2] & F2_ppm <= range[1])
         num_peaks_to_keep <- if (i <= 1) 1 else 4
-        top_peaks <- centroids_in_range %>% arrange(desc(stain_intensity)) %>% slice_head(n = num_peaks_to_keep)
+        top_peaks <- centroids_in_range %>% arrange(desc(Volume)) %>% slice_head(n = num_peaks_to_keep)
         centroids <- centroids %>% filter(!(F2_ppm >= range[2] & F2_ppm <= range[1])) %>% bind_rows(top_peaks)
         
         boxes_in_range <- bounding_boxes %>% filter(xmin >= range[2] & xmax <= range[1])
@@ -566,7 +566,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
   # --- 12. Renommage ---
   centroids <- centroids %>%
     mutate(stain_id = paste0("peak", seq_len(n()))) %>%
-    select(stain_id, F2_ppm, F1_ppm, stain_intensity)
+    select(stain_id, F2_ppm, F1_ppm, Volume)
   
   message(sprintf("✅ %d pics valides détectés après filtrage.", nrow(centroids)))
   
@@ -720,7 +720,7 @@ plot_rejected_clusters <- function(rr_data, process_result) {
 #   
 #   # Renommer colonnes pour cohérence avec ta fonction
 #   centroids <- maxima_df %>%
-#     rename(F2_ppm = x, F1_ppm = y, stain_intensity = intensity)
+#     rename(F2_ppm = x, F1_ppm = y, Volume = intensity)
 #   
 #   # Inverser axes pour correspondre à convention NMR (optionnel)
 #   centroids <- centroids %>%
@@ -745,7 +745,7 @@ plot_rejected_clusters <- function(rr_data, process_result) {
 
 
 # Compute local contour intensity around a point (stain)
-get_local_stain_intensity <- function(f2_ppm, f1_ppm, contour_data, eps_ppm = 0.0068) {
+get_local_Volume <- function(f2_ppm, f1_ppm, contour_data, eps_ppm = 0.0068) {
   local_points <- contour_data %>%
     filter(
       x >= f2_ppm - eps_ppm & x <= f2_ppm + eps_ppm,
