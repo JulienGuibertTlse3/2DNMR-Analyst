@@ -28,7 +28,6 @@ library(keras)
 
 source("Function/Read_2DNMR_spectrum.R")
 source("Function/Vizualisation.R")
-source("Function/Integration.R")
 source("Function/Pping.R")
 source("Function/CNN_shiny.R")
 

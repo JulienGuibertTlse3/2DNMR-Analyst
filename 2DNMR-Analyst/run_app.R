@@ -14,7 +14,6 @@
 #   └── Function_test/
 #       ├── Read_2DNMR_spectrum.R
 #       ├── Vizualisation.R
-#       ├── Integration.R
 #       ├── Pping.R
 #       └── CNN_shiny.R
 # ============================================================================
