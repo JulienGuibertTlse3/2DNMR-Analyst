@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="2DNMR-Analyst/www/spin.png" alt="SPIN Logo" width="200"/>
+  <img src="" alt="SPIN Logo" width="200"/>
 </p>
 
 <h1 align="center">SPIN</h1>
@@ -18,7 +18,7 @@
 
 ## 📋 Overview
 
-**SPIN** is an interactive R Shiny application for analyzing 2D NMR spectra. It provides automated peak detection, manual editing tools, and batch processing capabilities for metabolomics research.
+**...** is an interactive R Shiny application for analyzing 2D NMR spectra. It provides automated peak detection, manual editing tools, and batch processing capabilities for metabolomics research.
 
 ---
 
