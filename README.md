@@ -103,6 +103,7 @@ Choose the spectrum type and adjust the intensity threshold. Click **Auto** to c
 - Click "Apply" to confirm changes before exporting
 - Use the "Data" tab to review and select boxes for editing
 - For batch processing: select the folder, process only a QC or the most intense spectrum first (Step 1), then reload all spectra and use "Batch Export" with the peaks selected from the first spectrum
+- For batch treatment, limit the number of sprectrum per batch to 25 for TOCSY, 50 for COSY and HSQC
 
 ---
 
