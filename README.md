@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="" alt="SPIN Logo" width="200"/>
+  <img src="" alt="Tool name" width="200"/>
 </p>
 
-<h1 align="center">SPIN</h1>
+<h1 align="center">Tool name</h1>
 
 <p align="center">
-  <strong>S</strong>harp <strong>P</strong>eak <strong>I</strong>dentification for 2D <strong>N</strong>MR
+  <strong>T</strong>ool <strong>N</strong>ame
 </p>
 
 <p align="center">
