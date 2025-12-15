@@ -266,7 +266,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       ) %>%
       pull(stain_id)
     
-  } else if (spectrum_type == "TOCSY") {
+  } else if (spectrum_type %in% c("TOCSY", "COSY")) {
     
     # ✅ CRITÈRES POUR TOCSY: Distinguer vrais multiplets vs artefacts
     valid_ids <- cluster_stats %>%
@@ -325,7 +325,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       ) %>%
       pull(stain_id)
     
-  } else {  # COSY, UFCOSY
+  } else {  #UFCOSY
     
     # ✅ CRITÈRES ASSOUPLIS pour COSY/UFCOSY
     valid_ids <- cluster_stats %>%

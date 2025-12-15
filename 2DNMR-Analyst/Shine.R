@@ -442,7 +442,7 @@ ui <- fluidPage(
                            selectInput("seuil_method", NULL, 
                                        choices = c("% of max" = "max_pct", "Noise ×" = "bruit_mult")),
                            conditionalPanel("input.seuil_method == 'max_pct'",
-                                            numericInput("pct_val", "Percentage:", value = 0.001, min = 0.001, max = 1, step = 0.001)
+                                            numericInput("pct_val", "Percentage:", value = 0.0001, min = 0.001, max = 1, step = 0.001)
                            ),
                            conditionalPanel("input.seuil_method == 'bruit_mult'",
                                             numericInput("bruit_mult", "Multiplier:", value = 1, min = 0.5, max = 10, step = 0.5)
@@ -1021,10 +1021,10 @@ server <- function(input, output, session) {
     switch(input$spectrum_type,
            "TOCSY" = list(intensity_threshold = 80000, contour_num = 40, contour_factor = 1.5, 
                           eps_value = 0.0068, neighborhood_size = 3),
-           "HSQC"  = list(intensity_threshold = 30000, contour_num = 30, contour_factor = 1.3, 
+           "HSQC"  = list(intensity_threshold = 20000, contour_num = 30, contour_factor = 1.3, 
                           eps_value = 0.002, neighborhood_size = 3),
            "COSY"  = list(intensity_threshold = 60000, contour_num = 30, contour_factor = 1.3, 
-                          eps_value = 0.0068, neighborhood_size = 9),
+                          eps_value = 0.014, neighborhood_size = 9),
            "UFCOSY" = list(intensity_threshold = 50000, contour_num = 70, contour_factor = 1.3, 
                            eps_value = 0.014, neighborhood_size = 2)
     )
@@ -1520,7 +1520,10 @@ server <- function(input, output, session) {
           threshold_value = input$contour_start,
           neighborhood_size = params$neighborhood_size,
           f2_exclude_range = c(4.7, 5.0),
-          keep_peak_ranges = keep_ranges
+          keep_peak_ranges = keep_ranges,
+          spectrum_type = "TOCSY",
+          diagnose_zones = c(0.9, 1.6),
+          diagnose_radius = 0.1
         )
       }, error = function(e) {
         showNotification(paste("❌ Error:", e$message), type = "error")
@@ -2673,49 +2676,49 @@ server <- function(input, output, session) {
   ## 10.1 Description ----
   output$toolDescription <- renderUI({
     tags$div(
-      
-      # Import de la font Orbitron
-      tags$style(HTML("
-  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-")),
-      
-      div(
-        style = "
-    background: rgba(8, 8, 16, 1);
-    border-radius: 20px;
-    padding: 25px 35px;
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    margin-bottom: 20px;
-    box-shadow: 0 0 40px rgba(196,77,255,0.15), inset 0 0 60px rgba(196,77,255,0.05);
-    border: 1px solid rgba(196,77,255,0.15);
-  ",
-        
-        img(src = "spin.png", height = "130px", 
-            style = "filter: drop-shadow(0 0 25px rgba(255,107,107,0.4));"),
-        
-        div(
-          style = "flex: 1;",
-          h2(
-            style = "
-        font-family: 'Orbitron', sans-serif;
-        font-size: 36px;
-        font-weight: 900;
-        letter-spacing: 10px;
-        margin: 0;
-        background: linear-gradient(135deg, #ff6b6b 0%, #ffd93d 25%, #6bcb77 50%, #4d96ff 75%, #9b59b6 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      ",
-            "SPIN"
-          ),
-          p(
-            style = "color: rgba(255,255,255,0.6); font-size: 13px; margin-top: 8px;",
-            HTML("<span style='color: #c44dff; font-weight: 600;'>S</span>harp <span style='color: #c44dff; font-weight: 600;'>P</span>eak <span style='color: #c44dff; font-weight: 600;'>I</span>dentification for 2D <span style='color: #c44dff; font-weight: 600;'>N</span>MR")
-          )
-        )
-      ),
+#'       
+#'       # Import de la font Orbitron
+#'       tags$style(HTML("
+#'   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+#' ")),
+#'       
+#'       div(
+#'         style = "
+#'     background: rgba(8, 8, 16, 1);
+#'     border-radius: 20px;
+#'     padding: 25px 35px;
+#'     display: flex;
+#'     align-items: center;
+#'     gap: 30px;
+#'     margin-bottom: 20px;
+#'     box-shadow: 0 0 40px rgba(196,77,255,0.15), inset 0 0 60px rgba(196,77,255,0.05);
+#'     border: 1px solid rgba(196,77,255,0.15);
+#'   ",
+#'         
+#'         img(src = "spin.png", height = "130px", 
+#'             style = "filter: drop-shadow(0 0 25px rgba(255,107,107,0.4));"),
+#'         
+#'         div(
+#'           style = "flex: 1;",
+#'           h2(
+#'             style = "
+#'         font-family: 'Orbitron', sans-serif;
+#'         font-size: 36px;
+#'         font-weight: 900;
+#'         letter-spacing: 10px;
+#'         margin: 0;
+#'         background: linear-gradient(135deg, #ff6b6b 0%, #ffd93d 25%, #6bcb77 50%, #4d96ff 75%, #9b59b6 100%);
+#'         -webkit-background-clip: text;
+#'         -webkit-text-fill-color: transparent;
+#'       ",
+#'             "SPIN"
+#'           ),
+#'           p(
+#'             style = "color: rgba(255,255,255,0.6); font-size: 13px; margin-top: 8px;",
+#'             HTML("<span style='color: #c44dff; font-weight: 600;'>S</span>harp <span style='color: #c44dff; font-weight: 600;'>P</span>eak <span style='color: #c44dff; font-weight: 600;'>I</span>dentification for 2D <span style='color: #c44dff; font-weight: 600;'>N</span>MR")
+#'           )
+#'         )
+#'       ),
       
       # Quick Start
       div(style = "background: #e8f5e9; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;",
