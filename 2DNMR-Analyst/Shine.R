@@ -2741,8 +2741,10 @@ server <- function(input, output, session) {
                   tags$li("Increase epsilon value to decrease size of cluster and get more solo peaks (e.g., TOCSY)"),
                   tags$li("Click 'Apply' to confirm changes before exporting"),
                   tags$li("Use the 'Data' tab to review and select boxes for editing"),
-                  tags$li("If you want to process a batch, you might want to select the folder, only select a QC or the most intense spectrum. Process it (Step 1), then reload every spectra and use the 'batch export' with the peaks selected on the first spectrum.")
-          )
+                  tags$li("If you want to process a batch, you might want to select the folder, only select a QC or the most intense spectrum. Process it (Step 1), then reload every spectra and use the 'batch export' with the peaks selected on the first spectrum."),
+                  tags$li("For batch treatment, limit the number of sprectrum per batch to 25 for TOCSY, 50 for COSY and HSQC.")
+                  
+                  )
       ),
       
       # Main Features
