@@ -1,161 +1,93 @@
 # ============================================================================
 # 2D NMR Spectra Analysis - Script de lancement
 # ============================================================================
-# Ce script installe automatiquement les packages nécessaires et lance l'application
+# Ce script vérifie l'environnement et lance l'application
 # 
 # UTILISATION :
 #   1. Ouvrir ce fichier dans RStudio
 #   2. Cliquer sur "Source" ou exécuter tout le script (Ctrl+Shift+Enter)
 #
-# STRUCTURE REQUISE :
-#   2DNMR-Analyst/
-#   ├── run_app.R              <- CE FICHIER (point d'entrée)
-#   ├── Shine.R                <- Application principale
-#   └── Function_test/
-#       ├── Read_2DNMR_spectrum.R
-#       ├── Vizualisation.R
-#       ├── Pping.R
-#       └── CNN_shiny.R
+# PREMIÈRE UTILISATION :
+#   Exécuter d'abord : source("setup.R")
+#
 # ============================================================================
 
-cat("
-╔══════════════════════════════════════════════════════════════════╗
-║           2D NMR Spectra Analysis - Initialisation               ║
-╚══════════════════════════════════════════════════════════════════╝
-\n")
+cat("\n")
+cat("╔══════════════════════════════════════════════════════════════════╗\n")
+cat("║           2D NMR Spectra Analysis - Démarrage                    ║\n")
+cat("╚══════════════════════════════════════════════════════════════════╝\n")
+cat("\n")
 
 # ----------------------------------------------------------------------------
 # 1. DÉFINIR LE RÉPERTOIRE DE TRAVAIL
 # ----------------------------------------------------------------------------
 
-# Automatiquement définir le répertoire de travail au dossier contenant ce script
 if (interactive() && requireNamespace("rstudioapi", quietly = TRUE)) {
-  script_path <- dirname(rstudioapi::getSourceEditorContext()$path)
+  script_path <- tryCatch(
+    dirname(rstudioapi::getSourceEditorContext()$path),
+    error = function(e) ""
+  )
   if (nchar(script_path) > 0) {
     setwd(script_path)
-    cat("📁 Répertoire de travail :", getwd(), "\n\n")
-  }
-} else {
-  cat("📁 Répertoire de travail actuel :", getwd(), "\n")
-  cat("   (Assurez-vous d'être dans le dossier 2DNMR-Analyst)\n\n")
-}
-
-# ----------------------------------------------------------------------------
-# 2. LISTE DES PACKAGES REQUIS
-# ----------------------------------------------------------------------------
-
-packages_required <- c(
-  # Interface Shiny
-  "shiny",
-  "shinyFiles",
-  "shinydashboard",
-  "shinydashboardPlus",
-  "shinyBS",
-  "shinyjs",
-  "shinycssloaders",
-  
-  # Visualisation
-  "plotly",
-  "ggplot2",
-  "DT",
-  
-  # Manipulation de données
-  "dplyr",
-  "data.table",
-  "magrittr",
-  "zoo",
-  
-  # Analyse
-  "dbscan",
-  "sp",
-  "matrixStats",
-  "pracma",
-  "minpack.lm",
-  
-  # Deep Learning
-  "tensorflow",
-  "keras",
-  "imager",
-  
-  # Autres
-  "Rcpp"
-)
-
-
-# ----------------------------------------------------------------------------
-# 3. VÉRIFICATION ET INSTALLATION DES VERSIONS REQUISES
-# ----------------------------------------------------------------------------
-
-# Versions minimales requises pour les packages critiques
-required_versions <- list(
-  reticulate = "1.41.0",
-  tensorflow = "2.9.0",
-  keras = "2.9.0",
-  shiny = "1.7.0"
-)
-
-cat("🔍 Vérification des packages critiques...\n\n")
-
-# Vérifier et installer/mettre à jour les packages avec versions spécifiques
-for (pkg_name in names(required_versions)) {
-  required_version <- required_versions[[pkg_name]]
-  needs_install <- FALSE
-  
-  if (!requireNamespace(pkg_name, quietly = TRUE)) {
-    cat("   📦", pkg_name, "non installé\n")
-    needs_install <- TRUE
-  } else {
-    current_version <- tryCatch(
-      as.character(packageVersion(pkg_name)),
-      error = function(e) "0.0.0"
-    )
-    if (package_version(current_version) < package_version(required_version)) {
-      cat("   ⚠️ ", pkg_name, current_version, "< version requise", required_version, "\n")
-      needs_install <- TRUE
-    } else {
-      cat("   ✅", pkg_name, current_version, "\n")
-    }
-  }
-  
-  if (needs_install) {
-    cat("      → Installation/mise à jour de", pkg_name, "...\n")
-    install.packages(pkg_name, dependencies = TRUE)
   }
 }
 
-cat("\n🔍 Vérification des autres packages requis...\n\n")
+cat("📁 Répertoire de travail :", getwd(), "\n\n")
 
-missing_packages <- packages_required[!sapply(packages_required, requireNamespace, quietly = TRUE)]
+# ----------------------------------------------------------------------------
+# 2. VÉRIFICATION DE L'ENVIRONNEMENT
+# ----------------------------------------------------------------------------
 
-if (length(missing_packages) > 0) {
-  cat("📦 Installation des packages manquants :", paste(missing_packages, collapse = ", "), "\n\n")
-  install.packages(missing_packages, dependencies = TRUE)
+cat("🔍 Vérification de l'environnement...\n\n")
+
+# Vérifier si renv est initialisé
+if (!file.exists("renv.lock")) {
+  stop("❌ Fichier renv.lock non trouvé. Êtes-vous dans le bon dossier ?")
 }
 
-
-# ----------------------------------------------------------------------------
-# 4. CHARGEMENT DES PACKAGES
-# ----------------------------------------------------------------------------
-
-cat("📚 Chargement des packages...\n")
-
-for (pkg in packages_required) {
-  suppressWarnings(suppressPackageStartupMessages(library(pkg, character.only = TRUE)))
+# Vérifier si l'environnement Python existe
+venv_path <- file.path(getwd(), ".venv")
+if (!dir.exists(venv_path)) {
+  cat("⚠️  Environnement Python non trouvé.\n")
+  cat("   Exécutez d'abord : source('setup.R')\n\n")
+  stop("Installation requise. Lancez source('setup.R')")
 }
 
-cat("   ✅ Tous les packages chargés\n")
+cat("   ✅ renv.lock trouvé\n")
+cat("   ✅ Environnement Python trouvé\n\n")
 
 # ----------------------------------------------------------------------------
-# 5. VÉRIFICATION DES FICHIERS SOURCE
+# 3. CONFIGURER PYTHON
 # ----------------------------------------------------------------------------
 
-cat("\n🔍 Vérification des fichiers sources...\n")
+cat("🐍 Configuration de Python...\n")
+
+library(reticulate)
+
+# Configurer reticulate pour utiliser notre environnement
+use_virtualenv(venv_path, required = TRUE)
+
+# Vérifier TensorFlow
+tryCatch({
+  tf <- import("tensorflow")
+  cat("   ✅ TensorFlow", tf$`__version__`, "chargé\n\n")
+}, error = function(e) {
+  cat("   ⚠️  TensorFlow non disponible:", e$message, "\n")
+  cat("   Le CNN ne fonctionnera pas, mais l'app peut démarrer.\n\n")
+})
+
+# ----------------------------------------------------------------------------
+# 4. VÉRIFICATION DES FICHIERS SOURCE
+# ----------------------------------------------------------------------------
+
+cat("🔍 Vérification des fichiers sources...\n")
 
 source_files <- c(
   "Function/Read_2DNMR_spectrum.R",
   "Function/Vizualisation.R",
   "Function/Pping.R",
-  "Function/CNN_shiny.R"
+  "Function/CNN_shiny.R",
+  "Shine.R"
 )
 
 all_files_ok <- TRUE
@@ -169,15 +101,8 @@ for (f in source_files) {
   }
 }
 
-if (!file.exists("Shine.R")) {
-  cat("   ❌ Shine.R - MANQUANT!\n")
-  all_files_ok <- FALSE
-} else {
-  cat("   ✅ Shine.R\n")
-}
-
 # ----------------------------------------------------------------------------
-# 6. LANCEMENT DE L'APPLICATION
+# 5. LANCEMENT DE L'APPLICATION
 # ----------------------------------------------------------------------------
 
 if (all_files_ok) {
@@ -189,7 +114,7 @@ if (all_files_ok) {
   cat("L'application va s'ouvrir dans votre navigateur...\n")
   cat("Pour arrêter : cliquez sur STOP dans RStudio ou appuyez sur Échap\n\n")
   
-  shiny::runApp("Shine.R") 
+  shiny::runApp("Shine.R")
   
 } else {
   cat("\n")

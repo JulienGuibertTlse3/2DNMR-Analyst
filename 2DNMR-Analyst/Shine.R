@@ -22,6 +22,14 @@ library(data.table)
 library(dbscan)
 library(tensorflow)
 library(keras)
+library(zoo)
+library(matrixStats)
+library(minpack.lm)
+library(imager)
+library(viridis)
+library(reshape2)
+library(abind)
+library(readr)
 
 # --- Chargement des fichiers sources (chemins relatifs) ---
 # Ces fichiers doivent être dans le sous-dossier Function_test/
