@@ -64,6 +64,7 @@ packages_required <- c(
   "data.table",
   "magrittr",
   "zoo",
+  "reshape2",
   
   # Analyse
   "dbscan",

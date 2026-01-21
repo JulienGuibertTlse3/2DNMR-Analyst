@@ -23,6 +23,7 @@ library(dbscan)
 # library(tensorflow)
 # library(keras)
 # library(reticulate)
+# library(Rcpp)
 library(zoo)
 library(matrixStats)
 library(minpack.lm)
@@ -38,6 +39,7 @@ library(readr)
 source("Function/Read_2DNMR_spectrum.R")
 source("Function/Vizualisation.R")
 source("Function/Pping.R")
+source("Function/Peak_fitting.R")
 # source("Function/CNN_shiny.R")
 
 # Fichier C++ (si disponible)
@@ -624,6 +626,23 @@ ui <- fluidPage(
                          )
                        ),
                        
+                       br(),
+                       hr(),
+                       
+                       # Dans bsCollapsePanel "5. Save & Export"
+                       radioButtons("integration_method", "Integration method:",
+                                    choices = c("Sum" = "sum", 
+                                                "Gaussian fit" = "gaussian",
+                                                "Voigt fit" = "voigt"),
+                                    selected = "sum"),
+                       
+                       conditionalPanel(
+                         "input.integration_method != 'sum'",
+                         checkboxInput("show_fit_quality", "Include R² in export", value = TRUE),
+                         sliderInput("min_r_squared", "Min R² threshold:", 
+                                     min = 0, max = 1, value = 0.7, step = 0.05)
+                       ),
+                       
                        hr(),
                        actionButton("reset_all", "🔄 Reset All", class = "btn-outline-danger btn-sm btn-block")
                      )
@@ -708,6 +727,72 @@ ui <- fluidPage(
                            DTOutput("pending_fusions_table"),
                            actionButton("discard_selected_fusion", "Remove Selected", class = "btn-sm btn-danger", style = "margin-top: 5px;")
                        )
+                     ),
+                     # Dans tabBox, ajouter un nouvel onglet
+                     tabPanel(
+                       title = tagList(icon("chart-line"), "Fit Quality"),
+                       value = "fit_quality_tab",
+                       
+                       # Info box en haut
+                       div(class = "info-box-custom",
+                           style = "margin-bottom: 20px;",
+                           icon("info-circle"),
+                           " This tab displays fit quality metrics when using Gaussian or Voigt integration methods. ",
+                           "Select a box in the ", tags$b("Fitted boxes details"), " tab to see detailed fit visualization."
+                       ),
+                       
+                       # Résumé global
+                       fluidRow(
+                         column(6,
+                                h4("📊 Fit Summary by Method"),
+                                DTOutput("fit_summary_table")
+                         ),
+                         column(6,
+                                h4("📋 Fitted Boxes Details"),
+                                DTOutput("fit_boxes_detail_table")
+                         )
+                       ),
+                       
+                       br(),
+                       
+                       # Distribution des R²
+                       fluidRow(
+                         column(12,
+                                h4("📈 R² Distribution"),
+                                plotlyOutput("fit_quality_plot", height = "400px")
+                         )
+                       ),
+                       
+                       br(),
+                       
+                       # Visualisation détaillée d'une box sélectionnée
+                       fluidRow(
+                         column(6,
+                                h4("🔍 Selected Box - 2D Fit"),
+                                div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;",
+                                    plotOutput("example_fit_2d", height = "400px")
+                                )
+                         ),
+                         column(6,
+                                h4("📉 Residuals Distribution"),
+                                div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;",
+                                    plotOutput("residuals_plot", height = "400px")
+                                )
+                         )
+                       ),
+                       
+                       br(),
+                       
+                       # Tips
+                       div(style = "background: #fff3e0; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9800;",
+                           h5("💡 Interpretation Tips"),
+                           tags$ul(
+                             tags$li(tags$b("R² > 0.9:"), " Excellent fit - peak is well-defined"),
+                             tags$li(tags$b("R² 0.7-0.9:"), " Good fit - acceptable quantification"),
+                             tags$li(tags$b("R² < 0.7:"), " Poor fit - consider manual inspection or sum method"),
+                             tags$li(tags$b("Residuals:"), " Should be randomly distributed around zero")
+                           )
+                       )
                      )
                    )
             )
@@ -754,21 +839,29 @@ server <- function(input, output, session) {
     data
   }
   
-  ## 2.2 Calcul d'intensité des boxes (vectorisé) ----
-  get_box_intensity <- function(mat, ppm_x, ppm_y, boxes) {
+  ## 2.2 Calcul d'intensité des boxes (vectorisé avec option fitting) ----
+  get_box_intensity <- function(mat, ppm_x, ppm_y, boxes, method = "sum", model = "gaussian") {
     if (nrow(boxes) == 0) return(numeric(0))
     
-    xmin_v <- as.numeric(boxes$xmin)
-    xmax_v <- as.numeric(boxes$xmax)
-    ymin_v <- as.numeric(boxes$ymin)
-    ymax_v <- as.numeric(boxes$ymax)
-    
-    vapply(seq_along(xmin_v), FUN.VALUE = 0.0, FUN = function(i) {
-      xi <- which(ppm_x >= xmin_v[i] & ppm_x <= xmax_v[i])
-      yi <- which(ppm_y >= ymin_v[i] & ppm_y <= ymax_v[i])
-      if (length(xi) == 0 || length(yi) == 0) return(NA_real_)
-      sum(mat[yi, xi], na.rm = TRUE)
-    })
+    if (method == "sum") {
+      # Méthode existante (rapide)
+      xmin_v <- as.numeric(boxes$xmin)
+      xmax_v <- as.numeric(boxes$xmax)
+      ymin_v <- as.numeric(boxes$ymin)
+      ymax_v <- as.numeric(boxes$ymax)
+      
+      vapply(seq_along(xmin_v), FUN.VALUE = 0.0, FUN = function(i) {
+        xi <- which(ppm_x >= xmin_v[i] & ppm_x <= xmax_v[i])
+        yi <- which(ppm_y >= ymin_v[i] & ppm_y <= ymax_v[i])
+        if (length(xi) == 0 || length(yi) == 0) return(NA_real_)
+        sum(mat[yi, xi], na.rm = TRUE)
+      })
+      
+    } else {
+      # Méthode par fitting (plus lente mais plus précise)
+      fit_results <- calculate_fitted_volumes(mat, ppm_x, ppm_y, boxes, model = model)
+      fit_results$volume_fitted
+    }
   }
   
   ## 2.3 Parse keep_peak_ranges ----
@@ -791,7 +884,12 @@ server <- function(input, output, session) {
   }
   
   ## 2.5 Calcul batch des intensités ----
-  calculate_batch_box_intensities <- function(reference_boxes, spectra_list, apply_shift = FALSE) {
+  calculate_batch_box_intensities <- function(reference_boxes, 
+                                              spectra_list, 
+                                              apply_shift = FALSE, 
+                                              method = "sum",      # NOUVEAU paramètre
+                                              model = "gaussian",  # NOUVEAU paramètre
+                                              progress = NULL) {
     
     # ========== VALIDATIONS ==========
     if (is.null(reference_boxes) || nrow(reference_boxes) == 0) {
@@ -926,23 +1024,46 @@ server <- function(input, output, session) {
         }
       }
       
-      # Calculer les intensités pour chaque box
-      intensities <- numeric(n_boxes)
-      
-      for (i in seq_len(n_boxes)) {
-        xmin_shifted <- ref_boxes$xmin[i] + shift_f2
-        xmax_shifted <- ref_boxes$xmax[i] + shift_f2
-        ymin_shifted <- ref_boxes$ymin[i] + shift_f1
-        ymax_shifted <- ref_boxes$ymax[i] + shift_f1
+      if (method == "sum") {
+        # Calculer les intensités pour chaque box
+        intensities <- numeric(n_boxes)
         
-        x_idx <- which(ppm_x >= xmin_shifted & ppm_x <= xmax_shifted)
-        y_idx <- which(ppm_y >= ymin_shifted & ppm_y <= ymax_shifted)
-        
-        if (length(x_idx) == 0 || length(y_idx) == 0) {
-          intensities[i] <- NA_real_
-        } else {
-          intensities[i] <- sum(mat[y_idx, x_idx, drop = FALSE], na.rm = TRUE)
+        for (i in seq_len(n_boxes)) {
+          xmin_shifted <- ref_boxes$xmin[i] + shift_f2
+          xmax_shifted <- ref_boxes$xmax[i] + shift_f2
+          ymin_shifted <- ref_boxes$ymin[i] + shift_f1
+          ymax_shifted <- ref_boxes$ymax[i] + shift_f1
+          
+          x_idx <- which(ppm_x >= xmin_shifted & ppm_x <= xmax_shifted)
+          y_idx <- which(ppm_y >= ymin_shifted & ppm_y <= ymax_shifted)
+          
+          if (length(x_idx) == 0 || length(y_idx) == 0) {
+            intensities[i] <- NA_real_
+          } else {
+            intensities[i] <- sum(mat[y_idx, x_idx, drop = FALSE], na.rm = TRUE)
+          }
         }
+        
+      } else {
+        # Méthode par fitting
+        fit_results <- calculate_fitted_volumes(
+          mat, ppm_x, ppm_y, 
+          ref_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")],
+          model = model
+        )
+        
+        intensities <- fit_results$volume_fitted
+        
+        # TOUJOURS ajouter les colonnes R² et centers quand on fait du fitting
+        # (ces infos sont nécessaires pour l'affichage dans l'onglet Fit Quality)
+        col_name_r2 <- paste0("R2_", make.names(basename(spectrum_name)))
+        result_df[[col_name_r2]] <- fit_results$r_squared
+        
+        col_name_cx <- paste0("CenterX_", make.names(basename(spectrum_name)))
+        result_df[[col_name_cx]] <- fit_results$center_x
+        
+        col_name_cy <- paste0("CenterY_", make.names(basename(spectrum_name)))
+        result_df[[col_name_cy]] <- fit_results$center_y
       }
       
       col_name <- paste0("Intensity_", make.names(basename(spectrum_name)))
@@ -1020,6 +1141,10 @@ server <- function(input, output, session) {
   progress_bar <- reactiveVal(NULL)
   data_cc <- reactiveVal(NULL)
   plot_list <- reactiveVal(list())
+  
+  ## 3.8 Fit results ----
+  fit_results_data <- reactiveVal(NULL)
+  last_fit_method <- reactiveVal("sum")
   
   
   # SECTION 4: PARAMÈTRES PAR TYPE DE SPECTRE ----
@@ -2565,11 +2690,23 @@ server <- function(input, output, session) {
   
   ## 9.4 Export batch box intensities ----
   output$export_batch_box_intensities <- downloadHandler(
-    filename = function() paste0("batch_box_intensities_", Sys.Date(), ".csv"),
+    filename = function() {
+      method_suffix <- if (input$integration_method == "sum") "" else paste0("_", input$integration_method)
+      paste0("batch_box_intensities", method_suffix, "_", Sys.Date(), ".csv")
+    },
     content = function(file) {
       req(reference_boxes(), spectra_list())
       
-      status_msg("🔄 Calculating batch intensities...")
+      # Récupérer la méthode choisie
+      method <- input$integration_method
+      model <- if (method %in% c("gaussian", "voigt")) method else "gaussian"
+      
+      status_msg(paste0("🔄 Calculating batch intensities (", method, " method)..."))
+      
+      # Progress bar
+      progress <- shiny::Progress$new()
+      on.exit(progress$close())
+      progress$set(message = "Processing spectra", value = 0)
       
       tryCatch({
         ref_boxes <- reference_boxes()
@@ -2579,16 +2716,83 @@ server <- function(input, output, session) {
           return()
         }
         
+        # Stocker la méthode utilisée
+        last_fit_method(method)
+        
+        # APPEL AVEC LES NOUVEAUX PARAMÈTRES
         batch_intensities <- calculate_batch_box_intensities(
           reference_boxes = ref_boxes,
           spectra_list = spectra_list(),
-          apply_shift = FALSE
+          apply_shift = FALSE,
+          method = method,
+          model = model,
+          progress = function(value, detail) {
+            progress$set(value = value, detail = detail)
+          }
         )
+        
+        # ========== EXTRAIRE LES INFOS DE FIT ==========
+        if (method != "sum") {
+          # Collecter toutes les colonnes de fit de tous les spectres
+          r2_cols <- grep("^R2_", names(batch_intensities), value = TRUE)
+          cx_cols <- grep("^CenterX_", names(batch_intensities), value = TRUE)
+          cy_cols <- grep("^CenterY_", names(batch_intensities), value = TRUE)
+          
+          if (length(r2_cols) > 0) {
+            # Prendre les valeurs moyennes sur tous les spectres
+            fit_data <- batch_intensities %>%
+              select(stain_id, xmin, xmax, ymin, ymax, all_of(r2_cols))
+            
+            # Calculer R² moyen
+            fit_data$r_squared <- rowMeans(select(fit_data, all_of(r2_cols)), na.rm = TRUE)
+            
+            # Prendre les centres du premier spectre (représentatif)
+            if (length(cx_cols) > 0 && length(cy_cols) > 0) {
+              fit_data$center_x <- batch_intensities[[cx_cols[1]]]
+              fit_data$center_y <- batch_intensities[[cy_cols[1]]]
+            } else {
+              fit_data$center_x <- NA
+              fit_data$center_y <- NA
+            }
+            
+            # Ajouter la méthode de fit
+            fit_data$fit_method <- method
+            
+            # Déterminer quelles boxes ont été fittées avec succès
+            # (R² non NA signifie fit réussi)
+            fit_data$fit_method[is.na(fit_data$r_squared)] <- "sum_fallback"
+            
+            # Stocker dans la reactive value
+            fit_results_data(fit_data %>% select(stain_id, r_squared, center_x, center_y, fit_method))
+            
+            message(sprintf("Stored fit results: %d boxes with R² data", 
+                            sum(!is.na(fit_data$r_squared))))
+          }
+        } else {
+          # Méthode sum : pas de données de fit
+          fit_results_data(NULL)
+        }
+        
+        # ========== FILTRER PAR QUALITÉ DE FIT ==========
+        if (method != "sum" && !is.null(input$show_fit_quality) && input$show_fit_quality) {
+          r2_cols <- grep("^R2_", names(batch_intensities), value = TRUE)
+          if (length(r2_cols) > 0 && !is.null(input$min_r_squared)) {
+            # Marquer les fits de mauvaise qualité
+            for (col in r2_cols) {
+              bad_fit <- batch_intensities[[col]] < input$min_r_squared
+              bad_fit[is.na(bad_fit)] <- FALSE  # Garder les NA
+              intensity_col <- sub("^R2_", "Intensity_", col)
+              if (intensity_col %in% names(batch_intensities)) {
+                batch_intensities[[intensity_col]][bad_fit] <- NA
+              }
+            }
+          }
+        }
         
         # Remplacer valeurs négatives par 0
         intensity_cols <- grep("^Intensity_", names(batch_intensities), value = TRUE)
         for (col in intensity_cols) {
-          batch_intensities[[col]] <- pmax(batch_intensities[[col]], 0)
+          batch_intensities[[col]] <- pmax(batch_intensities[[col]], 0, na.rm = TRUE)
         }
         
         readr::write_csv(batch_intensities, file)
@@ -2599,6 +2803,7 @@ server <- function(input, output, session) {
         
       }, error = function(e) {
         showNotification(paste("❌ Export error:", e$message), type = "error")
+        status_msg(paste("❌ Error:", e$message))
       })
     }
   )
@@ -2684,49 +2889,49 @@ server <- function(input, output, session) {
   ## 10.1 Description ----
   output$toolDescription <- renderUI({
     tags$div(
-#'       
-#'       # Import de la font Orbitron
-#'       tags$style(HTML("
-#'   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-#' ")),
-#'       
-#'       div(
-#'         style = "
-#'     background: rgba(8, 8, 16, 1);
-#'     border-radius: 20px;
-#'     padding: 25px 35px;
-#'     display: flex;
-#'     align-items: center;
-#'     gap: 30px;
-#'     margin-bottom: 20px;
-#'     box-shadow: 0 0 40px rgba(196,77,255,0.15), inset 0 0 60px rgba(196,77,255,0.05);
-#'     border: 1px solid rgba(196,77,255,0.15);
-#'   ",
-#'         
-#'         img(src = "spin.png", height = "130px", 
-#'             style = "filter: drop-shadow(0 0 25px rgba(255,107,107,0.4));"),
-#'         
-#'         div(
-#'           style = "flex: 1;",
-#'           h2(
-#'             style = "
-#'         font-family: 'Orbitron', sans-serif;
-#'         font-size: 36px;
-#'         font-weight: 900;
-#'         letter-spacing: 10px;
-#'         margin: 0;
-#'         background: linear-gradient(135deg, #ff6b6b 0%, #ffd93d 25%, #6bcb77 50%, #4d96ff 75%, #9b59b6 100%);
-#'         -webkit-background-clip: text;
-#'         -webkit-text-fill-color: transparent;
-#'       ",
-#'             "SPIN"
-#'           ),
-#'           p(
-#'             style = "color: rgba(255,255,255,0.6); font-size: 13px; margin-top: 8px;",
-#'             HTML("<span style='color: #c44dff; font-weight: 600;'>S</span>harp <span style='color: #c44dff; font-weight: 600;'>P</span>eak <span style='color: #c44dff; font-weight: 600;'>I</span>dentification for 2D <span style='color: #c44dff; font-weight: 600;'>N</span>MR")
-#'           )
-#'         )
-#'       ),
+      #'       
+      #'       # Import de la font Orbitron
+      #'       tags$style(HTML("
+      #'   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+      #' ")),
+      #'       
+      #'       div(
+      #'         style = "
+      #'     background: rgba(8, 8, 16, 1);
+      #'     border-radius: 20px;
+      #'     padding: 25px 35px;
+      #'     display: flex;
+      #'     align-items: center;
+      #'     gap: 30px;
+      #'     margin-bottom: 20px;
+      #'     box-shadow: 0 0 40px rgba(196,77,255,0.15), inset 0 0 60px rgba(196,77,255,0.05);
+      #'     border: 1px solid rgba(196,77,255,0.15);
+      #'   ",
+      #'         
+      #'         img(src = "spin.png", height = "130px", 
+      #'             style = "filter: drop-shadow(0 0 25px rgba(255,107,107,0.4));"),
+      #'         
+      #'         div(
+      #'           style = "flex: 1;",
+      #'           h2(
+      #'             style = "
+      #'         font-family: 'Orbitron', sans-serif;
+      #'         font-size: 36px;
+      #'         font-weight: 900;
+      #'         letter-spacing: 10px;
+      #'         margin: 0;
+      #'         background: linear-gradient(135deg, #ff6b6b 0%, #ffd93d 25%, #6bcb77 50%, #4d96ff 75%, #9b59b6 100%);
+      #'         -webkit-background-clip: text;
+      #'         -webkit-text-fill-color: transparent;
+      #'       ",
+      #'             "SPIN"
+      #'           ),
+      #'           p(
+      #'             style = "color: rgba(255,255,255,0.6); font-size: 13px; margin-top: 8px;",
+      #'             HTML("<span style='color: #c44dff; font-weight: 600;'>S</span>harp <span style='color: #c44dff; font-weight: 600;'>P</span>eak <span style='color: #c44dff; font-weight: 600;'>I</span>dentification for 2D <span style='color: #c44dff; font-weight: 600;'>N</span>MR")
+      #'           )
+      #'         )
+      #'       ),
       
       # Quick Start
       div(style = "background: #e8f5e9; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #4caf50;",
@@ -2753,7 +2958,7 @@ server <- function(input, output, session) {
                   tags$li("If you want to process a batch, you might want to select the folder, only select a QC or the most intense spectrum. Process it (Step 1), then reload every spectra and use the 'batch export' with the peaks selected on the first spectrum."),
                   tags$li("For batch treatment, limit the number of sprectrum per batch to 25 for TOCSY, 50 for COSY and HSQC.")
                   
-                  )
+          )
       ),
       
       # Main Features
@@ -3101,6 +3306,321 @@ server <- function(input, output, session) {
   })
   
   observeEvent(spectra_list(), { centroids(NULL) })
+  
+  
+  ## 10.9 Fit Quality Visualizations ----
+  
+  # Données combinées : boxes + fit results
+  boxes_with_fit <- reactive({
+    boxes <- modifiable_boxes()
+    fit_data <- fit_results_data()
+    
+    if (is.null(boxes) || nrow(boxes) == 0) return(NULL)
+    if (is.null(fit_data)) return(boxes)  # Retourner boxes sans fit info
+    
+    # Joindre les données de fit avec les boxes
+    boxes_merged <- boxes %>%
+      left_join(fit_data, by = "stain_id")
+    
+    boxes_merged
+  })
+  
+  # Table résumée des résultats de fitting
+  fit_summary_data <- reactive({
+    boxes <- boxes_with_fit()
+    
+    if (is.null(boxes) || !"fit_method" %in% names(boxes)) {
+      return(NULL)
+    }
+    
+    # Résumé par méthode
+    summary_df <- boxes %>%
+      filter(!is.na(fit_method)) %>%
+      group_by(fit_method) %>%
+      summarise(
+        n_boxes = n(),
+        mean_r2 = mean(r_squared, na.rm = TRUE),
+        median_r2 = median(r_squared, na.rm = TRUE),
+        min_r2 = min(r_squared, na.rm = TRUE),
+        max_r2 = max(r_squared, na.rm = TRUE),
+        .groups = "drop"
+      )
+    
+    summary_df
+  })
+  
+  # Plot de distribution des R²
+  output$fit_quality_plot <- renderPlotly({
+    boxes <- boxes_with_fit()
+    
+    # Vérifier si on a des données de fit
+    if (is.null(boxes) || !"r_squared" %in% names(boxes) || all(is.na(boxes$r_squared))) {
+      p <- ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = "No fit quality data available.\n\nSteps to generate fit data:\n1. Select 'Gaussian fit' or 'Voigt fit' in Export section\n2. Click 'Batch Export' button\n3. Return to this tab to see results",
+                 size = 4, color = "gray50", hjust = 0.5, vjust = 0.5) +
+        theme_void() +
+        ggtitle("Fit Quality Distribution")
+      
+      return(ggplotly(p))
+    }
+    
+    # Filtrer les NA
+    boxes_with_r2 <- boxes %>% filter(!is.na(r_squared))
+    
+    if (nrow(boxes_with_r2) == 0) {
+      p <- ggplot() +
+        annotate("text", x = 0.5, y = 0.5, 
+                 label = "No R² values computed yet.\nRun 'Batch Export' with fitting method.",
+                 size = 5, color = "gray50") +
+        theme_void()
+      return(ggplotly(p))
+    }
+    
+    # Histogramme des R² avec couleurs selon la méthode
+    p <- ggplot(boxes_with_r2, aes(x = r_squared, fill = fit_method)) +
+      geom_histogram(bins = 30, color = "white", alpha = 0.8, position = "stack") +
+      geom_vline(aes(xintercept = median(r_squared, na.rm = TRUE)), 
+                 color = "red", linetype = "dashed", size = 1) +
+      scale_fill_manual(
+        values = c("gaussian" = "#667eea", "voigt" = "#f5576c", "multiplet_fit" = "#38ef7d", "sum_fallback" = "#ffd93d"),
+        name = "Fit Method"
+      ) +
+      labs(
+        title = "Distribution of Fit Quality (R²)",
+        subtitle = paste0("Median R² = ", round(median(boxes_with_r2$r_squared, na.rm = TRUE), 3),
+                          " | Total boxes = ", nrow(boxes_with_r2)),
+        x = "R² (Coefficient of Determination)",
+        y = "Number of Peaks"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(face = "bold", size = 14),
+        plot.subtitle = element_text(color = "gray30")
+      )
+    
+    ggplotly(p) %>%
+      layout(hovermode = "x unified")
+  })
+  
+  # Reactive pour récupérer la box sélectionnée (depuis fit_boxes_detail_table)
+  selected_fit_box <- reactive({
+    boxes <- boxes_with_fit()
+    if (is.null(boxes) || !"fit_method" %in% names(boxes)) return(NULL)
+    
+    # Récupérer la sélection dans fit_boxes_detail_table
+    selected_row <- input$fit_boxes_detail_table_rows_selected
+    if (is.null(selected_row) || length(selected_row) == 0) return(NULL)
+    
+    # Reconstruire le même ordre que dans la table (trié par R² décroissant)
+    detail_df <- boxes %>%
+      filter(!is.na(fit_method)) %>%
+      arrange(desc(r_squared))
+    
+    if (selected_row > nrow(detail_df)) return(NULL)
+    
+    # Récupérer le stain_id sélectionné
+    selected_stain_id <- detail_df$stain_id[selected_row]
+    
+    # Retourner la box correspondante depuis boxes_with_fit (avec toutes les colonnes)
+    boxes %>% filter(stain_id == selected_stain_id)
+  })
+  
+  # Exemple de fit 2D pour une box sélectionnée
+  output$example_fit_2d <- renderPlot({
+    req(bruker_data())
+    
+    box <- selected_fit_box()
+    
+    if (is.null(box) || nrow(box) == 0) {
+      plot.new()
+      text(0.5, 0.5, "Select a box in the\n'Fitted Boxes Details' table\nto visualize its fit", cex = 1.3, col = "gray50")
+      return()
+    }
+    
+    box <- box[1, ]  # Prendre la première ligne si plusieurs
+    
+    # Vérifier que le fit existe
+    if (!"fit_method" %in% names(box) || is.na(box$fit_method) || box$fit_method == "sum_fallback") {
+      plot.new()
+      text(0.5, 0.5, paste0("Box '", box$stain_id, "'\nwas not fitted successfully\n(used sum method or fit failed)"), 
+           cex = 1.2, col = "orange")
+      return()
+    }
+    
+    # Extraire la région
+    mat <- bruker_data()$spectrumData
+    ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
+    ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
+    
+    x_idx <- which(ppm_x >= box$xmin & ppm_x <= box$xmax)
+    y_idx <- which(ppm_y >= box$ymin & ppm_y <= box$ymax)
+    
+    if (length(x_idx) == 0 || length(y_idx) == 0) {
+      plot.new()
+      text(0.5, 0.5, "Region out of bounds", cex = 1.5, col = "red")
+      return()
+    }
+    
+    region <- mat[y_idx, x_idx, drop = FALSE]
+    x_sub <- ppm_x[x_idx]
+    y_sub <- ppm_y[y_idx]
+    
+    # CORRECTION: S'assurer que x et y sont en ordre croissant pour image()
+    if (is.unsorted(x_sub)) {
+      x_order <- order(x_sub)
+      x_sub <- x_sub[x_order]
+      region <- region[, x_order, drop = FALSE]
+    }
+    if (is.unsorted(y_sub)) {
+      y_order <- order(y_sub)
+      y_sub <- y_sub[y_order]
+      region <- region[y_order, , drop = FALSE]
+    }
+    
+    # Créer le plot avec image() pour visualiser la 2D
+    par(mfrow = c(1, 1), mar = c(4, 4, 3, 2))
+    
+    image(x_sub, y_sub, t(region), 
+          col = viridis::viridis(100),
+          xlab = "F2 (ppm)", ylab = "F1 (ppm)",
+          main = paste0("Fitted Region: ", box$stain_id, 
+                        "\nMethod: ", box$fit_method,
+                        " | R² = ", round(box$r_squared, 3)))
+    
+    # Ajouter le centre fitté si disponible
+    if (!is.na(box$center_x) && !is.na(box$center_y)) {
+      points(box$center_x, box$center_y, pch = 3, col = "red", cex = 2, lwd = 2)
+      
+      # Ajouter aussi le centre de la box (pour comparaison)
+      box_center_x <- (box$xmin + box$xmax) / 2
+      box_center_y <- (box$ymin + box$ymax) / 2
+      points(box_center_x, box_center_y, pch = 1, col = "cyan", cex = 2, lwd = 2)
+      
+      legend("topright", 
+             legend = c("Fitted center", "Box center"), 
+             pch = c(3, 1), 
+             col = c("red", "cyan"), 
+             bg = "white")
+    }
+    
+    # Ajouter les contours
+    contour(x_sub, y_sub, t(region), add = TRUE, col = "white", lwd = 0.5, nlevels = 10)
+  })
+  
+  # Plot des résidus
+  output$residuals_plot <- renderPlot({
+    req(bruker_data())
+    
+    box <- selected_fit_box()
+    
+    if (is.null(box) || nrow(box) == 0) {
+      plot.new()
+      text(0.5, 0.5, "Select a box in the\n'Fitted Boxes Details' table\nto see residuals", cex = 1.3, col = "gray50")
+      return()
+    }
+    
+    box <- box[1, ]  # Prendre la première ligne si plusieurs
+    
+    if (!"fit_method" %in% names(box) || is.na(box$fit_method) || box$fit_method == "sum_fallback") {
+      plot.new()
+      text(0.5, 0.5, "No fit residuals available\n(sum method used or fit failed)", cex = 1.2, col = "orange")
+      return()
+    }
+    
+    # Re-fitter pour obtenir les résidus
+    mat <- bruker_data()$spectrumData
+    ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
+    ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
+    
+    fit_result <- fit_2d_peak(mat, ppm_x, ppm_y, box, model = box$fit_method)
+    
+    if (is.null(fit_result$residuals) || length(fit_result$residuals) == 0) {
+      plot.new()
+      text(0.5, 0.5, "Could not compute residuals", cex = 1.5, col = "red")
+      return()
+    }
+    
+    # Histogramme des résidus
+    par(mfrow = c(1, 1), mar = c(4, 4, 3, 2))
+    hist(fit_result$residuals, breaks = 30, 
+         col = "#f5576c", border = "white",
+         main = paste0("Fit Residuals: ", box$stain_id),
+         xlab = "Residual (Observed - Fitted)",
+         ylab = "Frequency")
+    abline(v = 0, col = "blue", lwd = 2, lty = 2)
+    abline(v = mean(fit_result$residuals), col = "red", lwd = 2, lty = 2)
+    
+    # Ajouter stats
+    legend("topright", 
+           legend = c(
+             paste("Mean:", round(mean(fit_result$residuals), 2)),
+             paste("SD:", round(sd(fit_result$residuals), 2)),
+             paste("R²:", round(box$r_squared, 3)),
+             "Blue = 0",
+             "Red = Mean"
+           ),
+           bg = "white", cex = 0.9)
+  })
+  
+  # Table de résumé
+  output$fit_summary_table <- renderDT({
+    summary <- fit_summary_data()
+    
+    if (is.null(summary) || nrow(summary) == 0) {
+      return(datatable(data.frame(Message = "No fit data available. Run 'Batch Export' with Gaussian or Voigt method.")))
+    }
+    
+    datatable(summary, 
+              options = list(pageLength = 10, dom = 't'),
+              rownames = FALSE) %>%
+      formatRound(columns = c('mean_r2', 'median_r2', 'min_r2', 'max_r2'), digits = 3)
+  })
+  
+  # Table détaillée des boxes fittées
+  output$fit_boxes_detail_table <- renderDT({
+    boxes <- boxes_with_fit()
+    
+    if (is.null(boxes) || !"fit_method" %in% names(boxes)) {
+      return(datatable(data.frame(Message = "No fit data available.")))
+    }
+    
+    # Sélectionner les colonnes pertinentes
+    detail_cols <- c("stain_id", "r_squared", "fit_method", "center_x", "center_y")
+    available_cols <- intersect(detail_cols, names(boxes))
+    
+    if (length(available_cols) == 0) {
+      return(datatable(data.frame(Message = "No fit columns available.")))
+    }
+    
+    detail_df <- boxes %>%
+      select(all_of(available_cols)) %>%
+      filter(!is.na(fit_method)) %>%
+      arrange(desc(r_squared))
+    
+    # Renommer pour affichage
+    names(detail_df) <- gsub("stain_id", "Box Name", names(detail_df))
+    names(detail_df) <- gsub("r_squared", "R²", names(detail_df))
+    names(detail_df) <- gsub("fit_method", "Method", names(detail_df))
+    names(detail_df) <- gsub("center_x", "Center F2", names(detail_df))
+    names(detail_df) <- gsub("center_y", "Center F1", names(detail_df))
+    
+    datatable(detail_df, 
+              options = list(
+                pageLength = 10, 
+                scrollY = "300px",
+                scrollCollapse = TRUE,
+                dom = 'ftp'
+              ),
+              rownames = FALSE,
+              selection = 'single') %>%
+      formatRound(columns = c('R²', 'Center F2', 'Center F1'), digits = 3) %>%
+      formatStyle('R²',
+                  backgroundColor = styleInterval(
+                    c(0.7, 0.9),
+                    c('#ffcccc', '#ffffcc', '#ccffcc')
+                  ))
+  })
   
 } # end server
 
