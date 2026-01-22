@@ -79,7 +79,10 @@ packages_required <- c(
   "imager",
   
   # Autres
-  "Rcpp"
+  "Rcpp",
+  "readr",
+  "viridis",
+  "abind"
 )
 
 

@@ -32,6 +32,8 @@ library(viridis)
 library(reshape2)
 library(abind)
 library(readr)
+library(pracma)
+library(magrittr)
 
 # --- Chargement des fichiers sources (chemins relatifs) ---
 # Ces fichiers doivent être dans le sous-dossier Function_test/
