@@ -23,7 +23,6 @@ library(dbscan)
 # library(tensorflow)
 # library(keras)
 # library(reticulate)
-# library(Rcpp)
 library(zoo)
 library(matrixStats)
 library(minpack.lm)
@@ -32,8 +31,6 @@ library(viridis)
 library(reshape2)
 library(abind)
 library(readr)
-library(pracma)
-library(magrittr)
 
 # --- Chargement des fichiers sources (chemins relatifs) ---
 # Ces fichiers doivent être dans le sous-dossier Function_test/
@@ -605,18 +602,82 @@ ui <- fluidPage(
                        
                      ),
                      
-                     ##### ===== SECTION 5: SAVE & EXPORT =====
+                     ##### ===== SECTION 5: INTEGRATION =====
                      bsCollapsePanel(
-                       title = "💾 5. Save & Export",
-                       value = "panel_export",
+                       title = "📐 5. Integration",
+                       value = "panel_integration",
                        style = "primary",
+                       
+                       # Méthode d'intégration avec groupes visuels
+                       h5(tags$b("Select method:")),
+                       
+                       # Groupe AUC
+                       div(style = "background: #e8f5e9; border-radius: 8px; padding: 10px; margin-bottom: 10px; border-left: 4px solid #4caf50;",
+                           tags$b("Area Under Curve (AUC)", style = "color: #2e7d32;"),
+                           radioButtons("integration_method", NULL,
+                                        choices = c("Sum (AUC)" = "sum"),
+                                        selected = "sum",
+                                        inline = TRUE),
+                           tags$small("Direct integration of intensity values in the box", style = "color: #666;")
+                       ),
+                       
+                       # Groupe Peak Fitting
+                       div(style = "background: #e3f2fd; border-radius: 8px; padding: 10px; border-left: 4px solid #2196f3;",
+                           tags$b("Peak Fitting", style = "color: #1565c0;"),
+                           radioButtons("integration_method_fit", NULL,
+                                        choices = c("Gaussian" = "gaussian",
+                                                    "Voigt (Gaussian + Lorentzian)" = "voigt"),
+                                        selected = character(0),
+                                        inline = TRUE),
+                           tags$small("Fits a mathematical model to the peak shape", style = "color: #666;")
+                       ),
+                       
+                       conditionalPanel(
+                         "input.integration_method_fit !== undefined && input.integration_method_fit !== null && input.integration_method_fit.length > 0",
+                         div(style = "margin-top: 10px; padding: 10px; background: #fff8e1; border-radius: 8px; border-left: 4px solid #ff9800;",
+                             tags$b("⚙️ Fitting options", style = "color: #e65100;"),
+                             checkboxInput("show_fit_quality", "Include R² in export", value = TRUE),
+                             sliderInput("min_r_squared", "Min R² threshold:", 
+                                         min = 0, max = 1, value = 0.7, step = 0.05),
+                             tags$small("Peaks with R² below threshold will use sum fallback", style = "color: #666;")
+                         )
+                       ),
                        
                        hr(),
                        
-                       downloadButton("export_centroids", "📤 Peaks", class = "btn-sm"),
-                       downloadButton("export_boxes", "📤 Boxes", class = "btn-sm"),
-                       br(), br(),
-                       downloadButton("export_batch_box_intensities", "📤 Batch Export", class = "btn-primary btn-sm btn-block"),
+                       # Bouton Calculate
+                       actionButton("run_integration", "▶️ Run Integration", class = "btn-success btn-block"),
+                       
+                       br(),
+                       
+                       # Résultat de l'intégration
+                       conditionalPanel(
+                         "output.integration_done",
+                         div(style = "margin-top: 10px; padding: 10px; background: #e8f5e9; border-radius: 8px; border: 1px solid #4caf50;",
+                             h5(tags$b("✅ Integration Results"), style = "color: #2e7d32;"),
+                             verbatimTextOutput("integration_summary"),
+                             br(),
+                             downloadButton("export_integration_results", "📥 Download Results", class = "btn-primary btn-block")
+                         )
+                       )
+                     ),
+                     
+                     ##### ===== SECTION 6: SAVE & EXPORT =====
+                     bsCollapsePanel(
+                       title = "💾 6. Save & Export",
+                       value = "panel_export",
+                       style = "primary",
+                       
+                       h5(tags$b("Export data:")),
+                       
+                       fluidRow(
+                         column(6, downloadButton("export_centroids", "📤 Peaks", class = "btn-sm btn-block")),
+                         column(6, downloadButton("export_boxes", "📤 Boxes", class = "btn-sm btn-block"))
+                       ),
+                       
+                       br(),
+                       
+                       downloadButton("export_batch_box_intensities", "📤 Batch Export (all spectra)", class = "btn-primary btn-sm btn-block"),
                        
                        hr(),
                        
@@ -626,23 +687,6 @@ ui <- fluidPage(
                            fileInput("import_centroids_file", "Peaks CSV:", accept = ".csv"),
                            fileInput("import_boxes_file", "Boxes CSV:", accept = ".csv")
                          )
-                       ),
-                       
-                       br(),
-                       hr(),
-                       
-                       # Dans bsCollapsePanel "5. Save & Export"
-                       radioButtons("integration_method", "Integration method:",
-                                    choices = c("Sum" = "sum", 
-                                                "Gaussian fit" = "gaussian",
-                                                "Voigt fit" = "voigt"),
-                                    selected = "sum"),
-                       
-                       conditionalPanel(
-                         "input.integration_method != 'sum'",
-                         checkboxInput("show_fit_quality", "Include R² in export", value = TRUE),
-                         sliderInput("min_r_squared", "Min R² threshold:", 
-                                     min = 0, max = 1, value = 0.7, step = 0.05)
                        ),
                        
                        hr(),
@@ -740,7 +784,7 @@ ui <- fluidPage(
                            style = "margin-bottom: 20px;",
                            icon("info-circle"),
                            " This tab displays fit quality metrics when using Gaussian or Voigt integration methods. ",
-                           "Select a box in the ", tags$b("Fitted boxes details"), " tab to see detailed fit visualization."
+                           "Select a box in the ", tags$b("Data"), " tab to see detailed fit visualization."
                        ),
                        
                        # Résumé global
@@ -1056,16 +1100,9 @@ server <- function(input, output, session) {
         
         intensities <- fit_results$volume_fitted
         
-        # TOUJOURS ajouter les colonnes R² et centers quand on fait du fitting
-        # (ces infos sont nécessaires pour l'affichage dans l'onglet Fit Quality)
-        col_name_r2 <- paste0("R2_", make.names(basename(spectrum_name)))
-        result_df[[col_name_r2]] <- fit_results$r_squared
-        
-        col_name_cx <- paste0("CenterX_", make.names(basename(spectrum_name)))
-        result_df[[col_name_cx]] <- fit_results$center_x
-        
-        col_name_cy <- paste0("CenterY_", make.names(basename(spectrum_name)))
-        result_df[[col_name_cy]] <- fit_results$center_y
+        # Note: On ne stocke plus R², CenterX, CenterY dans le batch export
+        # pour garder un CSV compact et facile à comparer entre spectres
+        # Ces infos sont disponibles dans l'onglet "Fit Quality" et via "Run Integration"
       }
       
       col_name <- paste0("Intensity_", make.names(basename(spectrum_name)))
@@ -1147,6 +1184,176 @@ server <- function(input, output, session) {
   ## 3.8 Fit results ----
   fit_results_data <- reactiveVal(NULL)
   last_fit_method <- reactiveVal("sum")
+  
+  ## 3.9 Integration method management ----
+  # Reactive pour obtenir la méthode d'intégration effective
+  effective_integration_method <- reactive({
+    auc_method <- input$integration_method
+    fit_method <- input$integration_method_fit
+    
+    # Si une méthode de fit est sélectionnée, l'utiliser
+    if (!is.null(fit_method) && fit_method != "") {
+      return(fit_method)
+    }
+    # Sinon utiliser AUC (sum)
+    return("sum")
+  })
+  
+  # Observer: quand on sélectionne AUC, désélectionner Peak Fitting
+  observeEvent(input$integration_method, {
+    if (!is.null(input$integration_method) && input$integration_method == "sum") {
+      updateRadioButtons(session, "integration_method_fit", selected = character(0))
+    }
+  }, ignoreInit = TRUE)
+  
+  # Observer: quand on sélectionne Peak Fitting, désélectionner AUC
+  observeEvent(input$integration_method_fit, {
+    if (!is.null(input$integration_method_fit) && input$integration_method_fit != "") {
+      updateRadioButtons(session, "integration_method", selected = character(0))
+    }
+  }, ignoreInit = TRUE)
+  
+  ## 3.10 Integration results storage ----
+  integration_results <- reactiveVal(NULL)
+  integration_done <- reactiveVal(FALSE)
+  
+  # Output pour conditionalPanel
+  output$integration_done <- reactive({
+    !is.null(integration_results())
+  })
+  outputOptions(output, "integration_done", suspendWhenHidden = FALSE)
+  
+  # Observer: Run Integration button
+  observeEvent(input$run_integration, {
+    req(bruker_data(), modifiable_boxes())
+    
+    boxes <- modifiable_boxes()
+    if (is.null(boxes) || nrow(boxes) == 0) {
+      showNotification("⚠️ No boxes to integrate", type = "warning")
+      return()
+    }
+    
+    method <- effective_integration_method()
+    model <- if (method %in% c("gaussian", "voigt")) method else "gaussian"
+    
+    status_msg(paste0("🔄 Running integration (", method, " method)..."))
+    
+    # Progress bar
+    progress <- shiny::Progress$new()
+    on.exit(progress$close())
+    progress$set(message = "Calculating intensities", value = 0)
+    
+    tryCatch({
+      mat <- bruker_data()$spectrumData
+      ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
+      ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
+      
+      if (method == "sum") {
+        # Méthode AUC simple
+        intensities <- sapply(seq_len(nrow(boxes)), function(i) {
+          progress$set(value = i / nrow(boxes), detail = paste("Box", i, "/", nrow(boxes)))
+          box <- boxes[i, ]
+          x_idx <- which(ppm_x >= box$xmin & ppm_x <= box$xmax)
+          y_idx <- which(ppm_y >= box$ymin & ppm_y <= box$ymax)
+          if (length(x_idx) == 0 || length(y_idx) == 0) return(NA_real_)
+          sum(mat[y_idx, x_idx], na.rm = TRUE)
+        })
+        
+        results <- data.frame(
+          stain_id = boxes$stain_id,
+          F2_ppm = (boxes$xmin + boxes$xmax) / 2,
+          F1_ppm = (boxes$ymin + boxes$ymax) / 2,
+          intensity = intensities,
+          method = "sum",
+          r_squared = NA_real_,
+          n_peaks = 1L,
+          stringsAsFactors = FALSE
+        )
+        
+      } else {
+        # Méthode Peak Fitting
+        fit_results <- calculate_fitted_volumes(
+          mat, ppm_x, ppm_y,
+          boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")],
+          model = model,
+          progress_callback = function(value, detail) {
+            progress$set(value = value, detail = detail)
+          }
+        )
+        
+        results <- data.frame(
+          stain_id = fit_results$stain_id,
+          F2_ppm = (boxes$xmin + boxes$xmax) / 2,
+          F1_ppm = (boxes$ymin + boxes$ymax) / 2,
+          intensity = fit_results$volume_fitted,
+          method = fit_results$fit_method,
+          r_squared = fit_results$r_squared,
+          n_peaks = fit_results$n_peaks,
+          stringsAsFactors = FALSE
+        )
+        
+        # Stocker aussi pour l'onglet Fit Quality
+        fit_results_data(fit_results %>% select(stain_id, r_squared, center_x, center_y, fit_method, n_peaks, is_multiplet))
+      }
+      
+      integration_results(results)
+      integration_done(TRUE)
+      last_fit_method(method)
+      
+      status_msg(paste0("✅ Integration complete! ", nrow(results), " boxes processed."))
+      showNotification("✅ Integration complete!", type = "message")
+      
+    }, error = function(e) {
+      status_msg(paste0("❌ Error: ", e$message))
+      showNotification(paste0("❌ Error: ", e$message), type = "error")
+    })
+  })
+  
+  # Output: Integration summary
+  output$integration_summary <- renderText({
+    results <- integration_results()
+    if (is.null(results)) return("No results yet.")
+    
+    method <- last_fit_method()
+    n_total <- nrow(results)
+    
+    if (method == "sum") {
+      paste0(
+        "Method: Sum (AUC)\n",
+        "Boxes processed: ", n_total, "\n",
+        "Total intensity: ", format(sum(results$intensity, na.rm = TRUE), big.mark = ",", scientific = FALSE)
+      )
+    } else {
+      n_fitted <- sum(results$method %in% c("gaussian", "voigt", "multiplet_fit"), na.rm = TRUE)
+      n_fallback <- sum(results$method == "sum_fallback", na.rm = TRUE)
+      n_multiplets <- sum(results$n_peaks > 1, na.rm = TRUE)
+      mean_r2 <- mean(results$r_squared, na.rm = TRUE)
+      
+      paste0(
+        "Method: ", method, " (Peak Fitting)\n",
+        "Boxes processed: ", n_total, "\n",
+        "  - Successfully fitted: ", n_fitted, "\n",
+        "  - Multiplets: ", n_multiplets, "\n", 
+        "  - Fallback to sum: ", n_fallback, "\n",
+        "Mean R²: ", round(mean_r2, 3), "\n",
+        "Total intensity: ", format(sum(results$intensity, na.rm = TRUE), big.mark = ",", scientific = FALSE)
+      )
+    }
+  })
+  
+  # Download handler for integration results
+  output$export_integration_results <- downloadHandler(
+    filename = function() {
+      method <- last_fit_method()
+      paste0("integration_results_", method, "_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      results <- integration_results()
+      if (!is.null(results)) {
+        readr::write_csv(results, file)
+      }
+    }
+  )
   
   
   # SECTION 4: PARAMÈTRES PAR TYPE DE SPECTRE ----
@@ -2693,14 +2900,15 @@ server <- function(input, output, session) {
   ## 9.4 Export batch box intensities ----
   output$export_batch_box_intensities <- downloadHandler(
     filename = function() {
-      method_suffix <- if (input$integration_method == "sum") "" else paste0("_", input$integration_method)
+      method <- effective_integration_method()
+      method_suffix <- if (method == "sum") "" else paste0("_", method)
       paste0("batch_box_intensities", method_suffix, "_", Sys.Date(), ".csv")
     },
     content = function(file) {
       req(reference_boxes(), spectra_list())
       
       # Récupérer la méthode choisie
-      method <- input$integration_method
+      method <- effective_integration_method()
       model <- if (method %in% c("gaussian", "voigt")) method else "gaussian"
       
       status_msg(paste0("🔄 Calculating batch intensities (", method, " method)..."))
@@ -2733,63 +2941,9 @@ server <- function(input, output, session) {
           }
         )
         
-        # ========== EXTRAIRE LES INFOS DE FIT ==========
-        if (method != "sum") {
-          # Collecter toutes les colonnes de fit de tous les spectres
-          r2_cols <- grep("^R2_", names(batch_intensities), value = TRUE)
-          cx_cols <- grep("^CenterX_", names(batch_intensities), value = TRUE)
-          cy_cols <- grep("^CenterY_", names(batch_intensities), value = TRUE)
-          
-          if (length(r2_cols) > 0) {
-            # Prendre les valeurs moyennes sur tous les spectres
-            fit_data <- batch_intensities %>%
-              select(stain_id, xmin, xmax, ymin, ymax, all_of(r2_cols))
-            
-            # Calculer R² moyen
-            fit_data$r_squared <- rowMeans(select(fit_data, all_of(r2_cols)), na.rm = TRUE)
-            
-            # Prendre les centres du premier spectre (représentatif)
-            if (length(cx_cols) > 0 && length(cy_cols) > 0) {
-              fit_data$center_x <- batch_intensities[[cx_cols[1]]]
-              fit_data$center_y <- batch_intensities[[cy_cols[1]]]
-            } else {
-              fit_data$center_x <- NA
-              fit_data$center_y <- NA
-            }
-            
-            # Ajouter la méthode de fit
-            fit_data$fit_method <- method
-            
-            # Déterminer quelles boxes ont été fittées avec succès
-            # (R² non NA signifie fit réussi)
-            fit_data$fit_method[is.na(fit_data$r_squared)] <- "sum_fallback"
-            
-            # Stocker dans la reactive value
-            fit_results_data(fit_data %>% select(stain_id, r_squared, center_x, center_y, fit_method))
-            
-            message(sprintf("Stored fit results: %d boxes with R² data", 
-                            sum(!is.na(fit_data$r_squared))))
-          }
-        } else {
-          # Méthode sum : pas de données de fit
-          fit_results_data(NULL)
-        }
-        
-        # ========== FILTRER PAR QUALITÉ DE FIT ==========
-        if (method != "sum" && !is.null(input$show_fit_quality) && input$show_fit_quality) {
-          r2_cols <- grep("^R2_", names(batch_intensities), value = TRUE)
-          if (length(r2_cols) > 0 && !is.null(input$min_r_squared)) {
-            # Marquer les fits de mauvaise qualité
-            for (col in r2_cols) {
-              bad_fit <- batch_intensities[[col]] < input$min_r_squared
-              bad_fit[is.na(bad_fit)] <- FALSE  # Garder les NA
-              intensity_col <- sub("^R2_", "Intensity_", col)
-              if (intensity_col %in% names(batch_intensities)) {
-                batch_intensities[[intensity_col]][bad_fit] <- NA
-              }
-            }
-          }
-        }
+        # Note: Les infos de fit (R², centers) ne sont plus dans le batch export
+        # Elles sont disponibles via "Run Integration" dans la section Integration
+        # Cela garde le CSV compact pour les comparaisons entre spectres
         
         # Remplacer valeurs négatives par 0
         intensity_cols <- grep("^Intensity_", names(batch_intensities), value = TRUE)
