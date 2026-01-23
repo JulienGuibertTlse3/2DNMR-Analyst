@@ -657,7 +657,7 @@ ui <- fluidPage(
                              h5(tags$b("✅ Integration Results"), style = "color: #2e7d32;"),
                              verbatimTextOutput("integration_summary"),
                              br(),
-                             downloadButton("export_integration_results", "📥 Download Results", class = "btn-primary btn-block")
+                             downloadButton("export_integration_results", "📥 Download Results (CSV)", class = "btn-primary btn-block")
                          )
                        )
                      ),
@@ -1393,7 +1393,69 @@ server <- function(input, output, session) {
   
   main_directory <- reactive({
     req(input$directory)
-    normalizePath(parseDirPath(roots, input$directory))
+    
+    # Parser le chemin sélectionné
+    dir_path <- tryCatch({
+      
+      # Extraire les infos de la sélection
+      selection <- input$directory
+      
+      # Vérifier que la sélection est valide
+      if (is.null(selection) || length(selection) == 0) {
+        return(NULL)
+      }
+      
+      # Récupérer la racine sélectionnée
+      selected_root <- selection$root
+      
+      if (is.null(selected_root) || !selected_root %in% names(roots)) {
+        return(NULL)
+      }
+      
+      # Récupérer le chemin de base de la racine
+      base_path <- roots[[selected_root]]
+      
+      # Récupérer le chemin relatif (liste de dossiers)
+      path_parts <- selection$path
+      
+      if (is.null(path_parts) || length(path_parts) == 0) {
+        # Seulement la racine sélectionnée
+        final_path <- base_path
+      } else {
+        # Filtrer les parties vides
+        path_parts <- unlist(path_parts)
+        path_parts <- path_parts[path_parts != ""]
+        
+        if (length(path_parts) == 0) {
+          final_path <- base_path
+        } else {
+          # Construire le chemin complet
+          if (selected_root == "Root") {
+            # Pour Root (/), construire le chemin absolu directement
+            final_path <- paste0("/", paste(path_parts, collapse = "/"))
+          } else {
+            # Pour les autres racines, joindre avec le base_path
+            final_path <- file.path(base_path, paste(path_parts, collapse = "/"))
+          }
+        }
+      }
+      
+      # Normaliser le chemin
+      norm_path <- normalizePath(final_path, mustWork = FALSE)
+      
+      # Vérifier que le dossier existe
+      if (!dir.exists(norm_path)) {
+        warning(paste("Directory does not exist:", norm_path))
+        return(NULL)
+      }
+      
+      norm_path
+    }, error = function(e) {
+      warning(paste("Error parsing directory:", e$message))
+      NULL
+    })
+    
+    dir_path
   })
   
   output$selected_dir <- renderPrint({ main_directory() })
@@ -3035,7 +3097,48 @@ server <- function(input, output, session) {
   ## 9.6 Save directory ----
   save_roots <- c(Home = normalizePath("~"), Root = "/")
   shinyDirChoose(input, "save_directory", roots = save_roots, session = session)
-  save_directory <- reactive({ req(input$save_directory); parseDirPath(save_roots, input$save_directory) })
+  save_directory <- reactive({ 
+    req(input$save_directory)
+    
+    tryCatch({
+      selection <- input$save_directory
+      
+      if (is.null(selection) || length(selection) == 0) {
+        return(NULL)
+      }
+      
+      selected_root <- selection$root
+      if (is.null(selected_root) || !selected_root %in% names(save_roots)) {
+        return(NULL)
+      }
+      
+      base_path <- save_roots[[selected_root]]
+      path_parts <- selection$path
+      
+      if (is.null(path_parts) || length(path_parts) == 0) {
+        final_path <- base_path
+      } else {
+        path_parts <- unlist(path_parts)
+        path_parts <- path_parts[path_parts != ""]
+        
+        if (length(path_parts) == 0) {
+          final_path <- base_path
+        } else {
+          if (selected_root == "Root") {
+            final_path <- paste0("/", paste(path_parts, collapse = "/"))
+          } else {
+            final_path <- file.path(base_path, paste(path_parts, collapse = "/"))
+          }
+        }
+      }
+      
+      norm_path <- normalizePath(final_path, mustWork = FALSE)
+      if (!dir.exists(norm_path)) return(NULL)
+      norm_path
+    }, error = function(e) {
+      NULL
+    })
+  })
   output$save_dir_display <- renderPrint({ save_directory() })
   
   
