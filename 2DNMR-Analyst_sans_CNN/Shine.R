@@ -497,13 +497,23 @@ ui <- fluidPage(
                        style = "primary",
                        
                        # Click mode
-                       radioButtons("box_click_mode", "Add box by click:",
-                                    choices = c("Off" = "disabled", "Two clicks" = "two_clicks"),
-                                    selected = "disabled", inline = TRUE),
+                       radioButtons("box_click_mode", "Click mode:",
+                                    choices = c("Off" = "disabled", 
+                                                "Add box (2 clicks)" = "two_clicks",
+                                                "Delete box on click" = "delete_click"),
+                                    selected = "disabled", inline = FALSE),
                        
                        conditionalPanel("input.box_click_mode == 'two_clicks'",
                                         uiOutput("two_click_indicator"),
                                         actionButton("cancel_first_click", "Cancel", class = "btn-warning btn-xs")
+                       ),
+                       
+                       conditionalPanel("input.box_click_mode == 'delete_click'",
+                                        div(class = "warning-box", style = "padding: 8px; margin: 5px 0;",
+                                            icon("exclamation-triangle"), 
+                                            tags$b(" Delete mode active"), br(),
+                                            tags$small("Click inside a box to mark it for deletion")
+                                        )
                        ),
                        
                        div(class = "click-coords", textOutput("click_coords_display")),
@@ -668,7 +678,21 @@ ui <- fluidPage(
                        value = "panel_export",
                        style = "primary",
                        
-                       h5(tags$b("Export data:")),
+                       # Session save/load
+                       h5(tags$b("💼 Session:")),
+                       fluidRow(
+                         column(6, downloadButton("save_session", "💾 Save Session", class = "btn-success btn-sm btn-block")),
+                         column(6, 
+                                fileInput("load_session_file", NULL, accept = ".rds", 
+                                          buttonLabel = "📂 Load", width = "100%")
+                         )
+                       ),
+                       tags$small("Save/load your complete work (peaks, boxes, parameters)", 
+                                  style = "color: #666;"),
+                       
+                       hr(),
+                       
+                       h5(tags$b("📤 Export data:")),
                        
                        fluidRow(
                          column(6, downloadButton("export_centroids", "📤 Peaks", class = "btn-sm btn-block")),
@@ -682,7 +706,7 @@ ui <- fluidPage(
                        hr(),
                        
                        tags$details(
-                         tags$summary("📥 Import"),
+                         tags$summary("📥 Import CSV"),
                          div(
                            fileInput("import_centroids_file", "Peaks CSV:", accept = ".csv"),
                            fileInput("import_boxes_file", "Boxes CSV:", accept = ".csv")
@@ -735,11 +759,21 @@ ui <- fluidPage(
                        fluidRow(
                          column(6,
                                 h4("🔴 Peaks"),
-                                DTOutput("centroid_table")
+                                DTOutput("centroid_table"),
+                                div(style = "margin-top: 8px;",
+                                    actionButton("delete_selected_peaks", "🗑️ Delete Selected", 
+                                                 class = "btn-sm btn-danger"),
+                                    tags$small(" (Ctrl+Click for multiple)", style = "color: #666; margin-left: 10px;")
+                                )
                          ),
                          column(6,
                                 h4("🟦 Boxes"),
-                                DTOutput("bbox_table")
+                                DTOutput("bbox_table"),
+                                div(style = "margin-top: 8px;",
+                                    actionButton("delete_selected_boxes", "🗑️ Delete Selected", 
+                                                 class = "btn-sm btn-danger"),
+                                    tags$small(" (Ctrl+Click for multiple)", style = "color: #666; margin-left: 10px;")
+                                )
                          )
                        )
                      ),
@@ -1350,7 +1384,8 @@ server <- function(input, output, session) {
     content = function(file) {
       results <- integration_results()
       if (!is.null(results)) {
-        readr::write_csv(results, file)
+        # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+        write.csv2(results, file, row.names = FALSE)
       }
     }
   )
@@ -2251,15 +2286,21 @@ server <- function(input, output, session) {
   preview_trace_index <- reactiveVal(NULL)
   
   # Quand une box est sélectionnée dans la table, charger ses valeurs
+  # Note: Si plusieurs boxes sont sélectionnées, on n'édite que la première
   observeEvent(input$bbox_table_rows_selected, {
     selected <- input$bbox_table_rows_selected
     
+    # Si plusieurs lignes sélectionnées, on prend seulement la première pour l'édition
+    # (les suppressions multiples se font via le bouton "Delete Selected")
     if (length(selected) > 0 && !is.null(selected)) {
+      # Prendre uniquement la première sélection pour l'édition
+      first_selected <- selected[1]
+      
       boxes <- bounding_boxes_data()
-      if (!is.null(boxes) && nrow(boxes) >= selected) {
-        box <- boxes[selected, ]
+      if (!is.null(boxes) && nrow(boxes) >= first_selected) {
+        box <- boxes[first_selected, , drop = FALSE]
         selected_box_for_edit(box)
-        selected_box_index(selected)
+        selected_box_index(first_selected)
         box_has_been_modified(FALSE)  # Reset le flag de modification
         
         # Stocker les coordonnées originales
@@ -2331,6 +2372,47 @@ server <- function(input, output, session) {
       return()
     }
     
+    # Récupérer les nouvelles coordonnées
+    new_xmin <- input$edit_box_xmin
+    new_xmax <- input$edit_box_xmax
+    new_ymin <- input$edit_box_ymin
+    new_ymax <- input$edit_box_ymax
+    
+    # Validation des coordonnées
+    coords_valid <- TRUE
+    error_msg <- ""
+    
+    # Vérifier que les valeurs ne sont pas NA
+    if (is.na(new_xmin) || is.na(new_xmax) || is.na(new_ymin) || is.na(new_ymax)) {
+      coords_valid <- FALSE
+      error_msg <- "Coordinates cannot be empty (NA)"
+    }
+    # Vérifier que les valeurs ne sont pas toutes à 0
+    else if (new_xmin == 0 && new_xmax == 0 && new_ymin == 0 && new_ymax == 0) {
+      coords_valid <- FALSE
+      error_msg <- "All coordinates cannot be zero. Use 'Delete' to remove a box."
+    }
+    # Vérifier que xmin < xmax
+    else if (new_xmin >= new_xmax) {
+      coords_valid <- FALSE
+      error_msg <- "xmin must be less than xmax"
+    }
+    # Vérifier que ymin < ymax
+    else if (new_ymin >= new_ymax) {
+      coords_valid <- FALSE
+      error_msg <- "ymin must be less than ymax"
+    }
+    # Vérifier que la box a une taille minimale raisonnable
+    else if ((new_xmax - new_xmin) < 0.001 || (new_ymax - new_ymin) < 0.001) {
+      coords_valid <- FALSE
+      error_msg <- "Box is too small (min size: 0.001 ppm)"
+    }
+    
+    if (!coords_valid) {
+      showNotification(paste("❌ Invalid coordinates:", error_msg), type = "error", duration = 5)
+      return()
+    }
+    
     # Vérifier si des modifications ont été faites
     if (!box_has_been_modified()) {
       showNotification("ℹ️ No changes to apply", type = "message")
@@ -2349,10 +2431,10 @@ server <- function(input, output, session) {
     
     # Créer l'entrée pour la modification
     edited_box <- data.frame(
-      xmin = input$edit_box_xmin,
-      xmax = input$edit_box_xmax,
-      ymin = input$edit_box_ymin,
-      ymax = input$edit_box_ymax,
+      xmin = new_xmin,
+      xmax = new_xmax,
+      ymin = new_ymin,
+      ymax = new_ymax,
       stain_id = box_to_edit$stain_id,
       Volume = NA_real_,
       status = "edit",
@@ -2574,39 +2656,84 @@ server <- function(input, output, session) {
       last_click_coords(list(F2_ppm = click_data$x, F1_ppm = click_data$y))
     }
     
-    # Gestion du mode deux clics
-    if (is.null(input$box_click_mode) || input$box_click_mode != "two_clicks") return()
+    # Vérifier les coordonnées
     if (is.null(click_data$x) || is.null(click_data$y)) return()
     if (is.na(click_data$x) || is.na(click_data$y)) return()
     
     f2_ppm <- -click_data$x
     f1_ppm <- -click_data$y
     
-    first_click <- first_click_for_box()
+    click_mode <- input$box_click_mode
     
-    if (is.null(first_click)) {
-      # Premier clic
-      first_click_for_box(list(f2 = f2_ppm, f1 = f1_ppm))
-      showNotification(sprintf("📍 Coin 1: F2=%.3f, F1=%.3f", f2_ppm, f1_ppm), duration = 4)
-    } else {
-      # Deuxième clic - créer la boîte
-      new_box <- data.frame(
-        xmin = min(first_click$f2, f2_ppm),
-        xmax = max(first_click$f2, f2_ppm),
-        ymin = min(first_click$f1, f1_ppm),
-        ymax = max(first_click$f1, f1_ppm),
-        stain_id = paste0("click_box_", format(Sys.time(), "%H%M%S")),
-        Volume = NA_real_,
-        status = "add",
-        stringsAsFactors = FALSE
+    # Mode DELETE: supprimer la box sous le clic
+    if (!is.null(click_mode) && click_mode == "delete_click") {
+      boxes <- bounding_boxes_data()
+      
+      if (is.null(boxes) || nrow(boxes) == 0) {
+        showNotification("⚠️ No boxes to delete", type = "warning")
+        return()
+      }
+      
+      # Trouver la box qui contient le point cliqué
+      clicked_box_idx <- which(
+        boxes$xmin <= f2_ppm & boxes$xmax >= f2_ppm &
+          boxes$ymin <= f1_ppm & boxes$ymax >= f1_ppm
       )
       
-      pending_boxes(dplyr::bind_rows(pending_boxes(), new_box))
-      first_click_for_box(NULL)
+      if (length(clicked_box_idx) == 0) {
+        showNotification("⚠️ No box at this location", type = "warning")
+        return()
+      }
       
-      showNotification(sprintf("🟦 Box: F2=[%.3f,%.3f], F1=[%.3f,%.3f]",
-                               new_box$xmin, new_box$xmax, new_box$ymin, new_box$ymax), 
-                       duration = 3)
+      # Si plusieurs boxes se chevauchent, prendre la première (ou la plus petite)
+      if (length(clicked_box_idx) > 1) {
+        # Prendre la plus petite box (la plus spécifique)
+        box_areas <- (boxes$xmax[clicked_box_idx] - boxes$xmin[clicked_box_idx]) * 
+          (boxes$ymax[clicked_box_idx] - boxes$ymin[clicked_box_idx])
+        clicked_box_idx <- clicked_box_idx[which.min(box_areas)]
+      }
+      
+      # Marquer la box pour suppression (via pending)
+      box_to_delete <- boxes[clicked_box_idx, , drop = FALSE]
+      box_to_delete$status <- "delete"
+      
+      pending_boxes(dplyr::bind_rows(pending_boxes(), box_to_delete))
+      
+      showNotification(
+        paste("🗑️ Box", box_to_delete$stain_id, "marked for deletion. Click 'Apply' to confirm."), 
+        type = "message"
+      )
+      return()
+    }
+    
+    # Mode TWO_CLICKS: créer une box avec deux clics
+    if (!is.null(click_mode) && click_mode == "two_clicks") {
+      first_click <- first_click_for_box()
+      
+      if (is.null(first_click)) {
+        # Premier clic
+        first_click_for_box(list(f2 = f2_ppm, f1 = f1_ppm))
+        showNotification(sprintf("📍 Coin 1: F2=%.3f, F1=%.3f", f2_ppm, f1_ppm), duration = 4)
+      } else {
+        # Deuxième clic - créer la boîte
+        new_box <- data.frame(
+          xmin = min(first_click$f2, f2_ppm),
+          xmax = max(first_click$f2, f2_ppm),
+          ymin = min(first_click$f1, f1_ppm),
+          ymax = max(first_click$f1, f1_ppm),
+          stain_id = paste0("click_box_", format(Sys.time(), "%H%M%S")),
+          Volume = NA_real_,
+          status = "add",
+          stringsAsFactors = FALSE
+        )
+        
+        pending_boxes(dplyr::bind_rows(pending_boxes(), new_box))
+        first_click_for_box(NULL)
+        
+        showNotification(sprintf("🟦 Box: F2=[%.3f,%.3f], F1=[%.3f,%.3f]",
+                                 new_box$xmin, new_box$xmax, new_box$ymin, new_box$ymax), 
+                         duration = 3)
+      }
     }
   }, priority = 10)
   
@@ -2621,9 +2748,37 @@ server <- function(input, output, session) {
     current_centroids <- centroids_data()
     pending_cents <- pending_centroids()
     
+    # Traiter les pending centroids avec gestion du statut delete
     if (!is.null(pending_cents) && nrow(pending_cents) > 0) {
       if (is.null(current_centroids)) current_centroids <- data.frame()
-      centroids_data(dplyr::bind_rows(current_centroids, pending_cents))
+      
+      # Vérifier si la colonne status existe
+      if ("status" %in% names(pending_cents)) {
+        # Séparer les ajouts et les suppressions
+        cents_to_add <- pending_cents[is.na(pending_cents$status) | pending_cents$status != "delete", , drop = FALSE]
+        cents_to_delete <- pending_cents[!is.na(pending_cents$status) & pending_cents$status == "delete", , drop = FALSE]
+        
+        # 1. Supprimer les centroids marqués pour suppression
+        if (nrow(cents_to_delete) > 0 && nrow(current_centroids) > 0) {
+          # Supprimer par stain_id si disponible, sinon par coordonnées
+          if ("stain_id" %in% names(cents_to_delete) && "stain_id" %in% names(current_centroids)) {
+            ids_to_delete <- cents_to_delete$stain_id
+            current_centroids <- current_centroids[!current_centroids$stain_id %in% ids_to_delete, , drop = FALSE]
+          }
+        }
+        
+        # 2. Ajouter les nouveaux centroids
+        if (nrow(cents_to_add) > 0) {
+          # Retirer la colonne status avant d'ajouter
+          cents_to_add$status <- NULL
+          current_centroids <- dplyr::bind_rows(current_centroids, cents_to_add)
+        }
+      } else {
+        # Pas de colonne status, tout ajouter
+        current_centroids <- dplyr::bind_rows(current_centroids, pending_cents)
+      }
+      
+      centroids_data(current_centroids)
     }
     
     current_boxes <- modifiable_boxes()
@@ -2791,18 +2946,411 @@ server <- function(input, output, session) {
   
   ## 8.9 Reset all ----
   observeEvent(input$reset_all, {
+    # Reset des plots
     nmr_plot(NULL)
     contour_plot_base(NULL)
+    
+    # Reset des centroids/peaks
     imported_centroids(NULL)
     centroids_data(NULL)
-    fixed_boxes(NULL)
+    centroids(NULL)
+    
+    # Reset des boxes - TOUTES les variables liées aux boxes
+    fixed_boxes(data.frame(xmin = numeric(), xmax = numeric(), 
+                           ymin = numeric(), ymax = numeric()))
+    modifiable_boxes(data.frame())
     reference_boxes(NULL)
+    
+    # Reset des pending changes
+    pending_centroids(data.frame(
+      F2_ppm = numeric(0), F1_ppm = numeric(0),
+      Volume = numeric(0), stain_id = character(0),
+      stringsAsFactors = FALSE
+    ))
+    pending_boxes(data.frame(
+      xmin = numeric(0), xmax = numeric(0),
+      ymin = numeric(0), ymax = numeric(0)
+    ))
+    pending_fusions(data.frame(
+      stain_id = character(), F2_ppm = numeric(),
+      F1_ppm = numeric(), Volume = numeric(),
+      stringsAsFactors = FALSE
+    ))
+    
+    # Reset des clics et sélections
     first_click_for_box(NULL)
+    last_click_coords(NULL)
+    selected_box_for_edit(NULL)
+    selected_box_index(NULL)
+    original_box_coords(NULL)
+    box_has_been_modified(FALSE)
+    
+    # Reset des résultats de fit
+    fit_results_data(NULL)
+    last_fit_method("sum")
+    
+    # Reset du cache
+    plot_cache(list())
+    contour_cache(list())
+    box_intensity_cache(list())
+    
+    # Reset de l'UI
     updateSelectInput(session, "selected_subfolder", selected = "")
-    status_msg("🔁 Interface reset")
+    
+    # Supprimer la preview si présente
+    if (isTRUE(preview_trace_added())) {
+      tryCatch({
+        plotlyProxy("interactivePlot", session) %>%
+          plotlyProxyInvoke("deleteTraces", -1L)
+      }, error = function(e) NULL)
+      preview_trace_added(FALSE)
+    }
+    
+    status_msg("🔁 All data reset")
+    showNotification("🔁 All data has been reset", type = "message")
+  })
+  
+  ## 8.9 Delete selected peaks (from Data tab) - via pending ----
+  observeEvent(input$delete_selected_peaks, {
+    selected_rows <- input$centroid_table_rows_selected
+    
+    if (is.null(selected_rows) || length(selected_rows) == 0) {
+      showNotification("⚠️ No peaks selected. Use Ctrl+Click to select multiple.", type = "warning")
+      return()
+    }
+    
+    df <- centroids_data()
+    if (is.null(df) || nrow(df) == 0) return()
+    
+    # Marquer les lignes sélectionnées pour suppression (via pending)
+    n_to_delete <- length(selected_rows)
+    to_delete <- df[selected_rows, , drop = FALSE]
+    to_delete$status <- "delete"
+    
+    # Ajouter aux pending
+    pending_centroids(dplyr::bind_rows(pending_centroids(), to_delete))
+    
+    showNotification(paste("🗑️", n_to_delete, "peak(s) marked for deletion. Click 'Apply' to confirm."), type = "message")
+  })
+  
+  ## 8.10 Delete selected boxes (from Data tab) - via pending ----
+  observeEvent(input$delete_selected_boxes, {
+    selected_rows <- input$bbox_table_rows_selected
+    
+    if (is.null(selected_rows) || length(selected_rows) == 0) {
+      showNotification("⚠️ No boxes selected. Use Ctrl+Click to select multiple.", type = "warning")
+      return()
+    }
+    
+    df <- bounding_boxes_data()
+    if (is.null(df) || nrow(df) == 0) return()
+    
+    # Marquer les lignes sélectionnées pour suppression (via pending)
+    n_to_delete <- length(selected_rows)
+    to_delete <- df[selected_rows, , drop = FALSE]
+    to_delete$status <- "delete"
+    
+    # Ajouter aux pending
+    pending_boxes(dplyr::bind_rows(pending_boxes(), to_delete))
+    
+    showNotification(paste("🗑️", n_to_delete, "box(es) marked for deletion. Click 'Apply' to confirm."), type = "message")
+  })
+  
+  ## 8.11 Discard selected pending centroids ----
+  observeEvent(input$discard_selected_centroid, {
+    selected_rows <- input$pending_centroids_table_rows_selected
+    
+    if (is.null(selected_rows) || length(selected_rows) == 0) {
+      showNotification("⚠️ No pending peaks selected", type = "warning")
+      return()
+    }
+    
+    df <- pending_centroids()
+    if (is.null(df) || nrow(df) == 0) return()
+    
+    n_to_delete <- length(selected_rows)
+    
+    # Récupérer les peaks qu'on va retirer de pending
+    peaks_to_discard <- df[selected_rows, , drop = FALSE]
+    
+    # Retirer de pending
+    df_remaining <- df[-selected_rows, , drop = FALSE]
+    pending_centroids(df_remaining)
+    
+    # Message informatif selon le type
+    if ("status" %in% names(peaks_to_discard)) {
+      n_delete <- sum(peaks_to_discard$status == "delete", na.rm = TRUE)
+      n_add <- sum(is.na(peaks_to_discard$status) | peaks_to_discard$status != "delete")
+      
+      msg_parts <- c()
+      if (n_delete > 0) msg_parts <- c(msg_parts, paste(n_delete, "deletion(s) cancelled"))
+      if (n_add > 0) msg_parts <- c(msg_parts, paste(n_add, "addition(s) cancelled"))
+      
+      showNotification(paste("↩️", paste(msg_parts, collapse = ", ")), type = "message")
+    } else {
+      showNotification(paste("🗑️ Removed", n_to_delete, "pending peak(s)"), type = "message")
+    }
+  })
+  
+  ## 8.12 Discard selected pending boxes ----
+  observeEvent(input$discard_selected_box, {
+    selected_rows <- input$pending_boxes_table_rows_selected
+    
+    if (is.null(selected_rows) || length(selected_rows) == 0) {
+      showNotification("⚠️ No pending boxes selected", type = "warning")
+      return()
+    }
+    
+    df <- pending_boxes()
+    if (is.null(df) || nrow(df) == 0) return()
+    
+    n_to_delete <- length(selected_rows)
+    
+    # Récupérer les boxes qu'on va retirer de pending
+    boxes_to_discard <- df[selected_rows, , drop = FALSE]
+    
+    # Pour les boxes avec status "delete" qui sont retirées de pending,
+    # elles restent dans Data (c'est le comportement voulu : annuler la suppression)
+    # Pour les boxes avec status "add", elles disparaissent simplement
+    # Pour les boxes avec status "edit", on annule l'édition
+    
+    # Retirer de pending
+    df_remaining <- df[-selected_rows, , drop = FALSE]
+    pending_boxes(df_remaining)
+    
+    # Nettoyer la preview trace si présente
+    if (isTRUE(preview_trace_added())) {
+      tryCatch({
+        plotlyProxy("interactivePlot", session) %>%
+          plotlyProxyInvoke("deleteTraces", -1L)
+      }, error = function(e) NULL)
+      preview_trace_added(FALSE)
+    }
+    
+    # Reset la sélection d'édition
+    selected_box_for_edit(NULL)
+    selected_box_index(NULL)
+    original_box_coords(NULL)
+    box_has_been_modified(FALSE)
+    
+    # Message informatif selon le type
+    if ("status" %in% names(boxes_to_discard)) {
+      n_delete <- sum(boxes_to_discard$status == "delete", na.rm = TRUE)
+      n_add <- sum(boxes_to_discard$status == "add", na.rm = TRUE)
+      n_edit <- sum(boxes_to_discard$status == "edit", na.rm = TRUE)
+      
+      msg_parts <- c()
+      if (n_delete > 0) msg_parts <- c(msg_parts, paste(n_delete, "deletion(s) cancelled"))
+      if (n_add > 0) msg_parts <- c(msg_parts, paste(n_add, "addition(s) cancelled"))
+      if (n_edit > 0) msg_parts <- c(msg_parts, paste(n_edit, "edit(s) cancelled"))
+      
+      showNotification(paste("↩️", paste(msg_parts, collapse = ", ")), type = "message")
+    } else {
+      showNotification(paste("🗑️ Removed", n_to_delete, "pending box(es)"), type = "message")
+    }
+  })
+  
+  ## 8.13 Discard selected pending fusions ----
+  observeEvent(input$discard_selected_fusion, {
+    selected_rows <- input$pending_fusions_table_rows_selected
+    
+    if (is.null(selected_rows) || length(selected_rows) == 0) {
+      showNotification("⚠️ No pending fusions selected", type = "warning")
+      return()
+    }
+    
+    df <- pending_fusions()
+    if (is.null(df) || nrow(df) == 0) return()
+    
+    n_to_delete <- length(selected_rows)
+    df_remaining <- df[-selected_rows, , drop = FALSE]
+    pending_fusions(df_remaining)
+    
+    showNotification(paste("🗑️ Removed", n_to_delete, "pending fusion(s)"), type = "message")
   })
   
   # SECTION 9: IMPORT/EXPORT ----
+  
+  
+  ## 9.0 Save/Load Session ----
+  
+  ### Save session ----
+  output$save_session <- downloadHandler(
+    filename = function() {
+      paste0("nmr_session_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".rds")
+    },
+    content = function(file) {
+      # Collecter toutes les données de la session
+      session_data <- list(
+        # Version pour compatibilité future
+        version = "1.0",
+        timestamp = Sys.time(),
+        
+        # Données principales
+        centroids = centroids_data(),
+        boxes = modifiable_boxes(),
+        fixed_boxes = fixed_boxes(),
+        
+        # Pending changes
+        pending_centroids = pending_centroids(),
+        pending_boxes = pending_boxes(),
+        pending_fusions = pending_fusions(),
+        
+        # Résultats de fit
+        fit_results = fit_results_data(),
+        last_fit_method = last_fit_method(),
+        
+        # Paramètres UI
+        params = list(
+          spectrum_type = input$spectrum_type,
+          contour_start = input$contour_start,
+          eps_value = input$eps_value,
+          neighborhood_size = input$neighborhood_size,
+          exclusion_zones = input$exclusion_zones,
+          filter_artifacts = input$filter_artifacts,
+          filter_diagonal = input$filter_diagonal,
+          diagonal_tolerance = input$diagonal_tolerance,
+          integration_method = input$integration_method,
+          integration_method_fit = input$integration_method_fit
+        ),
+        
+        # Chemin du dossier (pour référence)
+        data_path = if (!is.null(input$directory)) {
+          tryCatch(parseDirPath(c(Home = normalizePath("~"), getwd = getwd()), input$directory),
+                   error = function(e) NULL)
+        } else NULL
+      )
+      
+      # Sauvegarder en RDS
+      saveRDS(session_data, file)
+      
+      showNotification("💾 Session saved successfully!", type = "message")
+    }
+  )
+  
+  ### Load session ----
+  observeEvent(input$load_session_file, {
+    req(input$load_session_file)
+    
+    tryCatch({
+      # Charger le fichier RDS
+      session_data <- readRDS(input$load_session_file$datapath)
+      
+      # Vérifier la version
+      if (is.null(session_data$version)) {
+        showNotification("⚠️ Old session format, some data may not load correctly", type = "warning")
+      }
+      
+      # Vider les caches pour forcer le recalcul
+      plot_cache(list())
+      contour_cache(list())
+      box_intensity_cache(list())
+      
+      # Restaurer les données principales
+      if (!is.null(session_data$centroids) && nrow(session_data$centroids) > 0) {
+        centroids_data(session_data$centroids)
+      }
+      
+      if (!is.null(session_data$boxes) && nrow(session_data$boxes) > 0) {
+        modifiable_boxes(session_data$boxes)
+        # Aussi mettre à jour fixed_boxes pour la cohérence
+        fixed_boxes(session_data$boxes)
+      }
+      
+      if (!is.null(session_data$fixed_boxes) && nrow(session_data$fixed_boxes) > 0) {
+        fixed_boxes(session_data$fixed_boxes)
+      }
+      
+      # Restaurer les pending changes
+      if (!is.null(session_data$pending_centroids) && nrow(session_data$pending_centroids) > 0) {
+        pending_centroids(session_data$pending_centroids)
+      }
+      
+      if (!is.null(session_data$pending_boxes) && nrow(session_data$pending_boxes) > 0) {
+        pending_boxes(session_data$pending_boxes)
+      }
+      
+      if (!is.null(session_data$pending_fusions) && nrow(session_data$pending_fusions) > 0) {
+        pending_fusions(session_data$pending_fusions)
+      }
+      
+      # Restaurer les résultats de fit
+      if (!is.null(session_data$fit_results)) {
+        fit_results_data(session_data$fit_results)
+      }
+      
+      if (!is.null(session_data$last_fit_method)) {
+        last_fit_method(session_data$last_fit_method)
+      }
+      
+      # Restaurer les paramètres UI
+      params <- session_data$params
+      if (!is.null(params)) {
+        if (!is.null(params$spectrum_type)) {
+          updateSelectInput(session, "spectrum_type", selected = params$spectrum_type)
+        }
+        if (!is.null(params$contour_start)) {
+          updateNumericInput(session, "contour_start", value = params$contour_start)
+        }
+        if (!is.null(params$eps_value)) {
+          updateNumericInput(session, "eps_value", value = params$eps_value)
+        }
+        if (!is.null(params$neighborhood_size)) {
+          updateNumericInput(session, "neighborhood_size", value = params$neighborhood_size)
+        }
+        if (!is.null(params$exclusion_zones)) {
+          updateTextInput(session, "exclusion_zones", value = params$exclusion_zones)
+        }
+        if (!is.null(params$filter_artifacts)) {
+          updateCheckboxInput(session, "filter_artifacts", value = params$filter_artifacts)
+        }
+        if (!is.null(params$filter_diagonal)) {
+          updateCheckboxInput(session, "filter_diagonal", value = params$filter_diagonal)
+        }
+        if (!is.null(params$diagonal_tolerance)) {
+          updateNumericInput(session, "diagonal_tolerance", value = params$diagonal_tolerance)
+        }
+      }
+      
+      # Message de succès avec résumé
+      n_peaks <- if (!is.null(session_data$centroids)) nrow(session_data$centroids) else 0
+      n_boxes <- if (!is.null(session_data$boxes)) nrow(session_data$boxes) else 0
+      
+      # Rafraîchir le plot si des données spectrales sont chargées
+      if (!is.null(bruker_data()) && !is.null(contour_plot_base())) {
+        # Forcer la régénération du plot
+        refresh_nmr_plot(force_recalc = TRUE)
+        
+        showNotification(
+          paste0("✅ Session loaded! ", n_peaks, " peaks, ", n_boxes, " boxes"),
+          type = "message",
+          duration = 5
+        )
+      } else {
+        # Données spectrales pas encore chargées
+        showNotification(
+          paste0("✅ Session data loaded! ", n_peaks, " peaks, ", n_boxes, " boxes. ",
+                 "Load spectrum data to see them on the plot."),
+          type = "message",
+          duration = 8
+        )
+      }
+      
+      status_msg(paste0("📂 Session loaded: ", n_peaks, " peaks, ", n_boxes, " boxes"))
+      
+      # Afficher le chemin original si disponible
+      if (!is.null(session_data$data_path)) {
+        showNotification(
+          paste0("ℹ️ Original data path: ", session_data$data_path),
+          type = "message",
+          duration = 8
+        )
+      }
+      
+    }, error = function(e) {
+      showNotification(paste("❌ Error loading session:", e$message), type = "error")
+    })
+  })
   
   
   ## 9.1 Import centroids and boxes ----
@@ -2911,8 +3459,9 @@ server <- function(input, output, session) {
     filename = function() paste0("centroids_", Sys.Date(), ".csv"),
     content = function(file) {
       df <- centroids_data()
-      if (!is.null(df) && nrow(df) > 0) write.csv(df, file, row.names = FALSE) 
-      else write.csv(data.frame(), file)
+      # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+      if (!is.null(df) && nrow(df) > 0) write.csv2(df, file, row.names = FALSE) 
+      else write.csv2(data.frame(), file)
     }
   )
   
@@ -2947,7 +3496,7 @@ server <- function(input, output, session) {
       }
       
       if (length(intensity_list) == 0) {
-        readr::write_csv(tibble::tibble(message = "No contour_data found."), file)
+        write.csv2(data.frame(message = "No contour_data found."), file, row.names = FALSE)
         return(invisible(NULL))
       }
       
@@ -2955,7 +3504,8 @@ server <- function(input, output, session) {
       final_data <- dplyr::left_join(boxes_ref, merged_data, by = "stain_id") %>%
         dplyr::select(stain_id, F2_ppm, F1_ppm, xmin, xmax, ymin, ymax, dplyr::starts_with("Intensity_"))
       
-      readr::write_csv(final_data, file)
+      # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+      write.csv2(final_data, file, row.names = FALSE)
     }
   )
   
@@ -3013,7 +3563,8 @@ server <- function(input, output, session) {
           batch_intensities[[col]] <- pmax(batch_intensities[[col]], 0, na.rm = TRUE)
         }
         
-        readr::write_csv(batch_intensities, file)
+        # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+        write.csv2(batch_intensities, file, row.names = FALSE)
         
         status_msg("✅ Batch export complete")
         showNotification(paste("✅ Exported", nrow(ref_boxes), "boxes,", 
@@ -3071,7 +3622,8 @@ server <- function(input, output, session) {
         
         safe_name <- make.names(basename(name))
         output_csv <- file.path(tmp_dir, paste0(safe_name, "_projected_centroids.csv"))
-        readr::write_csv(projected_centroids, output_csv)
+        # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+        write.csv2(projected_centroids, output_csv, row.names = FALSE)
         csv_files <- c(csv_files, output_csv)
         
         vol_df <- projected_centroids %>% 
@@ -3086,7 +3638,8 @@ server <- function(input, output, session) {
         merged_data <- merged_data %>% dplyr::select(stain_id, F2_ppm, F1_ppm, dplyr::all_of(volume_cols))
         merged_data$status <- ifelse(rowSums(is.na(merged_data[volume_cols])) == 0, "ok", "missing")
         summary_csv <- file.path(tmp_dir, "summary_volumes.csv")
-        readr::write_csv(merged_data, summary_csv)
+        # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+        write.csv2(merged_data, summary_csv, row.names = FALSE)
         csv_files <- c(csv_files, summary_csv)
       }
       
@@ -3423,11 +3976,46 @@ server <- function(input, output, session) {
               legend.title = element_text(size = 9), 
               legend.key.size = unit(0.4, "cm"))
       
+      # Ticks fixes simples : tous les 1 ppm pour F2
+      # Pour F1 : 1 ppm pour TOCSY/COSY/UFCOSY (homonucléaire 1H), 10 ppm pour HSQC (13C)
+      # Les valeurs sur l'axe sont négatives, on les inverse pour l'affichage (ex: -3 devient 3)
+      # SAUF pour les vraies valeurs négatives ppm (ex: -0.5 ppm reste -0.5)
+      x_tickvals <- seq(-14, 2, by = 1)  # Couvre de -2 à 14 ppm en affichage
+      x_ticktext <- sprintf("%.0f", -x_tickvals)  # Inverse le signe : -7 -> "7", 1 -> "-1"
+      
+      # Adapter F1 selon le type de spectre
+      is_hsqc <- !is.null(input$spectrum_type) && input$spectrum_type == "HSQC"
+      if (is_hsqc) {
+        # HSQC : F1 = 13C, ticks tous les 10 ppm (-10 à 230 ppm en affichage)
+        y_tickvals <- seq(-240, 20, by = 10)
+        y_ticktext <- sprintf("%.0f", -y_tickvals)
+      } else {
+        # TOCSY/COSY/UFCOSY : F1 = 1H, ticks tous les 1 ppm (-2 à 14 ppm en affichage)
+        y_tickvals <- seq(-14, 2, by = 1)
+        y_ticktext <- sprintf("%.0f", -y_tickvals)
+      }
+      
       p <- suppressWarnings({
         ggplotly(plot_obj, source = "nmr_plot") %>%
           layout(dragmode = "zoom",
-                 xaxis = list(showticklabels = TRUE, ticks = "outside"), 
-                 yaxis = list(showticklabels = TRUE, ticks = "outside")) %>%
+                 xaxis = list(
+                   showticklabels = TRUE, 
+                   ticks = "outside",
+                   tickmode = "array",
+                   tickvals = x_tickvals,
+                   ticktext = x_ticktext,
+                   title = list(text = "F2 (ppm)", standoff = 10),
+                   gridcolor = "rgba(200,200,200,0.3)"
+                 ), 
+                 yaxis = list(
+                   showticklabels = TRUE, 
+                   ticks = "outside",
+                   tickmode = "array",
+                   tickvals = y_tickvals,
+                   ticktext = y_ticktext,
+                   title = list(text = "F1 (ppm)", standoff = 10),
+                   gridcolor = "rgba(200,200,200,0.3)"
+                 )) %>%
           config(modeBarButtonsToAdd = list("select2d", "lasso2d"), displayModeBar = TRUE) %>%
           event_register("plotly_click") %>%
           event_register("plotly_selected") %>%
@@ -3498,30 +4086,34 @@ server <- function(input, output, session) {
   output$centroid_table <- renderDT({
     df <- centroids_data()
     if (is.null(df) || nrow(df) == 0) return(datatable(data.frame()))
-    datatable(df[, seq_len(min(4, ncol(df))), drop = FALSE], selection = "single", options = list(pageLength = 5))
+    datatable(df[, seq_len(min(4, ncol(df))), drop = FALSE], 
+              selection = "multiple",  # Sélection multiple activée
+              options = list(pageLength = 10))  # Plus d'entrées par page
   })
   
   output$full_centroid_table <- renderDT({
     df <- centroids_data() %||% data.frame()
-    datatable(df, selection = "single", options = list(pageLength = 5))
+    datatable(df, selection = "multiple", options = list(pageLength = 10))
   })
   
   output$bbox_table <- renderDT({
     df <- bounding_boxes_data() %||% data.frame()
-    datatable(df, selection = "single", options = list(pageLength = 5))
+    datatable(df, 
+              selection = "multiple",  # Sélection multiple activée
+              options = list(pageLength = 10))  # Plus d'entrées par page
   })
   
   output$pending_centroids_table <- renderDT({ 
-    datatable(pending_centroids(), selection = "single", options = list(pageLength = 5)) 
+    datatable(pending_centroids(), selection = "multiple", options = list(pageLength = 10)) 
   })
   
   output$pending_boxes_table <- renderDT({ 
-    datatable(pending_boxes(), selection = "single", options = list(pageLength = 5)) 
+    datatable(pending_boxes(), selection = "multiple", options = list(pageLength = 10)) 
   })
   
   output$pending_fusions_table <- renderDT({ 
     req(pending_fusions())
-    datatable(pending_fusions(), selection = "single", options = list(scrollX = TRUE, pageLength = 5)) 
+    datatable(pending_fusions(), selection = "multiple", options = list(scrollX = TRUE, pageLength = 10)) 
   })
   
   ## 10.6 Spectrum type update ----
@@ -3540,6 +4132,168 @@ server <- function(input, output, session) {
     plotlyProxy("interactivePlot", session) %>%
       plotlyProxyInvoke("relayout", list(dragmode = input$plotly_dragmode))
   })
+  
+  ## 10.7b Dynamic axis ticks on zoom ----
+  # Stocker les ranges complets du plot pour l'autoscale
+  full_plot_ranges <- reactiveVal(list(x = c(-10, 0), y = c(-200, 0)))
+  
+  # Observer pour capturer les ranges initiaux quand le plot est créé
+  observe({
+    plot_obj <- nmr_plot()
+    if (!is.null(plot_obj)) {
+      x_range <- tryCatch({
+        layer_scales(plot_obj)$x$range$range
+      }, error = function(e) c(-10, 0))
+      y_range <- tryCatch({
+        layer_scales(plot_obj)$y$range$range
+      }, error = function(e) c(-200, 0))
+      
+      if (!is.null(x_range) && !is.null(y_range)) {
+        full_plot_ranges(list(x = x_range, y = y_range))
+      }
+    }
+  })
+  
+  # Fonction pour générer des ticks avec les bonnes valeurs ppm affichées
+  # Les données sur l'axe sont l'opposé des valeurs ppm réelles (ex: ppm=3 -> axe=-3)
+  generate_positive_ticks <- function(range_vals, target_nticks = 10, decimals = 2) {
+    if (any(is.null(range_vals)) || any(is.na(range_vals)) || length(range_vals) < 2) return(NULL)
+    
+    # Range sur l'axe (valeurs négatives des ppm, ex: -7.5 à 0.5 si ppm va de 7.5 à -0.5)
+    axis_min <- min(range_vals)
+    axis_max <- max(range_vals)
+    
+    # Valeurs ppm correspondantes (on inverse le signe)
+    ppm_max <- -axis_min  # ex: 7.5
+    ppm_min <- -axis_max  # ex: -0.5
+    
+    span <- ppm_max - ppm_min
+    
+    if (span <= 0 || !is.finite(span)) return(NULL)
+    
+    # Calculer un pas "joli"
+    rough_step <- span / target_nticks
+    if (rough_step <= 0 || !is.finite(rough_step)) return(NULL)
+    
+    magnitude <- 10^floor(log10(rough_step))
+    nice_steps <- c(0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10)
+    step <- magnitude * nice_steps[which.min(abs(nice_steps - rough_step/magnitude))]
+    
+    if (step <= 0 || !is.finite(step)) return(NULL)
+    
+    # Générer les valeurs de tick en ppm
+    tick_start <- floor(ppm_min / step) * step
+    tick_end <- ceiling(ppm_max / step) * step
+    
+    tick_values_ppm <- seq(tick_start, tick_end, by = step)
+    
+    # Filtrer pour ne garder que les ticks dans la plage visible (avec petite marge)
+    margin <- step * 0.1
+    tick_values_ppm <- tick_values_ppm[
+      tick_values_ppm >= (ppm_min - margin) & 
+        tick_values_ppm <= (ppm_max + margin)
+    ]
+    
+    if (length(tick_values_ppm) == 0) return(NULL)
+    
+    # Les valeurs sur l'axe sont l'opposé des ppm
+    tick_values_axis <- -tick_values_ppm
+    
+    # Format selon le nombre de décimales
+    fmt <- paste0("%.", decimals, "f")
+    
+    list(
+      tickvals = tick_values_axis,
+      ticktext = sprintf(fmt, tick_values_ppm)  # Affiche les vraies valeurs ppm
+    )
+  }
+  
+  observeEvent(event_data("plotly_relayout", source = "nmr_plot"), {
+    relayout_data <- event_data("plotly_relayout", source = "nmr_plot")
+    
+    if (is.null(relayout_data)) return()
+    
+    # Détecter si c'est un autoscale (double-clic ou bouton reset)
+    is_autoscale <- !is.null(relayout_data$`xaxis.autorange`) || 
+      !is.null(relayout_data$`yaxis.autorange`) ||
+      !is.null(relayout_data$autosize)
+    
+    # Cas Autoscale : remettre les ticks par défaut (simples, tous les 1 ou 10 ppm)
+    if (is_autoscale) {
+      # Ticks par défaut F2 : tous les 1 ppm (plage étendue -2 à 14 ppm)
+      x_tickvals_default <- seq(-14, 2, by = 1)
+      x_ticktext_default <- sprintf("%.0f", -x_tickvals_default)
+      
+      # Ticks par défaut F1 : selon le type de spectre
+      is_hsqc <- !is.null(input$spectrum_type) && input$spectrum_type == "HSQC"
+      if (is_hsqc) {
+        # HSQC : plage étendue -10 à 240 ppm
+        y_tickvals_default <- seq(-240, 20, by = 10)
+      } else {
+        # TOCSY/COSY/UFCOSY : plage étendue -2 à 14 ppm
+        y_tickvals_default <- seq(-14, 2, by = 1)
+      }
+      y_ticktext_default <- sprintf("%.0f", -y_tickvals_default)
+      
+      plotlyProxy("interactivePlot", session) %>%
+        plotlyProxyInvoke("relayout", list(
+          `xaxis.tickmode` = "array",
+          `xaxis.tickvals` = x_tickvals_default,
+          `xaxis.ticktext` = x_ticktext_default,
+          `yaxis.tickmode` = "array",
+          `yaxis.tickvals` = y_tickvals_default,
+          `yaxis.ticktext` = y_ticktext_default
+        ))
+      
+      return()  # On s'arrête là pour l'autoscale
+    }
+    
+    # Cas Zoom manuel : calculer des ticks fins
+    x_range <- NULL
+    y_range <- NULL
+    
+    if (!is.null(relayout_data$`xaxis.range[0]`) && !is.null(relayout_data$`xaxis.range[1]`)) {
+      x_range <- c(relayout_data$`xaxis.range[0]`, relayout_data$`xaxis.range[1]`)
+    }
+    if (!is.null(relayout_data$`yaxis.range[0]`) && !is.null(relayout_data$`yaxis.range[1]`)) {
+      y_range <- c(relayout_data$`yaxis.range[0]`, relayout_data$`yaxis.range[1]`)
+    }
+    
+    # Appliquer les ticks fins pour l'axe X (F2)
+    if (!is.null(x_range) && length(x_range) == 2) {
+      x_ticks <- generate_positive_ticks(x_range, target_nticks = 12, decimals = 2)
+      if (!is.null(x_ticks) && length(x_ticks$tickvals) > 0) {
+        plotlyProxy("interactivePlot", session) %>%
+          plotlyProxyInvoke("relayout", list(
+            `xaxis.tickmode` = "array",
+            `xaxis.tickvals` = x_ticks$tickvals,
+            `xaxis.ticktext` = x_ticks$ticktext
+          ))
+      }
+    }
+    
+    # Appliquer les ticks fins pour l'axe Y (F1)
+    if (!is.null(y_range) && length(y_range) == 2) {
+      y_span <- abs(diff(y_range))
+      is_hsqc <- !is.null(input$spectrum_type) && input$spectrum_type == "HSQC"
+      
+      if (is_hsqc) {
+        y_decimals <- if (y_span > 10) 0 else if (y_span > 1) 1 else 2
+      } else {
+        y_decimals <- if (y_span > 5) 1 else 2
+      }
+      
+      y_ticks <- generate_positive_ticks(y_range, target_nticks = 12, decimals = y_decimals)
+      if (!is.null(y_ticks) && length(y_ticks$tickvals) > 0) {
+        plotlyProxy("interactivePlot", session) %>%
+          plotlyProxyInvoke("relayout", list(
+            `yaxis.tickmode` = "array",
+            `yaxis.tickvals` = y_ticks$tickvals,
+            `yaxis.ticktext` = y_ticks$ticktext
+          ))
+      }
+    }
+  }, ignoreNULL = FALSE)
   
   ## 10.8 Pending changes indicators ----
   output$has_pending_changes <- reactive({
