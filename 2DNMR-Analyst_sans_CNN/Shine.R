@@ -2027,7 +2027,7 @@ server <- function(input, output, session) {
     
     
     
-    # ========== VALIDATIONS ==========
+    # VALIDATIONS
     
     if (is.null(reference_boxes) || nrow(reference_boxes) == 0) {
       
@@ -2057,7 +2057,7 @@ server <- function(input, output, session) {
     
     
     
-    # ========== NETTOYAGE DES BOXES ==========
+    # NETTOYAGE DES BOXES 
     
     
     
@@ -2119,7 +2119,7 @@ server <- function(input, output, session) {
     
     
     
-    # ========== GESTION DES DUPLICATS ==========
+    # GESTION DES DUPLICATS
     
     
     
@@ -2163,7 +2163,7 @@ server <- function(input, output, session) {
     
     
     
-    # ========== CALCUL DES CENTRES ==========
+    # CALCUL DES CENTRES 
     
     
     
@@ -2175,7 +2175,7 @@ server <- function(input, output, session) {
     
     
     
-    # ========== CONSTRUCTION DU DATAFRAME RÉSULTAT ==========
+    # CONSTRUCTION DU DATAFRAME RÉSULTAT 
     
     
     
@@ -2211,7 +2211,7 @@ server <- function(input, output, session) {
     
     
     
-    # ========== CALCUL DES INTENSITÉS PAR SPECTRE ==========
+    # CALCUL DES INTENSITÉS PAR SPECTRE 
     
     
     
@@ -2371,7 +2371,7 @@ server <- function(input, output, session) {
     
     
     
-    # ========== VÉRIFICATION FINALE ==========
+    # VÉRIFICATION FINALE 
     
     
     
