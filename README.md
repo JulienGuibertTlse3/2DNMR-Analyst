@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/R-Shiny-blue?logo=r" alt="R Shiny"/>
   <img src="https://img.shields.io/badge/NMR-2D%20Analysis-green" alt="NMR 2D"/>
-  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License"/>
+  <img src="https://img.shields.io/badge/License-GNU-yellow" alt="License"/>
 </p>
 
 ---
