@@ -28,7 +28,8 @@
 2. **Plot** → Generate contour plots
 3. **Pick** → Detect peaks automatically
 4. **Edit** → Refine boxes manually if needed
-5. **Export** → Save results to CSV
+5. **Integrate** → Calculate volumes (Sum or Fitting)
+6. **Export** → Save results to CSV or session 
 
 ---
 
@@ -53,10 +54,22 @@
 - Configurable clustering parameters
 
 ### ✏️ Manual Editing
-- Add boxes by clicking (two-click mode)
+- Add and remove boxes by clicking (two-click mode)
 - Move and resize existing boxes
 - Delete unwanted peaks/boxes
 - Fuse multiple peaks into one
+
+### 📐 Integration & Peak Fitting
+- Direct: Sum intensity
+- Fitting: Gaussian, Voigt models
+- Fit Quality tab with R² metrics
+- 2D fit visualization for each box
+
+### 💾 Save & Export
+- Session: Save/Load complete work (.rds)
+- Import: CSV files for peaks and boxes
+- Export: CSV (French format ;), Batch export
+- Pending system: Apply/Discard changes
 
 ---
 
@@ -88,10 +101,16 @@ Choose the spectrum type and adjust the intensity threshold. Click **Auto** to c
 - **Edit boxes:** Select a box in the Data tab, then use arrow buttons to move or +/- to resize.
 - **Fuse peaks:** Use the lasso tool to select multiple peaks, then click "Fuse".
 
-### Step 5: Export Results
-- **Peaks:** Export peak positions (F1, F2 coordinates) and intensities.
-- **Boxes:** Export bounding box coordinates and integrated intensities.
-- **Batch Export:** Apply the same boxes to all loaded spectra and export intensities for each.
+### Step 5: Integration & Peak Fitting
+- Direct Integration: Sum (sum of intensities)
+- Peak Fitting: Gaussian ou Voigt (convolution Gauss-Lorentz)
+- Fit Quality: Dedicated tab with R² metrics and 2D fit visualization
+
+### Step 6: Save & Export
+3 collapsible sections:
+💼 Session: Complete Save/Load in .rds (peaks, boxes, parameters)
+📥 Import: CSV files for peaks and boxes
+📤 Export: CSV (semicolon separator), Batch Export (multiple spectra)
 
 ---
 
