@@ -108,9 +108,9 @@ Choose the spectrum type and adjust the intensity threshold. Click **Auto** to c
 
 ### Step 6: Save & Export
 3 collapsible sections:
-💼 Session: Complete Save/Load in .rds (peaks, boxes, parameters)
-📥 Import: CSV files for peaks and boxes
-📤 Export: CSV (semicolon separator), Batch Export (multiple spectra)
+  - 💼 Session: Complete Save/Load in .rds (peaks, boxes, parameters)
+  - 📥 Import: CSV files for peaks and boxes
+  - 📤 Export: CSV (semicolon separator), Batch Export (multiple spectra)
 
 ---
 
