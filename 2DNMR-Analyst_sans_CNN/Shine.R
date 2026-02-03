@@ -1,16 +1,8 @@
-# ============================================================================
-
-# 2D NMR Spectra Analysis - Application Shiny
-
-# ============================================================================
+# 2D NMR Spectra Analysis - Application Shiny -----
 
 # Auteur : Julien Guibert
 
 # GitHub : https://github.com/JulienGuibertTlse3/2DNMR-Analyst
-
-# ============================================================================
-
-
 
 # --- Chargement des packages ---
 
@@ -76,7 +68,7 @@ source("Function/Read_2DNMR_spectrum.R")
 
 source("Function/Vizualisation.R")
 
-source("Function/Pping.R")
+source("Function/Peak_picking.R")
 
 source("Function/Peak_fitting.R")
 
@@ -97,12 +89,16 @@ if (file.exists("Function_test/petit_test.cpp")) {
 # UI SIMPLIFIÉE ET INTUITIVE - ACCORDÉON ----
 
 
+
 ui <- fluidPage(
+  
   
   
   # Activer shinyjs
   
   useShinyjs(),
+  
+  
   
   # CSS personnalisé
   
@@ -118,6 +114,7 @@ ui <- fluidPage(
 
       }
 
+      
 
       /* Plot interactif pleine largeur */
 
@@ -129,6 +126,7 @@ ui <- fluidPage(
 
       }
 
+      
 
       /* Style de l'accordéon */
 
@@ -137,6 +135,8 @@ ui <- fluidPage(
         margin-bottom: 0 !important;
 
       }
+
+      
 
       .panel-group .panel {
 
@@ -152,6 +152,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       .panel-group .panel-heading {
 
         border-radius: 0 !important;
@@ -164,11 +166,15 @@ ui <- fluidPage(
 
       }
 
+      
+
       .panel-group .panel-heading:hover {
 
         filter: brightness(95%);
 
       }
+
+      
 
       .panel-group .panel-title {
 
@@ -177,6 +183,8 @@ ui <- fluidPage(
         font-weight: 600 !important;
 
       }
+
+      
 
       .panel-group .panel-title a {
 
@@ -188,6 +196,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       .panel-group .panel-title a:hover,
 
       .panel-group .panel-title a:focus {
@@ -196,6 +206,7 @@ ui <- fluidPage(
 
       }
 
+      
 
       .panel-group .panel-body {
 
@@ -204,6 +215,8 @@ ui <- fluidPage(
         background-color: #fafafa !important;
 
       }
+
+      
 
       /* Couleurs par section */
 
@@ -215,6 +228,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       .panel-group .panel:nth-child(2) .panel-heading {
 
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
@@ -222,6 +237,8 @@ ui <- fluidPage(
         border: none !important;
 
       }
+
+      
 
       .panel-group .panel:nth-child(3) .panel-heading {
 
@@ -231,6 +248,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       .panel-group .panel:nth-child(4) .panel-heading {
 
         background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
@@ -239,6 +258,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       .panel-group .panel:nth-child(5) .panel-heading {
 
         background: linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important;
@@ -246,6 +267,7 @@ ui <- fluidPage(
         border: none !important;
 
       }
+
       
 
       /* Info box */
@@ -264,6 +286,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       /* Warning box */
 
       .warning-box {
@@ -279,6 +303,8 @@ ui <- fluidPage(
         border-radius: 4px;
 
       }
+
+      
 
       /* Coordonnées cliquées */
 
@@ -298,6 +324,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       /* Tables plus compactes */
 
       .dataTables_wrapper {
@@ -307,6 +335,8 @@ ui <- fluidPage(
         font-size: 12px;
 
       }
+
+      
 
       /* Checkbox list scrollable */
 
@@ -326,6 +356,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       /* Details/Summary styling */
 
       details {
@@ -333,6 +365,8 @@ ui <- fluidPage(
         margin: 10px 0;
 
       }
+
+      
 
       details summary {
 
@@ -352,11 +386,15 @@ ui <- fluidPage(
 
       }
 
+      
+
       details summary:hover {
 
         background: #dee2e6;
 
       }
+
+      
 
       details[open] summary {
 
@@ -369,6 +407,8 @@ ui <- fluidPage(
         color: white;
 
       }
+
+      
 
       details > div {
 
@@ -384,6 +424,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       /* Boutons compacts */
 
       .btn-xs {
@@ -393,6 +435,8 @@ ui <- fluidPage(
         font-size: 11px;
 
       }
+
+      
 
       /* Move buttons layout */
 
@@ -412,6 +456,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       .move-btn-grid .btn {
 
         width: 32px;
@@ -424,6 +470,8 @@ ui <- fluidPage(
 
       }
 
+      
+
       /* Fix overflow issues in sidebar and panels */
 
 .panel-body {
@@ -432,11 +480,14 @@ ui <- fluidPage(
 
 }
 
+
+
 .bsCollapsePanel .panel-body {
 
   overflow: visible !important;
 
 }
+
 
 
 /* Fix sidebar overflow */
@@ -447,11 +498,15 @@ ui <- fluidPage(
 
 }
 
+
+
 .content-wrapper, .main-content {
 
   overflow: visible !important;
 
 }
+
+
 
 /* Fix pour les boutons Peak Picking qui sont coupés */
 
@@ -460,6 +515,8 @@ ui <- fluidPage(
   overflow: visible !important;
 
 }
+
+
 
 /* Boutons Local Max et CNN plus compacts */
 
@@ -473,6 +530,8 @@ ui <- fluidPage(
 
 }
 
+
+
 /* Fix pour le Step input qui est coupé */
 
 #move_box_step {
@@ -480,6 +539,7 @@ ui <- fluidPage(
   width: 100% !important;
 
 }
+
 
 
 /* Labels plus compacts */
@@ -492,6 +552,8 @@ ui <- fluidPage(
 
 }
 
+
+
 /* NumericInput plus compact dans Edit box */
 
 .edit-box-inputs .form-group {
@@ -499,6 +561,8 @@ ui <- fluidPage(
   margin-bottom: 5px !important;
 
 }
+
+
 
 .edit-box-inputs input[type='number'] {
 
@@ -508,6 +572,8 @@ ui <- fluidPage(
 
 }
 
+
+
 /* Step input compact */
 
 .step-input-compact .form-group {
@@ -516,11 +582,15 @@ ui <- fluidPage(
 
 }
 
+
+
 .step-input-compact label {
 
   font-size: 11px !important;
 
 }
+
+
 
 .step-input-compact input {
 
@@ -531,6 +601,8 @@ ui <- fluidPage(
   height: 28px !important;
 
 }
+
+
 
 /* Move buttons grid fix */
 
@@ -550,6 +622,8 @@ ui <- fluidPage(
 
 }
 
+
+
 .move-btn-grid .btn {
 
   width: 26px !important;
@@ -563,6 +637,8 @@ ui <- fluidPage(
   line-height: 24px !important;
 
 }
+
+
 
 /* Shrink/Expand buttons */
 
@@ -646,7 +722,7 @@ ui <- fluidPage(
 
           tickvals.push(t);
 
-          // Inverser le signe pour l'affichage (convention NMR)
+          // Invert sign for display (NMR convention)
 
           ticktext.push((-t).toFixed(decimals));
 
@@ -822,12 +898,17 @@ ui <- fluidPage(
   
   ## DASHBOARD ----
   
+  
+  
   dashboardPage(
+    
+    
     
     # Header
     
     dashboardHeader(title = "NMR 2D Analysis"),
-
+    
+    
     
     # Sidebar
     
@@ -847,16 +928,23 @@ ui <- fluidPage(
       
     ),
     
+    
+    
     # Body
     
     dashboardBody(
-
+      
+      
       
       tabItems(
- 
+        
+        
+        
+        
         
         ### TAB: GUIDE ----
-       
+        
+        
         
         tabItem(
           
@@ -882,7 +970,7 @@ ui <- fluidPage(
                        
                        icon("book-open", class = "fa-2x", style = "color: #3c8dbc; margin-right: 15px;"),
                        
-                       h2("Guide d'utilisation", style = "margin: 0; color: #333; font-weight: 600;")
+                       h2("User Guide", style = "margin: 0; color: #333; font-weight: 600;")
                        
                      ),
                      
@@ -908,6 +996,10 @@ ui <- fluidPage(
           
         ),
         
+        
+        
+        
+        
         ### TAB: ANALYSIS ----
         
         tabItem(
@@ -915,15 +1007,25 @@ ui <- fluidPage(
           tabName = "analysis",
           
           fluidRow(
-
+            
+            
+            
+            
             
             #### LEFT PANEL - Controls (width = 3) ----
-       
+            
+            
+            
             column(3,
-
+                   
+                   
+                   
+                   
                    
                    # ACCORDÉON - Une seule section ouverte
-
+                   
+                   
+                   
                    bsCollapse(
                      
                      id = "main_accordion",
@@ -1088,7 +1190,7 @@ ui <- fluidPage(
                            
                            textAreaInput("keep_peak_ranges_text", "Delete ranges:", 
                                          
-                                         value = "0.5,-0.5; 1,0.8; 1.55,1.45; 5.1,4.5,", rows = 2)
+                                         value = "0.5,-0.5; 1,0.8; 1.55,1.45", rows = 2)
                            
                          )
                          
@@ -1280,6 +1382,8 @@ ui <- fluidPage(
                          
                        ),
                        
+                       
+                       
                        # Add manually
                        
                        tags$details(
@@ -1325,7 +1429,8 @@ ui <- fluidPage(
                          )
                          
                        ),
-
+                       
+                       
                        
                        fluidRow(
                          
@@ -1335,8 +1440,12 @@ ui <- fluidPage(
                          
                        )
                        
+                       
+                       
                      ),
-
+                     
+                     
+                     
                      ##### ===== SECTION 5: INTEGRATION =====
                      
                      bsCollapsePanel(
@@ -1373,7 +1482,8 @@ ui <- fluidPage(
                            
                        ),
                        
-
+                       
+                       
                        # Groupe Peak Fitting
                        
                        div(style = "background: #e3f2fd; border-radius: 8px; padding: 10px; border-left: 4px solid #2196f3;",
@@ -1394,7 +1504,8 @@ ui <- fluidPage(
                            
                        ),
                        
-
+                       
+                       
                        conditionalPanel(
                          
                          "input.integration_method_fit !== undefined && input.integration_method_fit !== null && input.integration_method_fit.length > 0",
@@ -1414,16 +1525,23 @@ ui <- fluidPage(
                          )
                          
                        ),
-
+                       
+                       
+                       
                        hr(),
-
+                       
+                       
+                       
                        # Bouton Calculate
                        
                        actionButton("run_integration", "▶️ Run Integration", class = "btn-success btn-block"),
                        
-
+                       
+                       
                        br(),
-
+                       
+                       
+                       
                        # Résultat de l'intégration
                        
                        conditionalPanel(
@@ -1438,7 +1556,7 @@ ui <- fluidPage(
                              
                              br(),
                              
-                             downloadButton("export_integration_results", "📥 Download Results (CSV)", class = "btn-primary btn-block")
+                             downloadButton("export_integration_results", "📥 Download Results", class = "btn-primary btn-block")
                              
                          )
                          
@@ -1446,7 +1564,8 @@ ui <- fluidPage(
                        
                      ),
                      
-
+                     
+                     
                      ##### ===== SECTION 6: SAVE & EXPORT =====
                      
                      bsCollapsePanel(
@@ -1520,9 +1639,9 @@ ui <- fluidPage(
                            
                            fluidRow(
                              
-                             column(6, downloadButton("export_centroids", "Peaks", class = "btn-sm btn-block")),
+                             column(6, downloadButton("export_centroids", "📤 Peaks", class = "btn-sm btn-block")),
                              
-                             column(6, downloadButton("export_boxes", "Boxes", class = "btn-sm btn-block"))
+                             column(6, downloadButton("export_boxes", "📤 Boxes", class = "btn-sm btn-block"))
                              
                            ),
                            
@@ -1534,18 +1653,23 @@ ui <- fluidPage(
                          
                        ),
                        
-
+                       
+                       
                        hr(),
                        
                        actionButton("reset_all", "🔄 Reset All", class = "btn-outline-danger btn-sm btn-block")
                        
                      )
                      
-  
+                     
+                     
                    ) # End bsCollapse
                    
             ),
-
+            
+            
+            
+            
             
             #### RIGHT PANEL - Visualization (width = 9) ----
             
@@ -1824,9 +1948,13 @@ ui <- fluidPage(
                          )
                          
                        ),
-
+                       
+                       
+                       
                        br(),
- 
+                       
+                       
+                       
                        # Tips
                        
                        div(style = "background: #fff3e0; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9800;",
@@ -1866,14 +1994,25 @@ ui <- fluidPage(
 )
 
 
+
+
+
 # Functions ----
 
-server <- function(input, output, session) {
 
+
+server <- function(input, output, session) {
+  
+  
+  
+  
   
   # SECTION 1: CONFIGURATION ET OPTIONS ----
   
-
+  
+  
+  
+  
   options(future.globals.maxSize = 10000 * 1024^2)  # allow up to 10 GB
   
   
@@ -1892,11 +2031,16 @@ server <- function(input, output, session) {
   
   `%||%` <- function(a, b) if (!is.null(a)) a else b
   
-
+  
+  
+  
   
   # SECTION 2: FONCTIONS UTILITAIRES ----
   
-
+  
+  
+  
+  
   ## 2.1 Cache pour lecture Bruker ----
   
   spectrum_cache <- new.env(parent = emptyenv())
@@ -2027,7 +2171,7 @@ server <- function(input, output, session) {
     
     
     
-    # VALIDATIONS
+    # ========== VALIDATIONS ==========
     
     if (is.null(reference_boxes) || nrow(reference_boxes) == 0) {
       
@@ -2057,7 +2201,7 @@ server <- function(input, output, session) {
     
     
     
-    # NETTOYAGE DES BOXES 
+    # ========== NETTOYAGE DES BOXES ==========
     
     
     
@@ -2085,7 +2229,7 @@ server <- function(input, output, session) {
     
     if (nrow(ref_boxes) == 0) {
       
-      stop("Toutes les boxes ont des coordonnées NA")
+      stop("All boxes have NA coordinates")
       
     }
     
@@ -2119,7 +2263,7 @@ server <- function(input, output, session) {
     
     
     
-    # GESTION DES DUPLICATS
+    # ========== GESTION DES DUPLICATS ==========
     
     
     
@@ -2127,7 +2271,7 @@ server <- function(input, output, session) {
     
     if (any(duplicated(ref_boxes$stain_id))) {
       
-      warning("Duplicats de stain_id détectés - renommage automatique")
+      warning("Duplicate stain_id detected - automatic renaming")
       
       # Renommer les duplicats
       
@@ -2155,7 +2299,7 @@ server <- function(input, output, session) {
     
     if (any(duplicated(coord_signature))) {
       
-      warning("Boxes avec coordonnées identiques détectées - suppression des doublons")
+      warning("Boxes with identical coordinates detected - removing duplicates")
       
       ref_boxes <- ref_boxes[!duplicated(coord_signature), , drop = FALSE]
       
@@ -2163,7 +2307,7 @@ server <- function(input, output, session) {
     
     
     
-    # CALCUL DES CENTRES 
+    # ========== CALCUL DES CENTRES ==========
     
     
     
@@ -2175,7 +2319,7 @@ server <- function(input, output, session) {
     
     
     
-    # CONSTRUCTION DU DATAFRAME RÉSULTAT 
+    # ========== CONSTRUCTION DU DATAFRAME RÉSULTAT ==========
     
     
     
@@ -2211,7 +2355,7 @@ server <- function(input, output, session) {
     
     
     
-    # CALCUL DES INTENSITÉS PAR SPECTRE 
+    # ========== CALCUL DES INTENSITÉS PAR SPECTRE ==========
     
     
     
@@ -2371,7 +2515,7 @@ server <- function(input, output, session) {
     
     
     
-    # VÉRIFICATION FINALE 
+    # ========== VÉRIFICATION FINALE ==========
     
     
     
@@ -2387,7 +2531,7 @@ server <- function(input, output, session) {
     
     # Log final
     
-    message(sprintf("Export: %d boxes, %d colonnes d'intensité", 
+    message(sprintf("Export: %d boxes, %d intensity columns", 
                     
                     nrow(result_df), 
                     
@@ -7591,7 +7735,9 @@ server <- function(input, output, session) {
                   
                   tags$li(tags$b("Edit"), " → Refine boxes manually if needed"),
                   
-                  tags$li(tags$b("Export"), " → Save results to CSV")
+                  tags$li(tags$b("Integrate"), " → Calculate volumes (Sum or Fitting)"),
+                  
+                  tags$li(tags$b("Export"), " → Save results to CSV or session")
                   
           )
           
@@ -7669,11 +7815,11 @@ server <- function(input, output, session) {
                    
                    tags$ul(style = "font-size: 13px;",
                            
-                           tags$li("Interactive contour plots (zoom, pan)"),
+                           tags$li("Interactive Plotly contour plots (zoom, pan)"),
                            
-                           tags$li("Adjustable intensity threshold"),
+                           tags$li("Adaptive tick labels (positive values, NMR convention)"),
                            
-                           tags$li("Click to get coordinates"),
+                           tags$li("Smooth zoom/dezoom with temporary axis hiding"),
                            
                            tags$li("Real-time display of peaks and boxes")
                            
@@ -7719,13 +7865,63 @@ server <- function(input, output, session) {
                    
                    tags$ul(style = "font-size: 13px;",
                            
-                           tags$li("Add boxes by clicking (two-click mode)"),
+                           tags$li("4 collapsible sections (Click mode, Fusing, Edit, Add)"),
                            
-                           tags$li("Move and resize existing boxes"),
+                           tags$li("Add/delete boxes directly on graph"),
                            
-                           tags$li("Delete unwanted peaks/boxes"),
+                           tags$li("Move and resize with preview (green rectangle)"),
                            
-                           tags$li("Fuse multiple peaks into one")
+                           tags$li("Fuse multiple peaks into one, multi-selection (Ctrl+Click)")
+                           
+                   )
+                   
+               )
+               
+        )
+        
+      ),
+      
+      
+      
+      fluidRow(
+        
+        column(6,
+               
+               div(style = "background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px; height: 180px;",
+                   
+                   h5(style = "color: #1976d2;", "📐 Integration & Peak Fitting"),
+                   
+                   tags$ul(style = "font-size: 13px;",
+                           
+                           tags$li(tags$b("Direct:"), " Sum intensity"),
+                           
+                           tags$li(tags$b("Fitting:"), " Gaussian, Voigt models"),
+                           
+                           tags$li("Fit Quality tab with R² metrics"),
+                           
+                           tags$li("2D fit visualization for each box")
+                           
+                   )
+                   
+               )
+               
+        ),
+        
+        column(6,
+               
+               div(style = "background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px; height: 180px;",
+                   
+                   h5(style = "color: #1976d2;", "💾 Save & Export"),
+                   
+                   tags$ul(style = "font-size: 13px;",
+                           
+                           tags$li(tags$b("Session:"), " Save/Load complete work (.rds)"),
+                           
+                           tags$li(tags$b("Import:"), " CSV files for peaks and boxes"),
+                           
+                           tags$li(tags$b("Export:"), " CSV (French format ;), Batch export"),
+                           
+                           tags$li("Pending system: Apply/Discard changes")
                            
                    )
                    
@@ -7875,17 +8071,24 @@ server <- function(input, output, session) {
                    
                    h5(style = "margin-top: 5px;", "Manual Editing"),
                    
-                   p(style = "font-size: 13px;", 
-                     
-                     tags$b("Add boxes:"), " Enable 'Two clicks' mode, then click two opposite corners on the spectrum."),
+                   p(style = "font-size: 13px; margin-bottom: 8px;", 
+                     tags$em("4 collapsible sections for a clean interface:")),
                    
                    p(style = "font-size: 13px;", 
                      
-                     tags$b("Edit boxes:"), " Select a box in the Data tab, then use arrow buttons to move or +/- to resize."),
+                     tags$b("🖱️ Click Mode:"), " Off / Add box (2 clicks) / Delete box on click"),
+                   
+                   p(style = "font-size: 13px;", 
+                     
+                     tags$b("🔗 Fusing Peaks & Boxes:"), " Multi-selection of peaks → merge into a single centroid"),
+                   
+                   p(style = "font-size: 13px;", 
+                     
+                     tags$b("📦 Edit Selected Box:"), " Modify coordinates, ↑↓←→ buttons, real-time preview (green)"),
                    
                    p(style = "margin-bottom: 0; font-size: 13px;", 
                      
-                     tags$b("Fuse peaks:"), " Use the lasso tool to select multiple peaks, then click 'Fuse'.")
+                     tags$b("➕ Add Manually:"), " Add a peak (F2, F1) or a box (xmin, xmax, ymin, ymax)")
                    
             )
             
@@ -7895,29 +8098,64 @@ server <- function(input, output, session) {
       
       
       
-      # Step 5
+      # Step 5 - Integration
       
       div(style = "background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 10px;",
           
           fluidRow(
             
-            column(1, div(style = "background: #fa709a; color: white; width: 30px; height: 30px; border-radius: 50%; text-align: center; line-height: 30px; font-weight: bold;", "5")),
+            column(1, div(style = "background: #9b59b6; color: white; width: 30px; height: 30px; border-radius: 50%; text-align: center; line-height: 30px; font-weight: bold;", "5")),
             
             column(11,
                    
-                   h5(style = "margin-top: 5px;", "Export Results"),
+                   h5(style = "margin-top: 5px;", "Integration & Peak Fitting"),
                    
                    p(style = "font-size: 13px;", 
                      
-                     tags$b("Peaks:"), " Export peak positions (F1, F2 coordinates) and intensities."),
+                     tags$b("Direct Integration:"), "Sum (sum of intensities)"),
                    
                    p(style = "font-size: 13px;", 
                      
-                     tags$b("Boxes:"), " Export bounding box coordinates and integrated intensities."),
+                     tags$b("Peak Fitting:"), " Gaussian ou Voigt (convolution Gauss-Lorentz)"),
                    
                    p(style = "margin-bottom: 0; font-size: 13px;", 
                      
-                     tags$b("Batch Export:"), " Apply the same boxes to all loaded spectra and export intensities for each.")
+                     tags$b("Fit Quality:"), " Dedicated tab with R² metrics and 2D fit visualization")
+                   
+            )
+            
+          )
+          
+      ),
+      
+      
+      
+      # Step 6 - Export
+      
+      div(style = "background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 10px;",
+          
+          fluidRow(
+            
+            column(1, div(style = "background: #fa709a; color: white; width: 30px; height: 30px; border-radius: 50%; text-align: center; line-height: 30px; font-weight: bold;", "6")),
+            
+            column(11,
+                   
+                   h5(style = "margin-top: 5px;", "Save & Export"),
+                   
+                   p(style = "font-size: 13px; margin-bottom: 8px;", 
+                     tags$em("3 collapsible sections:")),
+                   
+                   p(style = "font-size: 13px;", 
+                     
+                     tags$b("💼 Session:"), " Complete Save/Load in .rds (peaks, boxes, parameters)"),
+                   
+                   p(style = "font-size: 13px;", 
+                     
+                     tags$b("📥 Import:"), " CSV files for peaks and boxes"),
+                   
+                   p(style = "margin-bottom: 0; font-size: 13px;", 
+                     
+                     tags$b("📤 Export:"), " CSV (semicolon separator), Batch Export (multiple spectra)")
                    
             )
             
@@ -7972,6 +8210,56 @@ server <- function(input, output, session) {
       
       
       br(),
+      
+      
+      
+      # Recent Improvements
+      
+      h4("🆕 What's New (v2.0)"),
+      
+      
+      
+      div(style = "background: #e3f2fd; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3; margin-bottom: 20px;",
+          
+          fluidRow(
+            
+            column(6,
+                   
+                   h5(style = "color: #1565c0; margin-top: 0;", "User Interface"),
+                   
+                   tags$ul(style = "font-size: 13px; margin-bottom: 0;",
+                           
+                           tags$li("Collapsible sections (Click mode, Fusing, Edit, Add)"),
+                           
+                           tags$li("Colored accordion with icons"),
+                           
+                           tags$li("Tables with multi-selection (Ctrl+Click)"),
+                           
+                           tags$li("Save & Export in 3 sub-sections")
+                           
+                   )
+                   
+            ),
+            
+            column(6,
+                   
+                   h5(style = "color: #1565c0; margin-top: 0;", "Axes & Data"),
+                   
+                   tags$ul(style = "font-size: 13px; margin-bottom: 0;",
+                           
+                           tags$li("Adaptive ticks (0.1, 0.5, 1, 2, 5...)"),
+                           
+                           tags$li("Smooth zoom/unzoom (client-side JavaScript)"),
+                           
+                           tags$li("Pending system (Apply/Discard)")
+                           
+                   )
+                   
+            )
+            
+          )
+          
+      ),
       
       
       

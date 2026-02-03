@@ -13,8 +13,9 @@
 #   ├── Shine.R                <- Application principale
 #   └── Function_test/
 #       ├── Read_2DNMR_spectrum.R
+#       ├── Peak_fitting.R
 #       ├── Vizualisation.R
-#       ├── Pping.R
+#       ├── Peak_picking.R
 #       └── CNN_shiny.R
 # ============================================================================
 
@@ -158,7 +159,7 @@ cat("\n🔍 Vérification des fichiers sources...\n")
 source_files <- c(
   "Function/Read_2DNMR_spectrum.R",
   "Function/Vizualisation.R",
-  "Function/Pping.R",
+  "Function/Peak_picking.R",
   "Function/CNN_shiny.R"
 )
 
