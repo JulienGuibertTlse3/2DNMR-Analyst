@@ -97,6 +97,412 @@ generate_spectrum_labels_full_mixed <- function(n_spectra = 2000,
     y_reg = y_reg_array        # [n_spectra, 2048, 3]
   ))
 }
+
+#===============================DECOMPOSITION SPECTRE 2D -> COUPES 1D POUR ENTRAINEMENT=====================
+
+#' Convertit un spectre 2D et sa liste de pics en coupes 1D pour l'entraînement CNN
+#'
+#' @param rr_norm Matrice 2D normalisée (rownames = F2 ppm, colnames = F1 ppm)
+#' @param peaks_2D Dataframe des pics 2D avec colonnes: F1_ppm, F2_ppm, intensity (optionnel: fwhh)
+#' @param n_points Nombre de points cible pour chaque coupe 1D (défaut: 2048)
+#' @param spectrum_type Type de spectre: "TOCSY", "COSY", "HSQC", "UFCOSY" (défaut: "TOCSY")
+#' @param ppm_range_F1 Plage ppm pour F1/colonnes (défaut: NULL = auto-détection)
+#' @param ppm_range_F2 Plage ppm pour F2/lignes (défaut: NULL = auto-détection)
+#' @param intensity_threshold Seuil pour distinguer pics forts/faibles (défaut: 0.2)
+#' @param center_margin Marge pour définir la zone "centrée" (défaut: 0.2)
+#' @param ppm_tolerance_F1 Tolérance en ppm pour F1 (défaut: NULL = auto)
+#' @param ppm_tolerance_F2 Tolérance en ppm pour F2 (défaut: NULL = auto)
+#' @param extract_F1 Extraire les coupes horizontales/lignes (défaut: TRUE)
+#' @param extract_F2 Extraire les coupes verticales/colonnes (défaut: TRUE)
+#'
+#' @return Liste avec X, y_class, y_reg au format attendu par le CNN
+#'
+#' @details
+#' Pour HSQC: F1 = 1H (0-14 ppm), F2 = 13C (0-200 ppm)
+#' Par défaut, seules les coupes 1H sont extraites pour HSQC car le CNN est entraîné sur 1H.
+#' Pour inclure les coupes 13C, mettre extract_F2 = TRUE (nécessite un CNN adapté).
+#'
+decompose_2D_to_1D_training <- function(rr_norm,
+                                        peaks_2D,
+                                        n_points = 2048,
+                                        spectrum_type = c("TOCSY", "COSY", "HSQC", "UFCOSY"),
+                                        ppm_range_F1 = NULL,
+                                        ppm_range_F2 = NULL,
+                                        intensity_threshold = 0.2,
+                                        center_margin = 0.2,
+                                        ppm_tolerance_F1 = NULL,
+                                        ppm_tolerance_F2 = NULL,
+                                        extract_F1 = TRUE,
+                                        extract_F2 = TRUE) {
+  
+  
+  spectrum_type <- match.arg(spectrum_type)
+  
+  # Vérifications
+  if (!is.matrix(rr_norm)) stop("rr_norm doit etre une matrice")
+  if (!all(c("F1_ppm", "F2_ppm") %in% names(peaks_2D))) {
+    stop("peaks_2D doit contenir les colonnes F1_ppm et F2_ppm")
+  }
+  
+  # Axes du spectre 2D
+  F1_axis <- as.numeric(colnames(rr_norm))  # axe horizontal (colonnes) - 1H pour tous
+  F2_axis <- as.numeric(rownames(rr_norm))  # axe vertical (lignes) - 1H ou 13C selon type
+  
+  # Configuration selon le type de spectre
+  if (spectrum_type == "HSQC") {
+    cat("Mode HSQC detecte: F1 = 1H, F2 = 13C\n")
+    
+    # Plages par défaut pour HSQC
+    if (is.null(ppm_range_F1)) ppm_range_F1 <- c(14, 0)      # 1H
+    if (is.null(ppm_range_F2)) ppm_range_F2 <- c(200, 0)     # 13C
+    
+    # Tolérances adaptées
+    if (is.null(ppm_tolerance_F1)) ppm_tolerance_F1 <- 0.05  # 1H: tolérance fine
+    if (is.null(ppm_tolerance_F2)) ppm_tolerance_F2 <- 0.5   # 13C: tolérance plus large
+    
+    # Par défaut, n'extraire que les coupes 1H pour HSQC (CNN entraîné sur 1H)
+    if (missing(extract_F2)) {
+      extract_F2 <- FALSE
+      cat("Note: Coupes 13C (verticales) desactivees par defaut pour HSQC.\n")
+      cat("      Le CNN standard est entraine sur 1H uniquement.\n")
+      cat("      Utilisez extract_F2 = TRUE pour inclure les coupes 13C.\n")
+    }
+    
+  } else {
+    # TOCSY, COSY, UFCOSY: les deux axes sont en 1H
+    if (is.null(ppm_range_F1)) ppm_range_F1 <- c(14, 0)
+    if (is.null(ppm_range_F2)) ppm_range_F2 <- c(14, 0)
+    if (is.null(ppm_tolerance_F1)) ppm_tolerance_F1 <- 0.05
+    if (is.null(ppm_tolerance_F2)) ppm_tolerance_F2 <- 0.05
+  }
+  
+  # Axes ppm standardisés pour l'output
+  ppm_axis_out_F1 <- seq(ppm_range_F1[1], ppm_range_F1[2], length.out = n_points)
+  ppm_axis_out_F2 <- seq(ppm_range_F2[1], ppm_range_F2[2], length.out = n_points)
+  
+  # Ajouter colonne intensity si absente
+  if (!"intensity" %in% names(peaks_2D)) {
+    peaks_2D$intensity <- 1.0
+  }
+  if (!"fwhh" %in% names(peaks_2D)) {
+    peaks_2D$fwhh <- 0.01
+  }
+  
+  # Listes pour stocker les résultats
+  spectra_list <- list()
+  y_class_list <- list()
+  y_reg_list <- list()
+  metadata_list <- list()  # Pour savoir d'où vient chaque coupe
+  
+  spectrum_idx <- 1
+  n_rows_extracted <- 0
+  n_cols_extracted <- 0
+  
+  # ============================================================
+  # PARTIE 1 : Extraction des coupes HORIZONTALES (lignes, F2 fixe)
+  # On balaye F1 (1H pour tous les types de spectres)
+  # ============================================================
+  
+  if (extract_F1) {
+    cat("Extraction des coupes horizontales (lignes, axe F1)...\n")
+    pb <- txtProgressBar(min = 0, max = nrow(rr_norm), style = 3)
+    
+    for (i in seq_len(nrow(rr_norm))) {
+      F2_current <- F2_axis[i]
+      slice_1D <- rr_norm[i, ]
+      
+      # Pics sur cette ligne (F2 ~ F2_current)
+      peaks_on_slice <- peaks_2D %>%
+        filter(abs(F2_ppm - F2_current) <= ppm_tolerance_F2)
+      
+      # Interpoler sur grille standard F1 (1H)
+      spec_interp <- approx(F1_axis, slice_1D, xout = ppm_axis_out_F1, rule = 2)$y
+      
+      # Normaliser
+      if (max(abs(spec_interp), na.rm = TRUE) > 0) {
+        spec_interp <- spec_interp / max(abs(spec_interp), na.rm = TRUE)
+      }
+      
+      # Labels
+      y_class <- rep(0, n_points)
+      y_reg <- matrix(0, nrow = n_points, ncol = 3)
+      
+      if (nrow(peaks_on_slice) > 0) {
+        for (j in seq_len(nrow(peaks_on_slice))) {
+          peak_ppm <- peaks_on_slice$F1_ppm[j]
+          idx <- which.min(abs(ppm_axis_out_F1 - peak_ppm))
+          
+          if (idx >= 1 && idx <= n_points) {
+            intensity <- peaks_on_slice$intensity[j]
+            fwhh <- peaks_on_slice$fwhh[j]
+            
+            rel_pos <- idx / n_points
+            is_centered <- rel_pos >= (0.5 - center_margin) && rel_pos <= (0.5 + center_margin)
+            is_strong <- intensity >= intensity_threshold
+            
+            y_class[idx] <- if (is_centered && is_strong) 1 else 2
+            y_reg[idx, ] <- c(peak_ppm, intensity, fwhh)
+          }
+        }
+      }
+      
+      spectra_list[[spectrum_idx]] <- spec_interp
+      y_class_list[[spectrum_idx]] <- y_class
+      y_reg_list[[spectrum_idx]] <- y_reg
+      metadata_list[[spectrum_idx]] <- list(type = "row", index = i, fixed_ppm = F2_current, nucleus = "1H")
+      spectrum_idx <- spectrum_idx + 1
+      
+      setTxtProgressBar(pb, i)
+    }
+    close(pb)
+    
+    n_rows_extracted <- spectrum_idx - 1
+    cat(sprintf("%d coupes horizontales (1H) extraites\n", n_rows_extracted))
+  }
+  
+  # ============================================================
+  # PARTIE 2 : Extraction des coupes VERTICALES (colonnes, F1 fixe)
+  # On balaye F2 (1H pour TOCSY/COSY, 13C pour HSQC)
+  # ============================================================
+  
+  if (extract_F2) {
+    nucleus_F2 <- if (spectrum_type == "HSQC") "13C" else "1H"
+    cat(sprintf("Extraction des coupes verticales (colonnes, axe F2 = %s)...\n", nucleus_F2))
+    pb <- txtProgressBar(min = 0, max = ncol(rr_norm), style = 3)
+    
+    for (j in seq_len(ncol(rr_norm))) {
+      F1_current <- F1_axis[j]
+      slice_1D <- rr_norm[, j]
+      
+      # Pics sur cette colonne (F1 ~ F1_current)
+      peaks_on_slice <- peaks_2D %>%
+        filter(abs(F1_ppm - F1_current) <= ppm_tolerance_F1)
+      
+      # Interpoler sur grille standard F2 (1H ou 13C selon type)
+      spec_interp <- approx(F2_axis, slice_1D, xout = ppm_axis_out_F2, rule = 2)$y
+      
+      # Normaliser
+      if (max(abs(spec_interp), na.rm = TRUE) > 0) {
+        spec_interp <- spec_interp / max(abs(spec_interp), na.rm = TRUE)
+      }
+      
+      # Labels
+      y_class <- rep(0, n_points)
+      y_reg <- matrix(0, nrow = n_points, ncol = 3)
+      
+      if (nrow(peaks_on_slice) > 0) {
+        for (k in seq_len(nrow(peaks_on_slice))) {
+          peak_ppm <- peaks_on_slice$F2_ppm[k]
+          idx <- which.min(abs(ppm_axis_out_F2 - peak_ppm))
+          
+          if (idx >= 1 && idx <= n_points) {
+            intensity <- peaks_on_slice$intensity[k]
+            fwhh <- peaks_on_slice$fwhh[k]
+            
+            rel_pos <- idx / n_points
+            is_centered <- rel_pos >= (0.5 - center_margin) && rel_pos <= (0.5 + center_margin)
+            is_strong <- intensity >= intensity_threshold
+            
+            y_class[idx] <- if (is_centered && is_strong) 1 else 2
+            y_reg[idx, ] <- c(peak_ppm, intensity, fwhh)
+          }
+        }
+      }
+      
+      spectra_list[[spectrum_idx]] <- spec_interp
+      y_class_list[[spectrum_idx]] <- y_class
+      y_reg_list[[spectrum_idx]] <- y_reg
+      metadata_list[[spectrum_idx]] <- list(type = "col", index = j, fixed_ppm = F1_current, nucleus = nucleus_F2)
+      spectrum_idx <- spectrum_idx + 1
+      
+      setTxtProgressBar(pb, j)
+    }
+    close(pb)
+    
+    n_cols_extracted <- spectrum_idx - 1 - n_rows_extracted
+    cat(sprintf("%d coupes verticales (%s) extraites\n", n_cols_extracted, nucleus_F2))
+  }
+  
+  # ============================================================
+  # Conversion en arrays
+  # ============================================================
+  
+  n_total <- length(spectra_list)
+  
+  if (n_total == 0) {
+    warning("Aucune coupe extraite! Verifiez extract_F1 et extract_F2.")
+    return(NULL)
+  }
+  
+  X_array <- do.call(rbind, lapply(spectra_list, function(x) matrix(x, nrow = 1)))
+  y_class_array <- do.call(rbind, y_class_list)
+  y_reg_array <- array(unlist(y_reg_list), dim = c(n_total, n_points, 3))
+  
+  # Stats
+  n_peaks_total <- sum(y_class_array > 0)
+  n_peaks_strong <- sum(y_class_array == 1)
+  n_peaks_weak <- sum(y_class_array == 2)
+  
+  cat(sprintf("\nResume du dataset genere:\n"))
+  cat(sprintf("   - Type de spectre: %s\n", spectrum_type))
+  cat(sprintf("   - Total spectres 1D: %d\n", n_total))
+  cat(sprintf("   - Coupes horizontales (F1, 1H): %d\n", n_rows_extracted))
+  if (spectrum_type == "HSQC") {
+    cat(sprintf("   - Coupes verticales (F2, 13C): %d\n", n_cols_extracted))
+  } else {
+    cat(sprintf("   - Coupes verticales (F2, 1H): %d\n", n_cols_extracted))
+  }
+  cat(sprintf("   - Total pics labellises: %d\n", n_peaks_total))
+  cat(sprintf("   - Pics forts (classe 1): %d\n", n_peaks_strong))
+  cat(sprintf("   - Pics faibles (classe 2): %d\n", n_peaks_weak))
+  
+  return(list(
+    X = X_array,
+    y_class = y_class_array,
+    y_reg = y_reg_array,
+    metadata = list(
+      spectrum_type = spectrum_type,
+      n_rows = n_rows_extracted,
+      n_cols = n_cols_extracted,
+      source_dims = dim(rr_norm),
+      n_peaks_2D = nrow(peaks_2D),
+      ppm_range_F1 = ppm_range_F1,
+      ppm_range_F2 = ppm_range_F2,
+      slice_info = metadata_list
+    )
+  ))
+}
+
+
+#' Combine plusieurs spectres 2D en un seul dataset d'entraînement
+#'
+#' @param spectra_list Liste de matrices 2D
+#' @param peaks_list Liste de dataframes de pics (meme ordre que spectra_list)
+#' @param spectrum_type Type de spectre: "TOCSY", "COSY", "HSQC", "UFCOSY" (defaut: "TOCSY")
+#' @param ... Parametres passes a decompose_2D_to_1D_training
+#'
+#' @return Dataset combine au format CNN
+#'
+combine_multiple_2D_spectra <- function(spectra_list, peaks_list, 
+                                        spectrum_type = "TOCSY", ...) {
+  
+  if (length(spectra_list) != length(peaks_list)) {
+    stop("spectra_list et peaks_list doivent avoir la meme longueur")
+  }
+  
+  all_X <- list()
+  all_y_class <- list()
+  all_y_reg <- list()
+  
+  for (i in seq_along(spectra_list)) {
+    cat(sprintf("\nTraitement du spectre %d/%d (%s)...\n", i, length(spectra_list), spectrum_type))
+    
+    result <- decompose_2D_to_1D_training(
+      rr_norm = spectra_list[[i]],
+      peaks_2D = peaks_list[[i]],
+      spectrum_type = spectrum_type,
+      ...
+    )
+    
+    if (!is.null(result)) {
+      all_X[[length(all_X) + 1]] <- result$X
+      all_y_class[[length(all_y_class) + 1]] <- result$y_class
+      all_y_reg[[length(all_y_reg) + 1]] <- result$y_reg
+    }
+  }
+  
+  if (length(all_X) == 0) {
+    warning("Aucun spectre n'a pu etre traite!")
+    return(NULL)
+  }
+  
+  # Combiner
+  X_combined <- do.call(rbind, all_X)
+  y_class_combined <- do.call(rbind, all_y_class)
+  y_reg_combined <- do.call(function(...) abind::abind(..., along = 1), all_y_reg)
+  
+  cat(sprintf("\nDataset final combine: %d spectres 1D\n", nrow(X_combined)))
+  
+  return(list(
+    X = X_combined,
+    y_class = y_class_combined,
+    y_reg = y_reg_combined
+  ))
+}
+
+
+#' Fusionne un dataset de spectres 2D reels avec les spectres synthetiques
+#'
+#' @param real_data Dataset issu de decompose_2D_to_1D_training ou combine_multiple_2D_spectra
+#' @param synthetic_data Dataset issu de generate_spectrum_labels_full_mixed
+#' @param shuffle Melanger les donnees (defaut: TRUE)
+#' @param seed Graine aleatoire pour le melange
+#'
+#' @return Dataset fusionne
+#'
+merge_real_and_synthetic <- function(real_data, synthetic_data, shuffle = TRUE, seed = 42) {
+  
+  X_merged <- rbind(real_data$X, synthetic_data$X)
+  y_class_merged <- rbind(real_data$y_class, synthetic_data$y_class)
+  y_reg_merged <- abind::abind(real_data$y_reg, synthetic_data$y_reg, along = 1)
+  
+  n_total <- nrow(X_merged)
+  
+  if (shuffle) {
+    set.seed(seed)
+    idx_shuffle <- sample(n_total)
+    X_merged <- X_merged[idx_shuffle, ]
+    y_class_merged <- y_class_merged[idx_shuffle, ]
+    y_reg_merged <- y_reg_merged[idx_shuffle, , ]
+  }
+  
+  cat(sprintf("Dataset fusionne:\n"))
+  cat(sprintf("   - Spectres reels: %d\n", nrow(real_data$X)))
+  cat(sprintf("   - Spectres synthetiques: %d\n", nrow(synthetic_data$X)))
+  cat(sprintf("   - Total: %d\n", n_total))
+  
+  return(list(
+    X = X_merged,
+    y_class = y_class_merged,
+    y_reg = y_reg_merged
+  ))
+}
+
+
+#' Charge une liste de pics 2D depuis un fichier CSV
+#'
+#' @param file_path Chemin vers le fichier CSV
+#' @param col_F1 Nom de la colonne F1 (defaut: "F1_ppm")
+#' @param col_F2 Nom de la colonne F2 (defaut: "F2_ppm")
+#' @param col_intensity Nom de la colonne intensite (defaut: "intensity", optionnel)
+#'
+#' @return Dataframe formate pour decompose_2D_to_1D_training
+#'
+load_2D_peaks <- function(file_path,
+                          col_F1 = "F1_ppm",
+                          col_F2 = "F2_ppm",
+                          col_intensity = "intensity") {
+  
+  peaks <- read.csv(file_path)
+  
+  # Renommer les colonnes si necessaire
+  if (col_F1 != "F1_ppm" && col_F1 %in% names(peaks)) {
+    peaks <- peaks %>% rename(F1_ppm = !!sym(col_F1))
+  }
+  if (col_F2 != "F2_ppm" && col_F2 %in% names(peaks)) {
+    peaks <- peaks %>% rename(F2_ppm = !!sym(col_F2))
+  }
+  if (col_intensity != "intensity" && col_intensity %in% names(peaks)) {
+    peaks <- peaks %>% rename(intensity = !!sym(col_intensity))
+  }
+  
+  # Ajouter colonnes manquantes
+  if (!"intensity" %in% names(peaks)) peaks$intensity <- 1.0
+  if (!"fwhh" %in% names(peaks)) peaks$fwhh <- 0.01
+  
+  return(peaks)
+}
+
 #===============================TEST DU DATASET=============================================================
 
 plot_four_spectra <- function(X, y_class, indices = c(1, 2, 3, 4)) {
@@ -814,7 +1220,7 @@ plot_peaks_ppm_plotly_clean <- function(peaks,
 }
 
 p_filtered <- plot_peaks_ppm_plotly_clean(peaks_clean_filtered, rr_norm = rr_norm,
-                                           intensity_threshold = params$int_thres, ratio = 1)
+                                          intensity_threshold = params$int_thres, ratio = 1)
 p_filtered
 
 # ===================== EXTRACTION ALEATOIRE DE 4 SPECTRES 1D - PLOTS SEPARES ==================================
