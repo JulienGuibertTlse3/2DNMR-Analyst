@@ -1,10 +1,10 @@
 # 2D NMR Peak Picking and Analysis ----
-
-
-# This script defines two main functions:
-# 1. find_nmr_peak_centroids: Generates a contour plot from a 2D NMR matrix and extracts contour data.
-# 2. process_nmr_centroids: Applies clustering to the contour lines to define peak centroids and bounding boxes.
-# Additionally, it includes functions to estimate signal thresholds and local intensity.
+#
+# This script defines functions for visualizing 2D NMR spectra and extracting peak information:
+# 1. find_nmr_peak_centroids_optimized: Generates a contour plot from a 2D NMR matrix and extracts contour data.
+# 2. get_local_Volume: Computes local contour intensity around a given point.
+# 3. Threshold estimation functions: seuil_bruit_multiplicatif, seuil_max_pourcentage, modulate_threshold.
+# 4. make_bbox_outline: Creates polygon outlines for bounding box visualization.
 
 
 ## ---- Required libraries ----
@@ -15,6 +15,64 @@ library(dbscan)     # for DBSCAN clustering
 library(magrittr)   # for piping (%>%)
 
 
+#' Generate Optimized Contour Plot for 2D NMR Spectrum
+#'
+#' Creates a contour plot from a 2D NMR intensity matrix with performance optimizations
+#' including downsampling, early intensity filtering, and spectrum-type-specific defaults.
+#'
+#' @param rr_data Numeric matrix. 2D NMR intensity data with chemical shifts as row/column names.
+#' @param spectrum_type Character. Type of NMR experiment: "HSQC", "TOCSY", "COSY", or "UFCOSY".
+#'   If provided, default parameters will be loaded for that experiment type.
+#' @param contour_start Numeric. Starting intensity level for contour lines. Default depends on spectrum_type.
+#' @param intensity_threshold Numeric. Minimum intensity to include in the plot (filters noise).
+#' @param contour_num Integer. Number of contour levels to draw.
+#' @param contour_factor Numeric. Multiplicative factor between successive contour levels (geometric progression).
+#' @param zoom_xlim Numeric vector of length 2. X-axis limits (F2/ppm) for zooming.
+#' @param zoom_ylim Numeric vector of length 2. Y-axis limits (F1/ppm) for zooming.
+#' @param f2_exclude_range Numeric vector of length 2. F2 ppm range to exclude (e.g., water region).
+#' @param downsample_factor Integer. Factor for matrix downsampling (default 2). Higher values = faster but less detail.
+#'
+#' @return A list containing:
+#'   \itemize{
+#'     \item \code{plot} - A ggplot2 contour plot object
+#'     \item \code{contour_data} - Data frame with contour line coordinates extracted via ggplot_build()
+#'   }
+#'
+#' @details
+#' The function applies several optimizations for handling large NMR matrices:
+#' \enumerate{
+#'   \item Downsampling: Reduces matrix size by the specified factor
+#'   \item Early filtering: Only processes points above intensity_threshold
+#'   \item Direct data.table creation: Avoids memory-intensive expand.grid()
+#'   \item Contour level limiting: Caps TOCSY spectra at 20 levels maximum
+#' }
+#'
+#' Default parameters by spectrum type:
+#' \itemize{
+#'   \item HSQC: contour_start=8000, intensity_threshold=200, contour_num=8
+#'   \item TOCSY: contour_start=100000, intensity_threshold=4000, contour_num=40, excludes water (4.7-5.0 ppm)
+#'   \item COSY: contour_start=1000, intensity_threshold=20000, contour_num=60
+#'   \item UFCOSY: contour_start=1000, intensity_threshold=20000, contour_num=40
+#' }
+#'
+#' @examples
+#' \dontrun{
+#' # Load spectrum and generate contour plot
+#' result <- find_nmr_peak_centroids_optimized(
+#'   rr_data = spectrum$spectrumData,
+#'   spectrum_type = "TOCSY",
+#'   downsample_factor = 2
+#' )
+#'
+#' # Display the plot
+#' print(result$plot)
+#'
+#' # Access contour coordinates for further processing
+#' contours <- result$contour_data
+#' }
+#'
+#' @export
+
 find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL, 
                                               contour_start = NULL, intensity_threshold = NULL, 
                                               contour_num = NULL, contour_factor = NULL, 
@@ -22,10 +80,13 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
                                               f2_exclude_range = NULL,
                                               downsample_factor = 2) {  # New parameter
   
+  # --- Input validation ---
   if (is.null(rr_data) || !is.matrix(rr_data)) {
     stop("Invalid Bruker data. Ensure rr_data is a matrix with proper intensity values.")
   }
   
+  # --- Default parameters for each spectrum type ---
+  # These values are empirically determined for typical NMR experiments
   spectrum_defaults <- list(
     HSQC = list(contour_start = 8000, intensity_threshold = 200, contour_num = 8, contour_factor = 1.3),
     TOCSY = list(contour_start = 100000, intensity_threshold = 4000, contour_num = 40, contour_factor = 1.3, f2_exclude_range = c(4.7, 5.0)),
@@ -33,6 +94,7 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
     COSY = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3)
   )
   
+  # Load defaults if spectrum_type is specified, allowing individual parameter overrides
   if (!is.null(spectrum_type)) {
     if (!spectrum_type %in% names(spectrum_defaults)) {
       stop("Invalid spectrum_type. Choose from 'HSQC', 'TOCSY', 'COSY' or 'UFCOSY'.")
@@ -45,18 +107,20 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
   }
   
   # OPTIMIZATION 1: Downsampling the matrix for display
+  # Reduces memory usage and rendering time for large spectra
   if (downsample_factor > 1) {
     seq_x <- seq(1, nrow(rr_data), by = downsample_factor)
     seq_y <- seq(1, ncol(rr_data), by = downsample_factor)
     rr_data <- rr_data[seq_x, seq_y]
   }
   
+  # Extract chemical shift axes from matrix row/column names
   ppm_x <- as.numeric(rownames(rr_data))
   ppm_y <- as.numeric(colnames(rr_data))
   
   # OPTIMIZATION 2: Early filtering before expand.grid
-  
-  # Keep only indices where the intensity exceeds the threshold
+  # Only keep matrix indices where intensity exceeds threshold
+  # This dramatically reduces the data size for sparse spectra
   high_intensity_indices <- which(rr_data >= intensity_threshold, arr.ind = TRUE)
   
   if (nrow(high_intensity_indices) == 0) {
@@ -65,25 +129,31 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
   }
   
   # OPTIMIZATION 3: Direct creation of the data.frame without expand.grid
+  # Using data.table for memory efficiency with large datasets
   intensity_df <- data.table(
     ppm_x = ppm_x[high_intensity_indices[, 1]],
     ppm_y = ppm_y[high_intensity_indices[, 2]],
     intensity = rr_data[high_intensity_indices]
   )
   
-  # Exclusion of the water area (if specified)
+  # Exclusion of the water region (typically 4.7-5.0 ppm in F2)
+  # Water signal creates artifacts that interfere with peak detection
   if (!is.null(f2_exclude_range) && length(f2_exclude_range) == 2) {
     intensity_df <- intensity_df[!(ppm_y >= f2_exclude_range[1] & ppm_y <= f2_exclude_range[2])]
   }
   
   # OPTIMIZATION 4: Reduce the number of contour levels for TOCSY
+  # TOCSY spectra with too many contours can be slow to render
   if (!is.null(spectrum_type) && spectrum_type == "TOCSY" && contour_num > 20) {
     contour_num <- min(contour_num, 20)  # Limit to a maximum of 20 outlines
   }
   
+  # Calculate contour levels as geometric progression
+  # Each level is contour_factor times the previous one
   contour_levels <- contour_start * contour_factor^(0:(contour_num - 1))
   
-  # OPTIMIZATION 5: Use stat_contour with bins instead of breaks if possible
+  # OPTIMIZATION 5: Build the ggplot contour plot
+  # Axes are reversed to match NMR convention (high ppm on left/top)
   p <- ggplot(intensity_df, aes(x = ppm_y, y = ppm_x, z = intensity)) +
     geom_contour(color = "black", breaks = contour_levels, linewidth = 0.3) +  # linewidth reduced
     scale_x_reverse() +
@@ -94,17 +164,19 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
       panel.grid = element_blank()  # Remove the grid to speed up rendering
     )
   
-  # Zoom if specified (improves performance by reducing the displayed data)
+  # Apply zoom limits if specified (improves performance by reducing displayed data)
   if (!is.null(zoom_xlim)) p <- p + coord_cartesian(xlim = zoom_xlim)
   if (!is.null(zoom_ylim)) p <- p + coord_cartesian(ylim = zoom_ylim)
   
+  # Extract contour line coordinates from the built plot
+  # This data is used for subsequent peak detection and clustering
   contour_data <- ggplot_build(p)$data[[1]]
   
   return(list(plot = p, contour_data = contour_data))
 }
 
 
-# # ===== FONCTION BONUS: Visualiser les clusters rejetés
+# # ===== BONUS FUNCTION: Visualize rejected clusters
 # 
 # plot_rejected_clusters <- function(rr_data, process_result) {
 #   
@@ -146,19 +218,50 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
 # }
 
 
+#' Compute Local Contour Volume Around a Point
+#'
+#' Calculates the sum of contour levels within a small neighborhood around
+#' a specified chemical shift coordinate. Used to estimate local signal intensity.
+#'
+#' @param f2_ppm Numeric. F2 (direct dimension) chemical shift in ppm.
+#' @param f1_ppm Numeric. F1 (indirect dimension) chemical shift in ppm.
+#' @param contour_data Data frame. Contour data from ggplot_build(), must contain x, y, and level columns.
+#' @param eps_ppm Numeric. Half-width of the neighborhood in ppm (default 0.0068 ppm ≈ 4 Hz at 600 MHz).
+#'
+#' @return Numeric. Sum of contour levels within the neighborhood, or NA if no points found.
+#'
+#' @details
+#' This function defines a square neighborhood of size (2*eps_ppm) x (2*eps_ppm)
+#' centered on the specified coordinates and sums all contour level values within.
+#' Higher values indicate stronger signals at that position.
+#'
+#' @examples
+#' \dontrun
+#' # Get local volume at a specific peak position
+#' volume <- get_local_Volume(
+#'   f2_ppm = 3.45,
+#'   f1_ppm = 1.23,
+#'   contour_data = result$contour_data
+#' )
+#' }
+#'
+#' @export
 
-# Compute local contour intensity around a point (stain)
 get_local_Volume <- function(f2_ppm, f1_ppm, contour_data, eps_ppm = 0.0068) {
+  # Filter contour points within a square neighborhood centered on (f2_ppm, f1_ppm)
+  # The neighborhood size is 2*eps_ppm in each dimension
   local_points <- contour_data %>%
     filter(
       x >= f2_ppm - eps_ppm & x <= f2_ppm + eps_ppm,
       y >= f1_ppm - eps_ppm & y <= f1_ppm + eps_ppm
     )
   
+  # Return NA if no contour points found in the neighborhood
   if (nrow(local_points) == 0) {
     return(NA)
   }
   
+  # Sum all contour levels as a proxy for local signal volume/intensity
   return(sum(local_points$level, na.rm = TRUE))
 }
 
@@ -166,48 +269,140 @@ get_local_Volume <- function(f2_ppm, f1_ppm, contour_data, eps_ppm = 0.0068) {
 
 ## Noise threshold ----
 
-# Threshold based on standard deviation * factor (default = 3)
+#' Estimate Noise Threshold Using Standard Deviation
+#'
+#' Calculates a signal threshold based on the standard deviation of the intensity matrix,
+#' multiplied by a user-defined factor. Assumes noise follows a Gaussian distribution.
+#'
+#' @param mat Numeric matrix. 2D NMR intensity data.
+#' @param facteur Numeric. Multiplicative factor for the standard deviation (default 3).
+#'   A factor of 3 corresponds to ~99.7% confidence for Gaussian noise.
+#'
+#' @return Numeric. Estimated noise threshold.
+#'
+#' @examples
+#' \dontrun{
+#' threshold <- seuil_bruit_multiplicatif(spectrum_matrix, facteur = 3)
+#' }
+#'
+#' @export
+
 seuil_bruit_multiplicatif <- function(mat, facteur = 3) {
+  # Estimate noise level as the standard deviation of all intensity values
   bruit_estime <- sd(as.numeric(mat), na.rm = TRUE)
+  # Threshold = noise_estimate * factor (typically 3 for 3-sigma rule)
   seuil <- bruit_estime * facteur
   return(seuil)
 }
 
-# Threshold based on percentage of the max intensity (default = 5%)
+
+#' Estimate Threshold as Percentage of Maximum Intensity
+#'
+#' Calculates a signal threshold as a fixed percentage of the maximum intensity
+#' in the spectrum. Simple approach that adapts to the overall signal strength.
+#'
+#' @param mat Numeric matrix. 2D NMR intensity data.
+#' @param pourcentage Numeric. Fraction of maximum intensity (default 0.05 = 5%).
+#'
+#' @return Numeric. Estimated threshold value.
+#'
+#' @examples
+#' \dontrun{
+#' threshold <- seuil_max_pourcentage(spectrum_matrix, pourcentage = 0.05)
+#' }
+#'
+#' @export
+
 seuil_max_pourcentage <- function(mat, pourcentage = 0.05) {
+  # Find the maximum intensity value in the matrix
   max_val <- max(mat, na.rm = TRUE)
+  # Threshold = percentage of maximum
   seuil <- max_val * pourcentage
   return(seuil)
 }
 
-# Custom threshold modulation based on intensity (VI)
+
+#' Modulate Threshold Based on Volume Integral
+#'
+#' Applies a power-law modulation to adjust thresholds based on peak volume.
+#' Used for adaptive thresholding where larger peaks need different cutoffs.
+#'
+#' @param VI Numeric. Volume integral or intensity value.
+#'
+#' @return Numeric. Modulated threshold value.
+#'
+#' @details
+#' Uses the formula: threshold = a * VI^b, where a=0.0006 and b=1.2.
+#' These empirical constants were determined through testing on typical NMR spectra.
+#' The power-law relationship accounts for the non-linear relationship between
+#' peak intensity and appropriate threshold values.
+#'
+#' @examples
+#' \dontrun{
+#' modulated <- modulate_threshold(peak_volume)
+#' }
+#'
+#' @export
+
 modulate_threshold <- function(VI) {
+  # Empirical constants for power-law modulation
   a <- 0.0006
   b <- 1.2
+  # Power-law relationship: larger VI values get proportionally higher thresholds
   a * VI^b
 }
 
+
+#' Create Bounding Box Outlines for Plotting
+#'
+#' Converts a data frame of bounding boxes into a format suitable for
+#' plotting with geom_path() in ggplot2. Each box becomes a closed polygon.
+#'
+#' @param boxes Data frame. Must contain columns: xmin, xmax, ymin, ymax.
+#'   Optionally includes stain_id for identification.
+#'
+#' @return Data frame with columns x, y, group for use with geom_path().
+#'   Returns NULL if input is NULL or empty.
+#'
+#' @details
+#' Each bounding box is converted to 5 points (closed rectangle) with a unique
+#' group identifier. NA values are inserted between boxes to prevent connecting
+#' lines when plotting multiple boxes with a single geom_path() call.
+#'
+#' @examples
+#' \dontrun{
+#' # Create box outlines for plotting
+#' outlines <- make_bbox_outline(peak_boxes)
+#'
+#' # Add to existing plot
+#' p + geom_path(data = outlines, aes(x = x, y = y, group = group), color = "red")
+#' }
+#'
+#' @export
+
 make_bbox_outline <- function(boxes) {
+  # Handle NULL or empty input
   if (is.null(boxes) || nrow(boxes) == 0) return(NULL)
   
-  # Ensure that stain_id exists
+  # Ensure that stain_id exists for identification
   if (!"stain_id" %in% names(boxes)) {
     boxes$stain_id <- paste0("box_", seq_len(nrow(boxes)))
   }
   
-  # ✅ CORRECTION: Create outlines with UNIQUE group and NA between each box
+  # Create outlines with UNIQUE group and NA between each box
+  # NA values prevent geom_path from connecting separate boxes
   outline_list <- lapply(seq_len(nrow(boxes)), function(i) {
     box <- boxes[i, ]
     
-    # Create a closed rectangle for this box
+    # Create a closed rectangle (5 points: 4 corners + return to start)
     rect <- data.frame(
       x = c(box$xmin, box$xmax, box$xmax, box$xmin, box$xmin),
       y = c(box$ymin, box$ymin, box$ymax, box$ymax, box$ymin),
-      group = paste0("box_", i),  # ✅ Unique group per box
+      group = paste0("box_", i),  # Unique group per box
       stringsAsFactors = FALSE
     )
     
-    # ✅ Add a line with NA to separate the boxes
+    # Add a row with NA to separate boxes (prevents connecting lines)
     if (i < nrow(boxes)) {
       rect <- rbind(rect, data.frame(
         x = NA,
@@ -220,5 +415,6 @@ make_bbox_outline <- function(boxes) {
     rect
   })
   
+  # Combine all box outlines into a single data frame
   do.call(rbind, outline_list)
 }
