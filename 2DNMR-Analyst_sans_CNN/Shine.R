@@ -1,10 +1,10 @@
 # 2D NMR Spectra Analysis - Application Shiny -----
 
-# Auteur : Julien Guibert
+# Author: Julien Guibert
 
 # GitHub : https://github.com/JulienGuibertTlse3/2DNMR-Analyst
 
-# --- Chargement des packages ---
+# --- Package Loading ---
 
 library(shiny)
 
@@ -58,9 +58,9 @@ library(readr)
 
 
 
-# --- Chargement des fichiers sources (chemins relatifs) ---
+# --- Source Files Loading (relative paths) ---
 
-# Ces fichiers doivent être dans le sous-dossier Function_test/
+# These files must be in the Function/ subfolder
 
 
 
@@ -76,7 +76,7 @@ source("Function/Peak_fitting.R")
 
 
 
-# Fichier C++ (si disponible)
+# C++ file (if available)
 
 if (file.exists("Function_test/petit_test.cpp")) {
   
@@ -86,7 +86,7 @@ if (file.exists("Function_test/petit_test.cpp")) {
 
 
 
-# UI SIMPLIFIÉE ET INTUITIVE - ACCORDÉON ----
+# SIMPLIFIED AND INTUITIVE UI -----
 
 
 
@@ -94,19 +94,19 @@ ui <- fluidPage(
   
   
   
-  # Activer shinyjs
+  # Enable shinyjs
   
   useShinyjs(),
   
   
   
-  # CSS personnalisé
+  # Custom CSS
   
   tags$head(
     
     tags$style(HTML("
 
-      /* Style général */
+      /* General style */
 
       body, label, input, button, select, .form-control {
 
@@ -116,7 +116,7 @@ ui <- fluidPage(
 
       
 
-      /* Plot interactif pleine largeur */
+      /* Full-width interactive plot */
 
       #interactivePlot {
 
@@ -128,7 +128,7 @@ ui <- fluidPage(
 
       
 
-      /* Style de l'accordéon */
+      /* Accordion style */
 
       .panel-group {
 
@@ -218,7 +218,7 @@ ui <- fluidPage(
 
       
 
-      /* Couleurs par section */
+      /* Section colors */
 
       .panel-group .panel:nth-child(1) .panel-heading {
 
@@ -306,7 +306,7 @@ ui <- fluidPage(
 
       
 
-      /* Coordonnées cliquées */
+      /* Clicked coordinates */
 
       .click-coords {
 
@@ -326,7 +326,7 @@ ui <- fluidPage(
 
       
 
-      /* Tables plus compactes */
+      /* More compact tables */
 
       .dataTables_wrapper {
 
@@ -338,7 +338,7 @@ ui <- fluidPage(
 
       
 
-      /* Checkbox list scrollable */
+      /* Scrollable checkbox list */
 
       .spectra-list {
 
@@ -426,7 +426,7 @@ ui <- fluidPage(
 
       
 
-      /* Boutons compacts */
+      /* Compact buttons */
 
       .btn-xs {
 
@@ -508,7 +508,7 @@ ui <- fluidPage(
 
 
 
-/* Fix pour les boutons Peak Picking qui sont coupés */
+/* Fix for Peak Picking buttons being cut off */
 
 .panel-group .panel:nth-child(3) .panel-body {
 
@@ -518,7 +518,7 @@ ui <- fluidPage(
 
 
 
-/* Boutons Local Max et CNN plus compacts */
+/* More compact Local Max and CNN buttons */
 
 .btn-peak-picking {
 
@@ -532,7 +532,7 @@ ui <- fluidPage(
 
 
 
-/* Fix pour le Step input qui est coupé */
+/* Fix for Step input being cut off */
 
 #move_box_step {
 
@@ -542,7 +542,7 @@ ui <- fluidPage(
 
 
 
-/* Labels plus compacts */
+/* More compact labels */
 
 .form-group label {
 
@@ -554,7 +554,7 @@ ui <- fluidPage(
 
 
 
-/* NumericInput plus compact dans Edit box */
+/* More compact NumericInput in Edit box */
 
 .edit-box-inputs .form-group {
 
@@ -574,7 +574,7 @@ ui <- fluidPage(
 
 
 
-/* Step input compact */
+/* Compact step input */
 
 .step-input-compact .form-group {
 
@@ -658,7 +658,7 @@ ui <- fluidPage(
     
     
     
-    # JavaScript pour mise à jour synchrone des ticks lors du zoom
+    # JavaScript for synchronous tick update during zoom
     
     tags$script(HTML("
 
@@ -962,7 +962,7 @@ ui <- fluidPage(
                      
                      
                      
-                     # En-tête stylisé
+                     # Styled header
                      
                      div(
                        
@@ -976,7 +976,7 @@ ui <- fluidPage(
                      
                      
                      
-                     # Contenu avec style amélioré
+                     # Content with improved style
                      
                      div(
                        
@@ -1022,7 +1022,7 @@ ui <- fluidPage(
                    
                    
                    
-                   # ACCORDÉON - Une seule section ouverte
+                   # ACCORDION - Only one section open
                    
                    
                    
@@ -1294,7 +1294,7 @@ ui <- fluidPage(
                            
                            
                            
-                           # Coordonnées en 2 lignes compactes
+                           # Coordinates in 2 compact lines
                            
                            div(class = "edit-box-inputs",
                                
@@ -1318,7 +1318,7 @@ ui <- fluidPage(
                            
                            
                            
-                           # Step et Move buttons sur la même ligne
+                           # Step and Move buttons on the same line
                            
                            div(style = "display: flex; align-items: flex-end; gap: 10px; margin-top: 10px;",
                                
@@ -1458,7 +1458,7 @@ ui <- fluidPage(
                        
                        
                        
-                       # Méthode d'intégration avec groupes visuels
+                       # Integration method with visual groups
                        
                        h5(tags$b("Select method:")),
                        
@@ -1542,7 +1542,7 @@ ui <- fluidPage(
                        
                        
                        
-                       # Résultat de l'intégration
+                       # Integration result
                        
                        conditionalPanel(
                          
@@ -1795,7 +1795,7 @@ ui <- fluidPage(
                        
                        
                        
-                       # Peaks - première ligne
+                       # Peaks - first row
                        
                        div(style = "margin-bottom: 20px;",
                            
@@ -1813,7 +1813,7 @@ ui <- fluidPage(
                        
                        
                        
-                       # Boxes - deuxième ligne
+                       # Boxes - second row
                        
                        div(style = "margin-bottom: 20px;",
                            
@@ -1831,7 +1831,7 @@ ui <- fluidPage(
                        
                        
                        
-                       # Fusions - troisième ligne
+                       # Fusions - third row
                        
                        div(style = "margin-bottom: 20px;",
                            
@@ -1871,7 +1871,7 @@ ui <- fluidPage(
                        
                        
                        
-                       # Résumé global
+                       # Global summary
                        
                        fluidRow(
                          
@@ -1919,7 +1919,7 @@ ui <- fluidPage(
                        
                        
                        
-                       # Visualisation détaillée d'une box sélectionnée
+                       # Detailed visualization of a selected box
                        
                        fluidRow(
                          
@@ -2007,7 +2007,7 @@ server <- function(input, output, session) {
   
   
   
-  # SECTION 1: CONFIGURATION ET OPTIONS ----
+  # SECTION 1: CONFIGURATION AND OPTIONS ----
   
   
   
@@ -2025,7 +2025,7 @@ server <- function(input, output, session) {
   
   
   
-  # Opérateur null-coalesce
+  # Null-coalesce operator
   
   
   
@@ -2035,13 +2035,13 @@ server <- function(input, output, session) {
   
   
   
-  # SECTION 2: FONCTIONS UTILITAIRES ----
+  # SECTION 2: UTILITY FUNCTIONS ----
   
   
   
   
   
-  ## 2.1 Cache pour lecture Bruker ----
+  ## 2.1 Cache for Bruker reading ----
   
   spectrum_cache <- new.env(parent = emptyenv())
   
@@ -2067,7 +2067,7 @@ server <- function(input, output, session) {
   
   
   
-  ## 2.2 Calcul d'intensité des boxes (vectorisé avec option fitting) ----
+  ## 2.2 Box intensity calculation (vectorized with fitting option) ----
   
   get_box_intensity <- function(mat, ppm_x, ppm_y, boxes, method = "sum", model = "gaussian") {
     
@@ -2077,7 +2077,7 @@ server <- function(input, output, session) {
     
     if (method == "sum") {
       
-      # Méthode existante (rapide)
+      # Existing method (fast)
       
       xmin_v <- as.numeric(boxes$xmin)
       
@@ -2105,7 +2105,7 @@ server <- function(input, output, session) {
       
     } else {
       
-      # Méthode par fitting (plus lente mais plus précise)
+      # Fitting method (slower but more accurate)
       
       fit_results <- calculate_fitted_volumes(mat, ppm_x, ppm_y, boxes, model = model)
       
@@ -2139,7 +2139,7 @@ server <- function(input, output, session) {
   
   
   
-  ## 2.4 Nettoyage des centroids importés ----
+  ## 2.4 Imported centroids cleaning ----
   
   clean_centroids_df <- function(df) {
     
@@ -2155,7 +2155,7 @@ server <- function(input, output, session) {
   
   
   
-  ## 2.5 Calcul batch des intensités ----
+  ## 2.5 Batch intensity calculation ----
   
   calculate_batch_box_intensities <- function(reference_boxes, 
                                               
@@ -2163,31 +2163,31 @@ server <- function(input, output, session) {
                                               
                                               apply_shift = FALSE, 
                                               
-                                              method = "sum",      # NOUVEAU paramètre
+                                              method = "sum",      # NEW parameter
                                               
-                                              model = "gaussian",  # NOUVEAU paramètre
+                                              model = "gaussian",  # NEW parameter
                                               
                                               progress = NULL) {
     
     
     
-    # ========== VALIDATIONS ==========
+    # ========== VALIDATIONS
     
     if (is.null(reference_boxes) || nrow(reference_boxes) == 0) {
       
-      stop("reference_boxes est vide ou NULL")
+      stop("reference_boxes is empty or NULL")
       
     }
     
     
     
-    # Copie pour ne pas modifier l'original
+    # Copy to avoid modifying the original
     
     ref_boxes <- as.data.frame(reference_boxes)
     
     
     
-    # Vérifier les colonnes requises
+    # Check required columns
     
     required_cols <- c("xmin", "xmax", "ymin", "ymax")
     
@@ -2195,17 +2195,17 @@ server <- function(input, output, session) {
     
     if (length(missing_cols) > 0) {
       
-      stop(paste("Colonnes manquantes:", paste(missing_cols, collapse = ", ")))
+      stop(paste("Missing columns:", paste(missing_cols, collapse = ", ")))
       
     }
     
     
     
-    # ========== NETTOYAGE DES BOXES ==========
+    # ========== CLEANING BOXES
     
     
     
-    # Ajouter stain_id si manquant
+    # Add stain_id if missing
     
     if (!"stain_id" %in% names(ref_boxes)) {
       
@@ -2215,7 +2215,7 @@ server <- function(input, output, session) {
     
     
     
-    # Supprimer les lignes avec des coordonnées NA
+    # Remove rows with NA coordinates
     
     ref_boxes <- ref_boxes[
       
@@ -2235,7 +2235,7 @@ server <- function(input, output, session) {
     
     
     
-    # Corriger les boxes inversées (xmin > xmax ou ymin > ymax)
+    # Fix inverted boxes (xmin > xmax or ymin > ymax)
     
     for (i in seq_len(nrow(ref_boxes))) {
       
@@ -2263,17 +2263,17 @@ server <- function(input, output, session) {
     
     
     
-    # ========== GESTION DES DUPLICATS ==========
+    # ========== DUPLICATE MANAGEMENT
     
     
     
-    # Vérifier les duplicats de stain_id
+    # Check stain_id duplicates
     
     if (any(duplicated(ref_boxes$stain_id))) {
       
       warning("Duplicate stain_id detected - automatic renaming")
       
-      # Renommer les duplicats
+      # Rename duplicates
       
       dup_ids <- ref_boxes$stain_id[duplicated(ref_boxes$stain_id)]
       
@@ -2293,7 +2293,7 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier les boxes avec coordonnées identiques
+    # Check boxes with identical coordinates
     
     coord_signature <- paste(ref_boxes$xmin, ref_boxes$xmax, ref_boxes$ymin, ref_boxes$ymax, sep = "_")
     
@@ -2307,11 +2307,11 @@ server <- function(input, output, session) {
     
     
     
-    # ========== CALCUL DES CENTRES ==========
+    # ========== CALCULATION OF CENTERS
     
     
     
-    # Calculer F2_ppm et F1_ppm (centres des boxes)
+    # Calculate F2_ppm and F1_ppm (centers of the boxes)
     
     ref_boxes$F2_ppm <- (ref_boxes$xmin + ref_boxes$xmax) / 2
     
@@ -2319,11 +2319,11 @@ server <- function(input, output, session) {
     
     
     
-    # ========== CONSTRUCTION DU DATAFRAME RÉSULTAT ==========
+    # ========== BUILD RESULT DATAFRAME 
     
     
     
-    # Nombre de boxes final
+    # Final number of boxes
     
     n_boxes <- nrow(ref_boxes)
     
@@ -2331,7 +2331,7 @@ server <- function(input, output, session) {
     
     
     
-    # Créer le dataframe résultat avec les colonnes de base
+    # Create result dataframe with base columns
     
     result_df <- data.frame(
       
@@ -2355,7 +2355,7 @@ server <- function(input, output, session) {
     
     
     
-    # ========== CALCUL DES INTENSITÉS PAR SPECTRE ==========
+    # ========== CALCULATE INTENSITIES PER SPECTRUM
     
     
     
@@ -2387,7 +2387,7 @@ server <- function(input, output, session) {
       
       
       
-      # Vérifier que les ppm sont valides
+      # Check that ppm values are valid
       
       if (any(is.na(ppm_x)) || any(is.na(ppm_y))) {
         
@@ -2403,7 +2403,7 @@ server <- function(input, output, session) {
       
       
       
-      # Calcul du shift si demandé
+      # Calculate shift if requested
       
       shift_f2 <- 0
       
@@ -2425,7 +2425,7 @@ server <- function(input, output, session) {
           
           shift_f1 <- max_f1 - ref_boxes$F1_ppm[1]
           
-          # Limiter le shift à 0.5 ppm max
+          # Limit shift to 0.5 ppm max
           
           if (abs(shift_f2) > 0.5) shift_f2 <- 0
           
@@ -2439,7 +2439,7 @@ server <- function(input, output, session) {
       
       if (method == "sum") {
         
-        # Calculer les intensités pour chaque box
+        # Calculate intensities for each box
         
         intensities <- numeric(n_boxes)
         
@@ -2479,7 +2479,7 @@ server <- function(input, output, session) {
         
       } else {
         
-        # Méthode par fitting
+        # Fitting method
         
         fit_results <- calculate_fitted_volumes(
           
@@ -2495,17 +2495,7 @@ server <- function(input, output, session) {
         
         intensities <- fit_results$volume_fitted
         
-        
-        
-        # Note: On ne stocke plus R², CenterX, CenterY dans le batch export
-        
-        # pour garder un CSV compact et facile à comparer entre spectres
-        
-        # Ces infos sont disponibles dans l'onglet "Fit Quality" et via "Run Integration"
-        
       }
-      
-      
       
       col_name <- paste0("Intensity_", make.names(basename(spectrum_name)))
       
@@ -2515,11 +2505,11 @@ server <- function(input, output, session) {
     
     
     
-    # ========== VÉRIFICATION FINALE ==========
+    # ========== FINAL VERIFICATION
     
     
     
-    # Vérifier que le nombre de lignes est correct
+    # Check that row count is correct
     
     if (nrow(result_df) != n_boxes) {
       
@@ -2545,13 +2535,13 @@ server <- function(input, output, session) {
   
   
   
-  # SECTION 3: VALEURS RÉACTIVES ----
+  # SECTION 3: REACTIVE VALUES ----
   
   
   
   
   
-  ## 3.1 État général ----
+  ## 3.1 General state ----
   
   status_msg <- reactiveVal("")
   
@@ -2563,7 +2553,7 @@ server <- function(input, output, session) {
   
   
   
-  ## 3.2 Plots et cache ----
+  ## 3.2 Plots and cache ----
   
   plot_cache <- reactiveVal(list())
   
@@ -2647,7 +2637,7 @@ server <- function(input, output, session) {
   
   
   
-  ## 3.7 Autres ----
+  ## 3.7 Others ----
   
   calculated_contour_value <- reactiveVal(NULL)
   
@@ -2669,7 +2659,7 @@ server <- function(input, output, session) {
   
   ## 3.9 Integration method management ----
   
-  # Reactive pour obtenir la méthode d'intégration effective
+  # Reactive to get effective integration method
   
   effective_integration_method <- reactive({
     
@@ -2679,7 +2669,7 @@ server <- function(input, output, session) {
     
     
     
-    # Si une méthode de fit est sélectionnée, l'utiliser
+    # If a fit method is selected, use it
     
     if (!is.null(fit_method) && fit_method != "") {
       
@@ -2687,7 +2677,7 @@ server <- function(input, output, session) {
       
     }
     
-    # Sinon utiliser AUC (sum)
+    # Otherwise use AUC (sum)
     
     return("sum")
     
@@ -2695,7 +2685,7 @@ server <- function(input, output, session) {
   
   
   
-  # Observer: quand on sélectionne AUC, désélectionner Peak Fitting
+  # Observer: when AUC is selected, deselect Peak Fitting
   
   observeEvent(input$integration_method, {
     
@@ -2709,7 +2699,7 @@ server <- function(input, output, session) {
   
   
   
-  # Observer: quand on sélectionne Peak Fitting, désélectionner AUC
+  # Observer: when Peak Fitting is selected, deselect AUC
   
   observeEvent(input$integration_method_fit, {
     
@@ -2731,7 +2721,7 @@ server <- function(input, output, session) {
   
   
   
-  # Output pour conditionalPanel
+  # Output for conditionalPanel
   
   output$integration_done <- reactive({
     
@@ -2795,7 +2785,7 @@ server <- function(input, output, session) {
       
       if (method == "sum") {
         
-        # Méthode AUC simple
+        # Simple AUC method
         
         intensities <- sapply(seq_len(nrow(boxes)), function(i) {
           
@@ -2839,7 +2829,7 @@ server <- function(input, output, session) {
         
       } else {
         
-        # Méthode Peak Fitting
+        # Peak Fitting method
         
         fit_results <- calculate_fitted_volumes(
           
@@ -2881,7 +2871,7 @@ server <- function(input, output, session) {
         
         
         
-        # Stocker aussi pour l'onglet Fit Quality
+        # Also store for the Fit Quality tab
         
         fit_results_data(fit_results %>% select(stain_id, r_squared, center_x, center_y, fit_method, n_peaks, is_multiplet))
         
@@ -2997,7 +2987,7 @@ server <- function(input, output, session) {
       
       if (!is.null(results)) {
         
-        # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+        # Use write.csv2 for ";" separator (French Excel compatible)
         
         write.csv2(results, file, row.names = FALSE)
         
@@ -3011,7 +3001,7 @@ server <- function(input, output, session) {
   
   
   
-  # SECTION 4: PARAMÈTRES PAR TYPE DE SPECTRE ----
+  # SECTION 4: SPECTRUM TYPE PARAMETERS ----
   
   
   
@@ -3069,7 +3059,7 @@ server <- function(input, output, session) {
   
   
   
-  # SECTION 5: CHARGEMENT DES DONNÉES ----
+  # SECTION 5: DATA LOADING ----
   
   
   
@@ -3087,19 +3077,19 @@ server <- function(input, output, session) {
     
     
     
-    # Parser le chemin sélectionné
+    # Parse selected path
     
     dir_path <- tryCatch({
       
       
       
-      # Extraire les infos de la sélection
+      # Extract selection info
       
       selection <- input$directory
       
       
       
-      # Vérifier que la sélection est valide
+      # Check that selection is valid
       
       if (is.null(selection) || length(selection) == 0) {
         
@@ -3109,7 +3099,7 @@ server <- function(input, output, session) {
       
       
       
-      # Récupérer la racine sélectionnée
+      # Get selected root
       
       selected_root <- selection$root
       
@@ -3123,13 +3113,13 @@ server <- function(input, output, session) {
       
       
       
-      # Récupérer le chemin de base de la racine
+      # Get root base path
       
       base_path <- roots[[selected_root]]
       
       
       
-      # Récupérer le chemin relatif (liste de dossiers)
+      # Get relative path (folder list)
       
       path_parts <- selection$path
       
@@ -3137,13 +3127,13 @@ server <- function(input, output, session) {
       
       if (is.null(path_parts) || length(path_parts) == 0) {
         
-        # Seulement la racine sélectionnée
+        # Only selected root
         
         final_path <- base_path
         
       } else {
         
-        # Filtrer les parties vides
+        # Filter out empty sections
         
         path_parts <- unlist(path_parts)
         
@@ -3157,17 +3147,17 @@ server <- function(input, output, session) {
           
         } else {
           
-          # Construire le chemin complet
+          # Build the complete path
           
           if (selected_root == "Root") {
             
-            # Pour Root (/), construire le chemin absolu directement
+            # For Root (/), construct the absolute path directly
             
             final_path <- paste0("/", paste(path_parts, collapse = "/"))
             
           } else {
             
-            # Pour les autres racines, joindre avec le base_path
+            # For other roots, join with the base_path
             
             final_path <- file.path(base_path, paste(path_parts, collapse = "/"))
             
@@ -3179,13 +3169,13 @@ server <- function(input, output, session) {
       
       
       
-      # Normaliser le chemin
+      # Normalize the path
       
       norm_path <- normalizePath(final_path, mustWork = FALSE)
       
       
       
-      # Vérifier que le dossier existe
+      # Check that folder exists
       
       if (!dir.exists(norm_path)) {
         
@@ -3245,7 +3235,7 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier si un dossier principal est sélectionné
+    # Check if a main folder is selected
     
     if (is.null(input$directory) || length(input$directory) == 0) {
       
@@ -3283,13 +3273,13 @@ server <- function(input, output, session) {
     
     
     
-    # Créer des noms d'affichage courts
+    # Create short display names
     
     display_names <- basename(folders)
     
     
     
-    # Si plusieurs ont le même nom, ajouter le dossier parent
+    # If multiple have same name, add parent folder
     
     if (any(duplicated(display_names))) {
       
@@ -3331,7 +3321,7 @@ server <- function(input, output, session) {
       
       
       
-      # Liste scrollable avec checkboxes
+      # Scrollable list with checkboxes
       
       tags$div(
         
@@ -3345,7 +3335,7 @@ server <- function(input, output, session) {
           
           choices = setNames(folders, display_names),
           
-          selected = folders  # Tout sélectionné par défaut
+          selected = folders  # All selected by default
           
         )
         
@@ -3357,7 +3347,7 @@ server <- function(input, output, session) {
       
       
       
-      # Bouton de chargement
+      # Load button
       
       actionButton("load_selected_spectra", "📥 Load Selected", class = "btn-primary btn-block")
       
@@ -3491,7 +3481,7 @@ server <- function(input, output, session) {
     
     
     
-    # Si pas de spectres chargés, afficher un message
+    # If no spectra loaded, display a message
     
     if (is.null(spectra) || length(spectra) == 0) {
       
@@ -3511,7 +3501,7 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier que les noms sont valides
+    # Check that names are valid
     
     if (is.null(subfolder_names) || length(subfolder_names) == 0) {
       
@@ -3615,7 +3605,7 @@ server <- function(input, output, session) {
   
   
   
-  # SECTION 6: GÉNÉRATION DES PLOTS ----
+  # SECTION 6: PLOT GENERATION ----
   
   
   
@@ -3725,7 +3715,7 @@ server <- function(input, output, session) {
     
     
     
-    # Ajouter bounding boxes
+    # Add bounding boxes
     
     boxes <- tryCatch(bounding_boxes_data(), error = function(e) NULL)
     
@@ -3753,7 +3743,7 @@ server <- function(input, output, session) {
     
     
     
-    # Ajouter centroids
+    # Add centroids
     
     centrs <- imported_centroids() %||% centroids_data()
     
@@ -3829,7 +3819,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$generate_plot, {
     
-    # Vérifications initiales
+    # Initial checks
     
     spectra <- spectra_list()
     
@@ -3851,7 +3841,7 @@ server <- function(input, output, session) {
       
       showNotification("⚠️ Spectra have no names.", type = "warning")
       
-      # Créer des noms par défaut
+      # Create default names
       
       spectra_names <- paste0("spectrum_", seq_along(spectra))
       
@@ -3891,7 +3881,7 @@ server <- function(input, output, session) {
     
     start_time <- Sys.time()
     
-    all_results <- vector("list", n)  # Pré-allouer la liste avec la bonne taille
+    all_results <- vector("list", n)  # Pre-allocate list with correct size
     
     
     
@@ -3903,7 +3893,7 @@ server <- function(input, output, session) {
       
       
       
-      # Vérifier que les données sont valides
+      # Check that data is valid
       
       if (is.null(data) || is.null(data$spectrumData)) {
         
@@ -3969,7 +3959,7 @@ server <- function(input, output, session) {
     
     
     
-    # Extraire les plots (garder NULL pour les échecs)
+    # Extract plots (keep NULL for failures)
     
     all_plots <- lapply(all_results, function(res) {
       
@@ -3979,7 +3969,7 @@ server <- function(input, output, session) {
     
     
     
-    # Assigner les noms seulement si les longueurs correspondent
+    # Assign names only if the lengths match
     
     if (length(all_plots) == length(spectra_names)) {
       
@@ -3995,7 +3985,7 @@ server <- function(input, output, session) {
     
     
     
-    # Trouver le premier résultat valide
+    # Find first valid result
     
     first_valid_idx <- which(sapply(all_results, function(x) !is.null(x) && !is.null(x$plot)))[1]
     
@@ -4015,7 +4005,7 @@ server <- function(input, output, session) {
       
       
       
-      # Vérifier que le plot existe avant de l'utiliser
+      # Check that plot exists before using it
       
       if (!is.null(all_results[[first_valid_idx]]$plot)) {
         
@@ -4077,8 +4067,7 @@ server <- function(input, output, session) {
   
   # SECTION 7: PEAK PICKING ----
   
-  
-  
+
   ## 7.1 Peak picking (Max method) ----
   
   observeEvent(input$generate_centroids, {
@@ -4103,9 +4092,8 @@ server <- function(input, output, session) {
       
     }
     
-    
-    
-    # Message de progression - Étape 1
+   
+    # Progress message - Step 1
     
     status_msg("🔄 [1/4] Preparing data...")
     
@@ -4129,7 +4117,7 @@ server <- function(input, output, session) {
     
     if (input$disable_clustering) {
       
-      # Mode sans clustering
+      # without clustering
       
       status_msg("🔄 [2/4] Detecting local maxima (no clustering)...")
       
@@ -4177,7 +4165,7 @@ server <- function(input, output, session) {
       
       
       
-      # Vérifier que bounding_boxes existe et a les bonnes colonnes
+      # Check that bounding_boxes exists and has correct columns
       
       if (!is.null(result_peaks$bounding_boxes) && nrow(result_peaks$bounding_boxes) > 0) {
         
@@ -4211,7 +4199,7 @@ server <- function(input, output, session) {
       
     } else {
       
-      # Mode avec clustering
+      # With clustering
       
       status_msg("🔄 [2/4] Detecting peaks + DBSCAN clustering...")
       
@@ -4265,7 +4253,7 @@ server <- function(input, output, session) {
       
       
       
-      # Vérifier que bounding_boxes existe et a les bonnes colonnes
+      # Check that bounding_boxes exists and has correct columns
       
       if (!is.null(result1$bounding_boxes) && nrow(result1$bounding_boxes) > 0) {
         
@@ -4315,7 +4303,7 @@ server <- function(input, output, session) {
     
     
     
-    # Résumé final
+    # Final summary
     
     n_peaks <- nrow(centroids_data() %||% data.frame())
     
@@ -4361,7 +4349,7 @@ server <- function(input, output, session) {
   
   #   
   
-  #   # DEBUG: Vérifier les inputs
+  #   # DEBUG: Check inputs
   
   #   cat("=== DEBUG CNN ===\n")
   
@@ -4427,7 +4415,7 @@ server <- function(input, output, session) {
   
   #   if (!is.null(result_peaks$boxes) && nrow(result_peaks$boxes) > 0) {
   
-  #     # Créer les peaks (centroïdes) à partir des centres des bounding boxes
+  #     # Create peaks (centroids) from bounding box centers
   
   #     result_peaks$peaks <- result_peaks$boxes %>%
   
@@ -4443,13 +4431,13 @@ server <- function(input, output, session) {
   
   #     
   
-  #     # IMPORTANT: Assigner les centroïdes pour qu'ils s'affichent sur le plot
+  #     # IMPORTANT: Assign centroids so they display on the plot
   
   #     centroids_data(result_peaks$peaks)
   
   #     
   
-  #     # Préparer les bounding boxes
+  #     # Prepare bounding boxes
   
   #     result_peaks$boxes$stain_id <- seq_len(nrow(result_peaks$boxes))
   
@@ -4487,7 +4475,7 @@ server <- function(input, output, session) {
   
   #   
   
-  #   # Résumé final
+  #   # Final summary
   
   #   n_boxes <- nrow(result_peaks$boxes %||% data.frame())
   
@@ -4503,7 +4491,9 @@ server <- function(input, output, session) {
   
   
   
-  # SECTION 8: GESTION MANUELLE (CENTROIDS, BOXES, CLICS) ----
+  
+  
+  # SECTION 8: MANUAL MANAGEMENT (CENTROIDS, BOXES, CLICS) ----
   
   ## 8.1 Add manual centroid ----
   
@@ -4679,7 +4669,7 @@ server <- function(input, output, session) {
       
       
       
-      # Ajouter aux pending au lieu de supprimer directement
+      # Add to pending instead of deleting directly
       
       pending_boxes(dplyr::bind_rows(pending_boxes(), to_delete))
       
@@ -4699,13 +4689,13 @@ server <- function(input, output, session) {
   
   ## 8.4b Edit/Move box ----
   
-  # Variables pour stocker l'état de l'édition
+  # Variables to store edit state
   
   selected_box_for_edit <- reactiveVal(NULL)
   
   selected_box_index <- reactiveVal(NULL)
   
-  original_box_coords <- reactiveVal(NULL)  # Stocker les coordonnées originales
+  original_box_coords <- reactiveVal(NULL)  # Store coordinates originales
   
   box_has_been_modified <- reactiveVal(FALSE)  # Flag pour savoir si modification
   
@@ -4713,7 +4703,7 @@ server <- function(input, output, session) {
   
   
   
-  # Fonction pour mettre à jour la preview de la box
+  # Function to update box preview
   
   update_box_preview <- function() {
     
@@ -4723,7 +4713,7 @@ server <- function(input, output, session) {
     
     
     
-    # Marquer comme modifié si les coordonnées ont changé
+    # Mark as modified if coordinates changed
     
     original <- original_box_coords()
     
@@ -4745,7 +4735,7 @@ server <- function(input, output, session) {
     
     
     
-    # Coordonnées de preview (inversées pour le plot)
+    # Preview coordinates (inverted for plot)
     
     x0 <- -input$edit_box_xmin
     
@@ -4757,7 +4747,7 @@ server <- function(input, output, session) {
     
     
     
-    # S'assurer que x0 < x1 et y0 < y1
+    # Ensure that x0 < x1 and y0 < y1
     
     if (x0 > x1) { tmp <- x0; x0 <- x1; x1 <- tmp }
     
@@ -4765,7 +4755,7 @@ server <- function(input, output, session) {
     
     
     
-    # Mettre à jour la trace preview via plotlyProxy
+    # Update preview trace via plotlyProxy
     
     if (preview_trace_added()) {
       
@@ -4793,15 +4783,15 @@ server <- function(input, output, session) {
   
   
   
-  # Index de la trace preview dans le plot
+  # Trace preview index in the plot
   
   preview_trace_index <- reactiveVal(NULL)
   
   
   
-  # Quand une box est sélectionnée dans la table, charger ses valeurs
+  # When a box is selected in table, load its values
   
-  # Note: Si plusieurs boxes sont sélectionnées, on n'édite que la première
+  # Note: If multiple boxes selected, only first is edited
   
   observeEvent(input$bbox_table_rows_selected, {
     
@@ -4809,13 +4799,13 @@ server <- function(input, output, session) {
     
     
     
-    # Si plusieurs lignes sélectionnées, on prend seulement la première pour l'édition
+    # If multiple rows selected, take only first for editing
     
-    # (les suppressions multiples se font via le bouton "Delete Selected")
+    # (Multiple deletions are done via the "Delete Selected" button)
     
     if (length(selected) > 0 && !is.null(selected)) {
       
-      # Prendre uniquement la première sélection pour l'édition
+      # Take only first selection for editing
       
       first_selected <- selected[1]
       
@@ -4835,7 +4825,7 @@ server <- function(input, output, session) {
         
         
         
-        # Stocker les coordonnées originales
+        # Store coordinates originales
         
         original_box_coords(list(
           
@@ -4851,7 +4841,7 @@ server <- function(input, output, session) {
         
         
         
-        # Mettre à jour les inputs d'édition
+        # Update edit inputs
         
         updateNumericInput(session, "edit_box_xmin", value = round(box$xmin, 4))
         
@@ -4863,7 +4853,7 @@ server <- function(input, output, session) {
         
         
         
-        # Coordonnées pour la preview (en vert pour différencier)
+        # Preview coordinates (in green to differentiate)
         
         x0 <- -box$xmin
         
@@ -4879,7 +4869,7 @@ server <- function(input, output, session) {
         
         
         
-        # Ajouter la trace preview sur le plot EXISTANT
+        # Add the preview trace to the EXISTING plot
         
         plotlyProxy("interactivePlot", session) %>%
           
@@ -4917,23 +4907,23 @@ server <- function(input, output, session) {
         
         
         
-        # Calculer l'index de la trace (dernière trace ajoutée)
+        # Calculate trace index (last added trace)
         
-        # On stocke qu'on a ajouté une trace, on utilisera -1 pour la supprimer
+        # Store that we added a trace, will use -1 to remove it
         
       }
       
     } else {
       
-      # Désélection - supprimer la preview SANS modifier le plot de base
+      # Deselection - remove preview WITHOUT modifying base plot
       
       if (isTRUE(preview_trace_added())) {
         
-        # Utiliser un délai pour s'assurer que la suppression s'exécute
+        # Use delay to ensure deletion executes
         
         plotlyProxy("interactivePlot", session) %>%
           
-          plotlyProxyInvoke("deleteTraces", -1L)  # -1L pour supprimer la dernière trace
+          plotlyProxyInvoke("deleteTraces", -1L)  # -1L to remove last trace
         
         preview_trace_added(FALSE)
         
@@ -4941,7 +4931,7 @@ server <- function(input, output, session) {
       
       
       
-      # Reset les variables d'état
+      # Reset state variables
       
       selected_box_for_edit(NULL)
       
@@ -4957,7 +4947,7 @@ server <- function(input, output, session) {
   
   
   
-  # Ajouter la modification aux pending
+  # Add the change to pending
   
   observeEvent(input$apply_box_edit, {
     
@@ -4973,7 +4963,7 @@ server <- function(input, output, session) {
     
     
     
-    # Récupérer les nouvelles coordonnées
+    # Get new coordinates
     
     new_xmin <- input$edit_box_xmin
     
@@ -4985,7 +4975,7 @@ server <- function(input, output, session) {
     
     
     
-    # Validation des coordonnées
+    # Coordinate validation
     
     coords_valid <- TRUE
     
@@ -4993,7 +4983,7 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier que les valeurs ne sont pas NA
+    # Check that values are not NA
     
     if (is.na(new_xmin) || is.na(new_xmax) || is.na(new_ymin) || is.na(new_ymax)) {
       
@@ -5003,7 +4993,7 @@ server <- function(input, output, session) {
       
     }
     
-    # Vérifier que les valeurs ne sont pas toutes à 0
+    # Check that values are not all 0
     
     else if (new_xmin == 0 && new_xmax == 0 && new_ymin == 0 && new_ymax == 0) {
       
@@ -5013,7 +5003,7 @@ server <- function(input, output, session) {
       
     }
     
-    # Vérifier que xmin < xmax
+    # Check that xmin < xmax
     
     else if (new_xmin >= new_xmax) {
       
@@ -5023,7 +5013,7 @@ server <- function(input, output, session) {
       
     }
     
-    # Vérifier que ymin < ymax
+    # Check that ymin < ymax
     
     else if (new_ymin >= new_ymax) {
       
@@ -5033,7 +5023,7 @@ server <- function(input, output, session) {
       
     }
     
-    # Vérifier que la box a une taille minimale raisonnable
+    # Check that box has reasonable minimum size
     
     else if ((new_xmax - new_xmin) < 0.001 || (new_ymax - new_ymin) < 0.001) {
       
@@ -5055,13 +5045,13 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier si des modifications ont été faites
+    # Check if modifications were made
     
     if (!box_has_been_modified()) {
       
       showNotification("ℹ️ No changes to apply", type = "message")
       
-      # Supprimer la preview
+      # Delete preview
       
       if (preview_trace_added()) {
         
@@ -5087,7 +5077,7 @@ server <- function(input, output, session) {
     
     
     
-    # Créer l'entrée pour la modification
+    # Create entry for modification
     
     edited_box <- data.frame(
       
@@ -5113,13 +5103,13 @@ server <- function(input, output, session) {
     
     
     
-    # Ajouter aux pending
+    # Add to pending
     
     pending_boxes(dplyr::bind_rows(pending_boxes(), edited_box))
     
     
     
-    # Supprimer la preview
+    # Delete preview
     
     if (isTRUE(preview_trace_added())) {
       
@@ -5151,7 +5141,7 @@ server <- function(input, output, session) {
   
   
   
-  # Bouton pour annuler l'édition en cours (sans appliquer)
+  # Button to cancel current edit (without applying)
   
   observeEvent(input$cancel_box_edit, {
     
@@ -5183,7 +5173,7 @@ server <- function(input, output, session) {
   
   
   
-  # Déplacer la box (shift par delta) avec preview
+  # Move box (shift by delta) with preview
   
   observeEvent(input$move_box_up, {
     
@@ -5249,7 +5239,7 @@ server <- function(input, output, session) {
   
   
   
-  # Observer les changements des inputs pour mettre à jour la preview
+  # Observe input changes to update preview
   
   observeEvent(c(input$edit_box_xmin, input$edit_box_xmax, input$edit_box_ymin, input$edit_box_ymax), {
     
@@ -5259,7 +5249,7 @@ server <- function(input, output, session) {
     
     
     
-    # Coordonnées de preview
+    # Preview coordinates
     
     x0 <- -input$edit_box_xmin
     
@@ -5275,7 +5265,7 @@ server <- function(input, output, session) {
     
     
     
-    # Supprimer et recréer la trace preview
+    # Remove and recreate preview trace
     
     plotlyProxy("interactivePlot", session) %>%
       
@@ -5311,7 +5301,7 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier si modifié par rapport à l'original
+    # Check if modified from original
     
     original <- original_box_coords()
     
@@ -5377,7 +5367,7 @@ server <- function(input, output, session) {
   
   
   
-  # Output pour afficher quelle box est sélectionnée
+  # Output to display which box is selected
   
   output$selected_box_info <- renderText({
     
@@ -5491,7 +5481,7 @@ server <- function(input, output, session) {
         
         
         
-        # Ajouter les colonnes manquantes à new_box pour matcher boxes
+        # Add missing columns to new_box to match boxes
         
         missing_box_cols <- setdiff(names(boxes), names(new_box))
         
@@ -5529,7 +5519,7 @@ server <- function(input, output, session) {
     
     
     
-    # Stocker les coordonnées
+    # Store coordinates
     
     if (!is.null(click_data) && !is.null(click_data$x) && !is.null(click_data$y) && 
         
@@ -5541,7 +5531,7 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier les coordonnées
+    # Check coordinates
     
     if (is.null(click_data$x) || is.null(click_data$y)) return()
     
@@ -5559,7 +5549,7 @@ server <- function(input, output, session) {
     
     
     
-    # Mode DELETE: supprimer la box sous le clic
+    # DELETE mode: delete the box under the click
     
     if (!is.null(click_mode) && click_mode == "delete_click") {
       
@@ -5577,7 +5567,7 @@ server <- function(input, output, session) {
       
       
       
-      # Trouver la box qui contient le point cliqué
+      # Find box containing clicked point
       
       clicked_box_idx <- which(
         
@@ -5599,11 +5589,11 @@ server <- function(input, output, session) {
       
       
       
-      # Si plusieurs boxes se chevauchent, prendre la première (ou la plus petite)
+      # If multiple boxes overlap, take first (or smallest)
       
       if (length(clicked_box_idx) > 1) {
         
-        # Prendre la plus petite box (la plus spécifique)
+        # Take smallest box (most specific)
         
         box_areas <- (boxes$xmax[clicked_box_idx] - boxes$xmin[clicked_box_idx]) * 
           
@@ -5615,7 +5605,7 @@ server <- function(input, output, session) {
       
       
       
-      # Marquer la box pour suppression (via pending)
+      # Mark the box for deletion (via pending)
       
       box_to_delete <- boxes[clicked_box_idx, , drop = FALSE]
       
@@ -5641,7 +5631,7 @@ server <- function(input, output, session) {
     
     
     
-    # Mode TWO_CLICKS: créer une box avec deux clics
+    # TWO_CLICKS mode: create box with two clicks
     
     if (!is.null(click_mode) && click_mode == "two_clicks") {
       
@@ -5651,7 +5641,7 @@ server <- function(input, output, session) {
       
       if (is.null(first_click)) {
         
-        # Premier clic
+        # First clic
         
         first_click_for_box(list(f2 = f2_ppm, f1 = f1_ppm))
         
@@ -5659,7 +5649,7 @@ server <- function(input, output, session) {
         
       } else {
         
-        # Deuxième clic - créer la boîte
+        # Second click - create the box
         
         new_box <- data.frame(
           
@@ -5725,7 +5715,7 @@ server <- function(input, output, session) {
     
     
     
-    # Traiter les pending centroids avec gestion du statut delete
+    # Handle pending centroids with delete status management
     
     if (!is.null(pending_cents) && nrow(pending_cents) > 0) {
       
@@ -5733,11 +5723,11 @@ server <- function(input, output, session) {
       
       
       
-      # Vérifier si la colonne status existe
+      # Check if status column exists
       
       if ("status" %in% names(pending_cents)) {
         
-        # Séparer les ajouts et les suppressions
+        # Separate additions and deletions
         
         cents_to_add <- pending_cents[is.na(pending_cents$status) | pending_cents$status != "delete", , drop = FALSE]
         
@@ -5745,11 +5735,11 @@ server <- function(input, output, session) {
         
         
         
-        # 1. Supprimer les centroids marqués pour suppression
+        # 1. Remove centroids marked for deletion
         
         if (nrow(cents_to_delete) > 0 && nrow(current_centroids) > 0) {
           
-          # Supprimer par stain_id si disponible, sinon par coordonnées
+          # Remove by stain_id if available, else by coordinates
           
           if ("stain_id" %in% names(cents_to_delete) && "stain_id" %in% names(current_centroids)) {
             
@@ -5763,11 +5753,11 @@ server <- function(input, output, session) {
         
         
         
-        # 2. Ajouter les nouveaux centroids
-        
+        # 2. Add the new centroids
+
         if (nrow(cents_to_add) > 0) {
           
-          # Retirer la colonne status avant d'ajouter
+          # Remove the status column before adding
           
           cents_to_add$status <- NULL
           
@@ -5777,7 +5767,7 @@ server <- function(input, output, session) {
         
       } else {
         
-        # Pas de colonne status, tout ajouter
+        # No status column, add everything
         
         current_centroids <- dplyr::bind_rows(current_centroids, pending_cents)
         
@@ -5817,7 +5807,7 @@ server <- function(input, output, session) {
       
       
       
-      # S'assurer que la colonne status existe
+      # Ensure that the status column exists
       
       if (!"status" %in% names(pending_bxs)) {
         
@@ -5827,13 +5817,13 @@ server <- function(input, output, session) {
       
       
       
-      # Remplacer NA par "add" dans status
+      # Replace NA with "add" in status
       
       pending_bxs$status[is.na(pending_bxs$status)] <- "add"
       
       
       
-      # Séparer les différents types d'opérations
+      # Separate different operation types
       
       boxes_to_add <- pending_bxs[pending_bxs$status == "add", , drop = FALSE]
       
@@ -5851,7 +5841,7 @@ server <- function(input, output, session) {
       
       
       
-      # Initialiser current_boxes si NULL
+      # Initialize current_boxes if NULL
       
       if (is.null(current_boxes)) {
         
@@ -5871,7 +5861,7 @@ server <- function(input, output, session) {
       
       
       
-      # 1. Traiter les suppressions
+      # 1. Processing deletions
       
       if (nrow(boxes_to_delete) > 0 && nrow(current_boxes) > 0) {
         
@@ -5887,7 +5877,7 @@ server <- function(input, output, session) {
       
       
       
-      # 2. Traiter les éditions (modifier les boxes existantes)
+      # 2. Process edits (modify existing boxes)
       
       if (nrow(boxes_to_edit) > 0 && nrow(current_boxes) > 0) {
         
@@ -5911,7 +5901,7 @@ server <- function(input, output, session) {
           
           
           
-          # Trouver l'index de la box originale
+          # Find the index of the original box
           
           box_idx <- which(current_boxes$stain_id == original_id)
           
@@ -5921,7 +5911,7 @@ server <- function(input, output, session) {
             
             message("Found at index: ", box_idx)
             
-            # Mettre à jour les coordonnées
+            # Update coordinates
             
             current_boxes[box_idx, "xmin"] <- edit_row$xmin
             
@@ -5933,7 +5923,7 @@ server <- function(input, output, session) {
             
             
             
-            # Recalculer l'intensité
+            # Recalculate intensity
             
             mat <- bruker_data()$spectrumData
             
@@ -5965,7 +5955,7 @@ server <- function(input, output, session) {
       
       
       
-      # 3. Traiter les ajouts
+      # 3. Process the additions
       
       if (nrow(boxes_to_add) > 0) {
         
@@ -5981,7 +5971,7 @@ server <- function(input, output, session) {
         
         
         
-        # Calculer les intensités
+        # Calculate intensities
         
         mat <- bruker_data()$spectrumData
         
@@ -5997,7 +5987,7 @@ server <- function(input, output, session) {
         
         
         
-        # Nettoyer les colonnes de status avant merge
+        # Clean the status columns before merging
         
         cols_to_remove <- c("status", "original_stain_id")
         
@@ -6005,7 +5995,7 @@ server <- function(input, output, session) {
         
         
         
-        # Ajouter les colonnes manquantes
+        # Add the missing columns
         
         all_cols <- unique(c(names(current_boxes), names(boxes_to_add)))
         
@@ -6019,7 +6009,7 @@ server <- function(input, output, session) {
         
         
         
-        # S'assurer que les colonnes sont dans le même ordre
+        # Ensure columns are in same order
         
         boxes_to_add <- boxes_to_add[, names(current_boxes), drop = FALSE]
         
@@ -6033,7 +6023,7 @@ server <- function(input, output, session) {
       
       
       
-      # Nettoyer les colonnes de status dans current_boxes
+      # Clean up the status columns in current_boxes
       
       cols_to_clean <- c("status", "original_stain_id")
       
@@ -6055,7 +6045,7 @@ server <- function(input, output, session) {
       
       
       
-      # Mettre à jour toutes les variables réactives
+      # Update all reactive variables
       
       modifiable_boxes(current_boxes)
       
@@ -6121,7 +6111,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$reset_all, {
     
-    # Reset des plots
+    # Reset plots
     
     nmr_plot(NULL)
     
@@ -6129,7 +6119,7 @@ server <- function(input, output, session) {
     
     
     
-    # Reset des centroids/peaks
+    # Reset centroids/peaks
     
     imported_centroids(NULL)
     
@@ -6139,7 +6129,7 @@ server <- function(input, output, session) {
     
     
     
-    # Reset des boxes - TOUTES les variables liées aux boxes
+    # Reset boxes - ALL box-related variables
     
     fixed_boxes(data.frame(xmin = numeric(), xmax = numeric(), 
                            
@@ -6151,7 +6141,7 @@ server <- function(input, output, session) {
     
     
     
-    # Reset des pending changes
+    # Reset pending changes
     
     pending_centroids(data.frame(
       
@@ -6183,7 +6173,7 @@ server <- function(input, output, session) {
     
     
     
-    # Reset des clics et sélections
+    # Reset clicks and selections
     
     first_click_for_box(NULL)
     
@@ -6199,7 +6189,7 @@ server <- function(input, output, session) {
     
     
     
-    # Reset des résultats de fit
+    # Reset fit results
     
     fit_results_data(NULL)
     
@@ -6207,7 +6197,7 @@ server <- function(input, output, session) {
     
     
     
-    # Reset du cache
+    # Reset cache
     
     plot_cache(list())
     
@@ -6217,13 +6207,13 @@ server <- function(input, output, session) {
     
     
     
-    # Reset de l'UI
+    # Reset UI
     
     updateSelectInput(session, "selected_subfolder", selected = "")
     
     
     
-    # Supprimer la preview si présente
+    # Remove preview if present
     
     if (isTRUE(preview_trace_added())) {
       
@@ -6273,7 +6263,7 @@ server <- function(input, output, session) {
     
     
     
-    # Marquer les lignes sélectionnées pour suppression (via pending)
+    # Mark selected rows for deletion (via pending)
     
     n_to_delete <- length(selected_rows)
     
@@ -6283,7 +6273,7 @@ server <- function(input, output, session) {
     
     
     
-    # Ajouter aux pending
+    # Add to pending
     
     pending_centroids(dplyr::bind_rows(pending_centroids(), to_delete))
     
@@ -6319,7 +6309,7 @@ server <- function(input, output, session) {
     
     
     
-    # Marquer les lignes sélectionnées pour suppression (via pending)
+    # Mark selected rows for deletion (via pending)
     
     n_to_delete <- length(selected_rows)
     
@@ -6329,7 +6319,7 @@ server <- function(input, output, session) {
     
     
     
-    # Ajouter aux pending
+    # Add to pending
     
     pending_boxes(dplyr::bind_rows(pending_boxes(), to_delete))
     
@@ -6369,13 +6359,13 @@ server <- function(input, output, session) {
     
     
     
-    # Récupérer les peaks qu'on va retirer de pending
+    # Get peaks to remove from pending
     
     peaks_to_discard <- df[selected_rows, , drop = FALSE]
     
     
     
-    # Retirer de pending
+    # Delete from pending
     
     df_remaining <- df[-selected_rows, , drop = FALSE]
     
@@ -6383,7 +6373,7 @@ server <- function(input, output, session) {
     
     
     
-    # Message informatif selon le type
+    # Informative message according to type
     
     if ("status" %in% names(peaks_to_discard)) {
       
@@ -6441,23 +6431,21 @@ server <- function(input, output, session) {
     
     
     
-    # Récupérer les boxes qu'on va retirer de pending
+    # Get boxes to remove from pending
     
     boxes_to_discard <- df[selected_rows, , drop = FALSE]
     
     
+    # For boxes with status "delete" that are removed from pending,
     
-    # Pour les boxes avec status "delete" qui sont retirées de pending,
+    # they remain in Data (this is the intended behavior: cancel the deletion)
     
-    # elles restent dans Data (c'est le comportement voulu : annuler la suppression)
+    # For boxes with status "add", they simply disappear
     
-    # Pour les boxes avec status "add", elles disparaissent simplement
-    
-    # Pour les boxes avec status "edit", on annule l'édition
-    
+    # For boxes with status "edit", cancel the edit
     
     
-    # Retirer de pending
+    # Delete from pending
     
     df_remaining <- df[-selected_rows, , drop = FALSE]
     
@@ -6465,7 +6453,7 @@ server <- function(input, output, session) {
     
     
     
-    # Nettoyer la preview trace si présente
+    # Clean preview trace if present
     
     if (isTRUE(preview_trace_added())) {
       
@@ -6483,7 +6471,7 @@ server <- function(input, output, session) {
     
     
     
-    # Reset la sélection d'édition
+    # Reset edit selection
     
     selected_box_for_edit(NULL)
     
@@ -6495,7 +6483,7 @@ server <- function(input, output, session) {
     
     
     
-    # Message informatif selon le type
+    # Informative message according to type
     
     if ("status" %in% names(boxes_to_discard)) {
       
@@ -6570,11 +6558,7 @@ server <- function(input, output, session) {
   # SECTION 9: IMPORT/EXPORT ----
   
   
-  
-  
-  
   ## 9.0 Save/Load Session ----
-  
   
   
   ### Save session ----
@@ -6589,11 +6573,11 @@ server <- function(input, output, session) {
     
     content = function(file) {
       
-      # Collecter toutes les données de la session
+      # Collect all session data
       
       session_data <- list(
         
-        # Version pour compatibilité future
+        # Version for future compatibility
         
         version = "1.0",
         
@@ -6601,7 +6585,7 @@ server <- function(input, output, session) {
         
         
         
-        # Données principales
+        # Main data
         
         centroids = centroids_data(),
         
@@ -6621,7 +6605,7 @@ server <- function(input, output, session) {
         
         
         
-        # Résultats de fit
+        # Fit results
         
         fit_results = fit_results_data(),
         
@@ -6629,7 +6613,7 @@ server <- function(input, output, session) {
         
         
         
-        # Paramètres UI
+        # UI parameters
         
         params = list(
           
@@ -6657,7 +6641,7 @@ server <- function(input, output, session) {
         
         
         
-        # Chemin du dossier (pour référence)
+        # Folder path (for reference)
         
         data_path = if (!is.null(input$directory)) {
           
@@ -6668,14 +6652,11 @@ server <- function(input, output, session) {
         } else NULL
         
       )
+
       
-      
-      
-      # Sauvegarder en RDS
+      # Save as RDS
       
       saveRDS(session_data, file)
-      
-      
       
       showNotification("💾 Session saved successfully!", type = "message")
       
@@ -6695,23 +6676,21 @@ server <- function(input, output, session) {
     
     tryCatch({
       
-      # Charger le fichier RDS
+      # Load RDS
       
       session_data <- readRDS(input$load_session_file$datapath)
       
       
       
-      # Vérifier la version
+      # Check version
       
       if (is.null(session_data$version)) {
         
         showNotification("⚠️ Old session format, some data may not load correctly", type = "warning")
         
       }
-      
-      
-      
-      # Vider les caches pour forcer le recalcul
+
+      # Clear the caches to force a recalculation
       
       plot_cache(list())
       
@@ -6721,7 +6700,7 @@ server <- function(input, output, session) {
       
       
       
-      # Restaurer les données principales
+      # Restore main data
       
       if (!is.null(session_data$centroids) && nrow(session_data$centroids) > 0) {
         
@@ -6735,7 +6714,7 @@ server <- function(input, output, session) {
         
         modifiable_boxes(session_data$boxes)
         
-        # Aussi mettre à jour fixed_boxes pour la cohérence
+        # Also update fixed_boxes for consistency
         
         fixed_boxes(session_data$boxes)
         
@@ -6751,7 +6730,7 @@ server <- function(input, output, session) {
       
       
       
-      # Restaurer les pending changes
+      # Restore pending changes
       
       if (!is.null(session_data$pending_centroids) && nrow(session_data$pending_centroids) > 0) {
         
@@ -6777,7 +6756,7 @@ server <- function(input, output, session) {
       
       
       
-      # Restaurer les résultats de fit
+      # Restore fit results
       
       if (!is.null(session_data$fit_results)) {
         
@@ -6795,7 +6774,7 @@ server <- function(input, output, session) {
       
       
       
-      # Restaurer les paramètres UI
+      # Restore UI parameters
       
       params <- session_data$params
       
@@ -6853,7 +6832,7 @@ server <- function(input, output, session) {
       
       
       
-      # Message de succès avec résumé
+      # Success message with summary
       
       n_peaks <- if (!is.null(session_data$centroids)) nrow(session_data$centroids) else 0
       
@@ -6861,11 +6840,11 @@ server <- function(input, output, session) {
       
       
       
-      # Rafraîchir le plot si des données spectrales sont chargées
+      # Refresh plot if spectral data is loaded
       
       if (!is.null(bruker_data()) && !is.null(contour_plot_base())) {
         
-        # Forcer la régénération du plot
+        # Force plot regeneration
         
         refresh_nmr_plot(force_recalc = TRUE)
         
@@ -6883,7 +6862,7 @@ server <- function(input, output, session) {
         
       } else {
         
-        # Données spectrales pas encore chargées
+        # Spectral data not yet loaded
         
         showNotification(
           
@@ -6905,7 +6884,7 @@ server <- function(input, output, session) {
       
       
       
-      # Afficher le chemin original si disponible
+      # Show original path if available
       
       if (!is.null(session_data$data_path)) {
         
@@ -6932,13 +6911,8 @@ server <- function(input, output, session) {
   })
   
   
-  
-  
-  
   ## 9.1 Import centroids and boxes ----
-  
-  
-  
+
   ### Import bounding centroids ----
   
   observeEvent(input$import_centroids_file, {
@@ -6970,24 +6944,21 @@ server <- function(input, output, session) {
     }
     
   })
-  
-  
+
   
   ### Import bounding boxes ----
   
   observeEvent(input$import_boxes_file, {
     
     req(input$import_boxes_file)
-    
-    
-    
-    # Essayer d'abord avec point-virgule, puis avec virgule
+
+    # Try first with a semicolon, then with a comma.
     
     imported <- tryCatch({
       
       df <- read.csv(input$import_boxes_file$datapath, sep = ";", stringsAsFactors = FALSE)
       
-      # Si on n'a qu'une colonne, essayer avec virgule
+      # If you only have one column, try using a comma.
       
       if (ncol(df) == 1) {
         
@@ -7061,7 +7032,7 @@ server <- function(input, output, session) {
     
     
     
-    # Garder seulement les colonnes requises (+ Volume si présent)
+    # Keep only required columns (+ Volume if present)
     
     cols_to_keep <- intersect(c(required_cols, "Volume"), colnames(imported))
     
@@ -7069,7 +7040,7 @@ server <- function(input, output, session) {
     
     
     
-    # Convertir les types - stain_id reste character !
+    # Convert the types - stain_id remains a character!
     
     imported$stain_id <- as.character(imported$stain_id)
     
@@ -7083,7 +7054,7 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier qu'on a des données valides
+    # Check that we have valid data
     
     valid_rows <- !is.na(imported$xmin) & !is.na(imported$xmax) & 
       
@@ -7121,7 +7092,7 @@ server <- function(input, output, session) {
     
     
     
-    # Forcer le rafraîchissement du plot
+    # Force plot refresh
     
     box_intensity_cache(list())
     
@@ -7147,7 +7118,7 @@ server <- function(input, output, session) {
       
       df <- centroids_data()
       
-      # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+      # Use write.csv2 for ";" separator (French Excel compatible)
       
       if (!is.null(df) && nrow(df) > 0) write.csv2(df, file, row.names = FALSE) 
       
@@ -7237,7 +7208,7 @@ server <- function(input, output, session) {
       
       
       
-      # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+      # Use write.csv2 for ";" separator (French Excel compatible)
       
       write.csv2(final_data, file, row.names = FALSE)
       
@@ -7267,7 +7238,7 @@ server <- function(input, output, session) {
       
       
       
-      # Récupérer la méthode choisie
+      # Get chosen method
       
       method <- effective_integration_method()
       
@@ -7305,13 +7276,13 @@ server <- function(input, output, session) {
         
         
         
-        # Stocker la méthode utilisée
+        # Store used method
         
         last_fit_method(method)
         
         
         
-        # APPEL AVEC LES NOUVEAUX PARAMÈTRES
+        # CALL WITH NEW PARAMETERS
         
         batch_intensities <- calculate_batch_box_intensities(
           
@@ -7332,18 +7303,17 @@ server <- function(input, output, session) {
           }
           
         )
+
+        
+        # Note: Fit information (R², centers) is no longer included in the batch export.
+        
+        # It is available via "Run Integration" in the Integration section.
+        
+        # This keeps the CSV file compact for comparisons between spectra.
         
         
         
-        # Note: Les infos de fit (R², centers) ne sont plus dans le batch export
-        
-        # Elles sont disponibles via "Run Integration" dans la section Integration
-        
-        # Cela garde le CSV compact pour les comparaisons entre spectres
-        
-        
-        
-        # Remplacer valeurs négatives par 0
+        # Replace negative values with 0
         
         intensity_cols <- grep("^Intensity_", names(batch_intensities), value = TRUE)
         
@@ -7355,7 +7325,7 @@ server <- function(input, output, session) {
         
         
         
-        # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+        # Use write.csv2 for ";" separator (French Excel compatible)
         
         write.csv2(batch_intensities, file, row.names = FALSE)
         
@@ -7473,7 +7443,7 @@ server <- function(input, output, session) {
         
         output_csv <- file.path(tmp_dir, paste0(safe_name, "_projected_centroids.csv"))
         
-        # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+        # Use write.csv2 for ";" separator (French Excel compatible)
         
         write.csv2(projected_centroids, output_csv, row.names = FALSE)
         
@@ -7505,15 +7475,13 @@ server <- function(input, output, session) {
         
         summary_csv <- file.path(tmp_dir, "summary_volumes.csv")
         
-        # Utiliser write.csv2 pour séparateur ";" (compatible Excel français)
+        # Use write.csv2 for ";" separator (French Excel compatible)
         
         write.csv2(merged_data, summary_csv, row.names = FALSE)
         
         csv_files <- c(csv_files, summary_csv)
         
       }
-      
-      
       
       zip(zipfile, files = csv_files, flags = "-j")
       
@@ -7614,16 +7582,10 @@ server <- function(input, output, session) {
   })
   
   output$save_dir_display <- renderPrint({ save_directory() })
-  
-  
-  
-  
+
   
   # SECTION 10: UI OUTPUTS ----
-  
-  
-  
-  
+
   
   ## 10.1 Description ----
   
@@ -8327,25 +8289,24 @@ server <- function(input, output, session) {
       
       # Ticks fixes simples : tous les 1 ppm pour F2
       
-      # Pour F1 : 1 ppm pour TOCSY/COSY/UFCOSY (homonucléaire 1H), 10 ppm pour HSQC (13C)
+      # For F1: 1 ppm for TOCSY/COSY/UFCOSY (homonuclear 1H), 10 ppm for HSQC (13C)
       
-      # Les valeurs sur l'axe sont négatives, on les inverse pour l'affichage (ex: -3 devient 3)
+      # Axis values are negative, invert for display (e.g. -3 becomes 3)
       
-      # SAUF pour les vraies valeurs négatives ppm (ex: -0.5 ppm reste -0.5)
+      # EXCEPT for true negative ppm values (e.g. -0.5 ppm stays -0.5)
       
-      x_tickvals <- seq(-14, 2, by = 1)  # Couvre de -2 à 14 ppm en affichage
+      x_tickvals <- seq(-14, 2, by = 1)  # Covers -2 to 14 ppm in display
       
       x_ticktext <- sprintf("%.0f", -x_tickvals)  # Inverse le signe : -7 -> "7", 1 -> "-1"
       
-      
-      
-      # Adapter F1 selon le type de spectre
+
+      # Adapt F1 according to the spectrum type
       
       is_hsqc <- !is.null(input$spectrum_type) && input$spectrum_type == "HSQC"
       
       if (is_hsqc) {
         
-        # HSQC : F1 = 13C, ticks tous les 10 ppm (-10 à 230 ppm en affichage)
+        # HSQC: F1 = 13C, ticks every 10 ppm (-10 to 230 ppm in display)
         
         y_tickvals <- seq(-240, 20, by = 10)
         
@@ -8353,7 +8314,7 @@ server <- function(input, output, session) {
         
       } else {
         
-        # TOCSY/COSY/UFCOSY : F1 = 1H, ticks tous les 1 ppm (-2 à 14 ppm en affichage)
+        # TOCSY/COSY/UFCOSY: F1 = 1H, ticks every 1 ppm (-2 to 14 ppm in display)
         
         y_tickvals <- seq(-14, 2, by = 1)
         
@@ -8415,11 +8376,9 @@ server <- function(input, output, session) {
         
       })
       
+      # Invisible grid to capture clicks
       
-      
-      # Grille invisible pour capturer les clics
-      
-      # Plus la grille est dense, plus les clics sont précis
+      # Denser grid means more precise clicks
       
       x_range <- layer_scales(plot_obj)$x$range$range
       
@@ -8429,7 +8388,7 @@ server <- function(input, output, session) {
       
       if (!is.null(x_range) && !is.null(y_range)) {
         
-        # Grille très dense: 100x100 = 10000 points pour une précision maximale
+        # Very dense grid: 100x100 = 10000 points for maximum precision
         
         n_points <- 150
         
@@ -8547,9 +8506,9 @@ server <- function(input, output, session) {
     
     datatable(df[, seq_len(min(4, ncol(df))), drop = FALSE], 
               
-              selection = "multiple",  # Sélection multiple activée
+              selection = "multiple",  # Multiple selection enabled
               
-              options = list(pageLength = 10))  # Plus d'entrées par page
+              options = list(pageLength = 10))  # More entries per page
     
   })
   
@@ -8571,9 +8530,9 @@ server <- function(input, output, session) {
     
     datatable(df, 
               
-              selection = "multiple",  # Sélection multiple activée
+              selection = "multiple",  # Multiple selection enabled
               
-              options = list(pageLength = 10))  # Plus d'entrées par page
+              options = list(pageLength = 10))  # More entries per page
     
   })
   
@@ -8641,13 +8600,13 @@ server <- function(input, output, session) {
   
   ## 10.7b Dynamic axis ticks on zoom ----
   
-  # Stocker les ranges complets du plot pour l'autoscale
+  # Store the complete plot ranges for autoscale
   
   full_plot_ranges <- reactiveVal(list(x = c(-10, 0), y = c(-200, 0)))
   
   
   
-  # Observer pour capturer les ranges initiaux quand le plot est créé
+  # Observer to capture initial ranges when plot is created
   
   observe({
     
@@ -8681,9 +8640,9 @@ server <- function(input, output, session) {
   
   
   
-  # Fonction pour générer des ticks avec les bonnes valeurs ppm affichées
+  # Function to generate ticks with correct displayed ppm values
   
-  # Les données sur l'axe sont l'opposé des valeurs ppm réelles (ex: ppm=3 -> axe=-3)
+  # Axis data is opposite of real ppm values (e.g. ppm=3 -> axis=-3)
   
   generate_positive_ticks <- function(range_vals, target_nticks = 10, decimals = 2) {
     
@@ -8691,7 +8650,7 @@ server <- function(input, output, session) {
     
     
     
-    # Range sur l'axe (valeurs négatives des ppm, ex: -7.5 à 0.5 si ppm va de 7.5 à -0.5)
+    # Axis range (negative ppm values, e.g. -7.5 to 0.5 if ppm goes from 7.5 to -0.5)
     
     axis_min <- min(range_vals)
     
@@ -8715,7 +8674,7 @@ server <- function(input, output, session) {
     
     
     
-    # Calculer un pas "joli"
+    # Calculate a "nice" step
     
     rough_step <- span / target_nticks
     
@@ -8735,7 +8694,7 @@ server <- function(input, output, session) {
     
     
     
-    # Générer les valeurs de tick en ppm
+    # Generate tick values in ppm
     
     tick_start <- floor(ppm_min / step) * step
     
@@ -8747,7 +8706,7 @@ server <- function(input, output, session) {
     
     
     
-    # Filtrer pour ne garder que les ticks dans la plage visible (avec petite marge)
+    # Filter to keep only the ticks within the visible range (with a small margin)
     
     margin <- step * 0.1
     
@@ -8765,13 +8724,13 @@ server <- function(input, output, session) {
     
     
     
-    # Les valeurs sur l'axe sont l'opposé des ppm
+    # Axis values are opposite of ppm
     
     tick_values_axis <- -tick_values_ppm
     
     
     
-    # Format selon le nombre de décimales
+    # Format according to decimal places
     
     fmt <- paste0("%.", decimals, "f")
     
@@ -8789,23 +8748,23 @@ server <- function(input, output, session) {
   
   
   
-  # Variable pour éviter les boucles de relayout (gardé pour compatibilité)
+  # Variable to prevent relayout loops (kept for compatibility)
   
   last_tick_update <- reactiveVal(0)
   
   
   
-  # Note: La mise à jour des ticks lors du zoom est gérée côté client (JavaScript)
+  # Note: Tick update during zoom is handled client-side (JavaScript)
   
-  # pour une meilleure fluidité. Cet observer est gardé en backup pour les cas
+  # for better smoothness. This observer is kept as backup for cases
   
-  # où le JavaScript ne se déclenche pas correctement.
+  # where JavaScript doesn't trigger correctly.
   
   observeEvent(event_data("plotly_relayout", source = "nmr_plot"), {
     
-    # Les ticks sont maintenant gérés par le JavaScript côté client
+    # Ticks are now managed by client-side JavaScript
     
-    # pour une mise à jour synchrone avec le zoom
+    # for synchronous update with zoom
     
     NULL
     
@@ -8860,16 +8819,12 @@ server <- function(input, output, session) {
   
   
   observeEvent(spectra_list(), { centroids(NULL) })
-  
-  
-  
-  
+ 
   
   ## 10.9 Fit Quality Visualizations ----
   
   
-  
-  # Données combinées : boxes + fit results
+  # Combined data: boxes + fit results
   
   boxes_with_fit <- reactive({
     
@@ -8885,7 +8840,7 @@ server <- function(input, output, session) {
     
     
     
-    # Joindre les données de fit avec les boxes
+    # Join fit data with boxes
     
     boxes_merged <- boxes %>%
       
@@ -8898,8 +8853,7 @@ server <- function(input, output, session) {
   })
   
   
-  
-  # Table résumée des résultats de fitting
+  # Summary table of fitting results
   
   fit_summary_data <- reactive({
     
@@ -8914,8 +8868,7 @@ server <- function(input, output, session) {
     }
     
     
-    
-    # Résumé par méthode
+    # Summary by method
     
     summary_df <- boxes %>%
       
@@ -8938,16 +8891,14 @@ server <- function(input, output, session) {
         .groups = "drop"
         
       )
-    
-    
-    
+
     summary_df
     
   })
   
   
   
-  # Plot de distribution des R²
+  # R² distribution plot
   
   output$fit_quality_plot <- renderPlotly({
     
@@ -8955,7 +8906,7 @@ server <- function(input, output, session) {
     
     
     
-    # Vérifier si on a des données de fit
+    # Check if we have fit data
     
     if (is.null(boxes) || !"r_squared" %in% names(boxes) || all(is.na(boxes$r_squared))) {
       
@@ -8979,7 +8930,7 @@ server <- function(input, output, session) {
     
     
     
-    # Filtrer les NA
+    # Filter NAs
     
     boxes_with_r2 <- boxes %>% filter(!is.na(r_squared))
     
@@ -9003,7 +8954,7 @@ server <- function(input, output, session) {
     
     
     
-    # Histogramme des R² avec couleurs selon la méthode
+    # R² histogram with colors by method
     
     p <- ggplot(boxes_with_r2, aes(x = r_squared, fill = fit_method)) +
       
@@ -9055,7 +9006,7 @@ server <- function(input, output, session) {
   
   
   
-  # Reactive pour récupérer la box sélectionnée (depuis fit_boxes_detail_table)
+  # Reactive to get selected box (from fit_boxes_detail_table)
   
   selected_fit_box <- reactive({
     
@@ -9065,7 +9016,7 @@ server <- function(input, output, session) {
     
     
     
-    # Récupérer la sélection dans fit_boxes_detail_table
+    # Get selection in fit_boxes_detail_table
     
     selected_row <- input$fit_boxes_detail_table_rows_selected
     
@@ -9073,7 +9024,7 @@ server <- function(input, output, session) {
     
     
     
-    # Reconstruire le même ordre que dans la table (trié par R² décroissant)
+    # Rebuild same order as in table (sorted by R² descending)
     
     detail_df <- boxes %>%
       
@@ -9087,13 +9038,13 @@ server <- function(input, output, session) {
     
     
     
-    # Récupérer le stain_id sélectionné
+    # Get selected stain_id
     
     selected_stain_id <- detail_df$stain_id[selected_row]
     
     
     
-    # Retourner la box correspondante depuis boxes_with_fit (avec toutes les colonnes)
+    # Return corresponding box from boxes_with_fit (with all columns)
     
     boxes %>% filter(stain_id == selected_stain_id)
     
@@ -9101,7 +9052,7 @@ server <- function(input, output, session) {
   
   
   
-  # Exemple de fit 2D pour une box sélectionnée
+  # 2D fit example for a selected box
   
   output$example_fit_2d <- renderPlot({
     
@@ -9125,11 +9076,11 @@ server <- function(input, output, session) {
     
     
     
-    box <- box[1, ]  # Prendre la première ligne si plusieurs
+    box <- box[1, ]  # Take the first row if multiple
     
     
     
-    # Vérifier que le fit existe
+    # Check that fit exists
     
     if (!"fit_method" %in% names(box) || is.na(box$fit_method) || box$fit_method == "sum_fallback") {
       
@@ -9145,7 +9096,7 @@ server <- function(input, output, session) {
     
     
     
-    # Extraire la région
+    # Extract region
     
     mat <- bruker_data()$spectrumData
     
@@ -9181,7 +9132,7 @@ server <- function(input, output, session) {
     
     
     
-    # CORRECTION: S'assurer que x et y sont en ordre croissant pour image()
+    # FIX: Ensure x and y are in ascending order for image()
     
     if (is.unsorted(x_sub)) {
       
@@ -9205,7 +9156,7 @@ server <- function(input, output, session) {
     
     
     
-    # Créer le plot avec image() pour visualiser la 2D
+    # Create plot with image() to visualize 2D
     
     par(mfrow = c(1, 1), mar = c(4, 4, 3, 2))
     
@@ -9225,7 +9176,7 @@ server <- function(input, output, session) {
     
     
     
-    # Ajouter le centre fitté si disponible
+    # Add fitted center if available
     
     if (!is.na(box$center_x) && !is.na(box$center_y)) {
       
@@ -9233,7 +9184,7 @@ server <- function(input, output, session) {
       
       
       
-      # Ajouter aussi le centre de la box (pour comparaison)
+      # Also add box center (for comparison)
       
       box_center_x <- (box$xmin + box$xmax) / 2
       
@@ -9257,7 +9208,7 @@ server <- function(input, output, session) {
     
     
     
-    # Ajouter les contours
+    # Add contours
     
     contour(x_sub, y_sub, t(region), add = TRUE, col = "white", lwd = 0.5, nlevels = 10)
     
@@ -9265,7 +9216,7 @@ server <- function(input, output, session) {
   
   
   
-  # Plot des résidus
+  # Residuals plot
   
   output$residuals_plot <- renderPlot({
     
@@ -9289,7 +9240,7 @@ server <- function(input, output, session) {
     
     
     
-    box <- box[1, ]  # Prendre la première ligne si plusieurs
+    box <- box[1, ]  # Take the first row if multiple
     
     
     
@@ -9305,7 +9256,7 @@ server <- function(input, output, session) {
     
     
     
-    # Re-fitter pour obtenir les résidus
+    # Re-fit to get residuals
     
     mat <- bruker_data()$spectrumData
     
@@ -9331,7 +9282,7 @@ server <- function(input, output, session) {
     
     
     
-    # Histogramme des résidus
+    # Residuals histogram
     
     par(mfrow = c(1, 1), mar = c(4, 4, 3, 2))
     
@@ -9351,7 +9302,7 @@ server <- function(input, output, session) {
     
     
     
-    # Ajouter stats
+    # Add stats
     
     legend("topright", 
            
@@ -9375,7 +9326,7 @@ server <- function(input, output, session) {
   
   
   
-  # Table de résumé
+  # Summary table
   
   output$fit_summary_table <- renderDT({
     
@@ -9403,7 +9354,7 @@ server <- function(input, output, session) {
   
   
   
-  # Table détaillée des boxes fittées
+  # Detailed table of fitted boxes
   
   output$fit_boxes_detail_table <- renderDT({
     
@@ -9419,7 +9370,7 @@ server <- function(input, output, session) {
     
     
     
-    # Sélectionner les colonnes pertinentes
+    # Select relevant columns
     
     detail_cols <- c("stain_id", "r_squared", "fit_method", "center_x", "center_y")
     
@@ -9445,7 +9396,7 @@ server <- function(input, output, session) {
     
     
     
-    # Renommer pour affichage
+    # Rename for display
     
     names(detail_df) <- gsub("stain_id", "Box Name", names(detail_df))
     

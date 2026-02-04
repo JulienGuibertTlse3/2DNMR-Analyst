@@ -1,22 +1,22 @@
-# ============================================================================
-# 2D NMR Spectra Analysis - Script de lancement
-# ============================================================================
-# Ce script installe automatiquement les packages nécessaires et lance l'application
-# 
-# UTILISATION :
-#   1. Ouvrir ce fichier dans RStudio
-#   2. Cliquer sur "Source" ou exécuter tout le script (Ctrl+Shift+Enter)
+# ======================================================================================
+# 2D NMR Spectra Analysis - Launch Script
+# ===========================================================================================
+# This script automatically installs the necessary packages and launches the application.
 #
-# STRUCTURE REQUISE :
-#   2DNMR-Analyst/
-#   ├── run_app.R              <- CE FICHIER (point d'entrée)
-#   ├── Shine.R                <- Application principale
-#   └── Function_test/
-#       ├── Read_2DNMR_spectrum.R
-#       ├── Peak_fitting.R
-#       ├── Vizualisation.R
-#       ├── Peak_picking.R
-#       └── CNN_shiny.R
+# USAGE:
+# 1. Open this file in RStudio
+# 2. Click on "Source" or run the entire script (Ctrl+Shift+Enter)
+#
+# REQUIRED STRUCTURE:
+#2DNMR-Analyst/
+# ├── run_app.R <- THIS FILE (entry point)
+# ├── Shine.R <- Main application
+#└──Function/
+# ├── Read_2DNMR_spectrum.R
+# ├── Peak_fitting.R
+# ├── Visualization.R
+# ├── Peak_picking.R
+# └── CNN_shiny.R
 # ============================================================================
 
 cat("
@@ -26,23 +26,23 @@ cat("
 \n")
 
 # ----------------------------------------------------------------------------
-# 1. DÉFINIR LE RÉPERTOIRE DE TRAVAIL
+# 1. DEFINE THE WORKING DIRECTORY
 # ----------------------------------------------------------------------------
 
-# Automatiquement définir le répertoire de travail au dossier contenant ce script
+# # Automatically set the working directory to the folder containing this script
 if (interactive() && requireNamespace("rstudioapi", quietly = TRUE)) {
   script_path <- dirname(rstudioapi::getSourceEditorContext()$path)
   if (nchar(script_path) > 0) {
     setwd(script_path)
-    cat("📁 Répertoire de travail :", getwd(), "\n\n")
+    cat("📁 Working directory :", getwd(), "\n\n")
   }
 } else {
-  cat("📁 Répertoire de travail actuel :", getwd(), "\n")
-  cat("   (Assurez-vous d'être dans le dossier 2DNMR-Analyst)\n\n")
+  cat("📁 Current working directory :", getwd(), "\n")
+  cat("   (Make sure you are in the 2DNMR-Analyst folder)\n\n")
 }
 
 # ----------------------------------------------------------------------------
-# 2. LISTE DES PACKAGES REQUIS
+# 2. LIST OF REQUIRED PACKAGES
 # ----------------------------------------------------------------------------
 
 packages_required <- c(
@@ -88,7 +88,7 @@ packages_required <- c(
 
 
 # ----------------------------------------------------------------------------
-# 3. VÉRIFICATION ET INSTALLATION DES VERSIONS REQUISES
+# 3. VERIFICATION AND INSTALLATION OF REQUIRED VERSIONS
 # ----------------------------------------------------------------------------
 
 # Versions minimales requises pour les packages critiques
@@ -99,15 +99,15 @@ required_versions <- list(
   shiny = "1.7.0"
 )
 
-cat("🔍 Vérification des packages critiques...\n\n")
+cat("🔍 Checking critical packages...\n\n")
 
-# Vérifier et installer/mettre à jour les packages avec versions spécifiques
+# Check and install/update packages with specific versions
 for (pkg_name in names(required_versions)) {
   required_version <- required_versions[[pkg_name]]
   needs_install <- FALSE
   
   if (!requireNamespace(pkg_name, quietly = TRUE)) {
-    cat("   📦", pkg_name, "non installé\n")
+    cat("   📦", pkg_name, "not installed\n")
     needs_install <- TRUE
   } else {
     current_version <- tryCatch(
@@ -115,7 +115,7 @@ for (pkg_name in names(required_versions)) {
       error = function(e) "0.0.0"
     )
     if (package_version(current_version) < package_version(required_version)) {
-      cat("   ⚠️ ", pkg_name, current_version, "< version requise", required_version, "\n")
+      cat("   ⚠️ ", pkg_name, current_version, "< required version", required_version, "\n")
       needs_install <- TRUE
     } else {
       cat("   ✅", pkg_name, current_version, "\n")
@@ -123,43 +123,44 @@ for (pkg_name in names(required_versions)) {
   }
   
   if (needs_install) {
-    cat("      → Installation/mise à jour de", pkg_name, "...\n")
+    cat("      → Installation/update of", pkg_name, "...\n")
     install.packages(pkg_name, dependencies = TRUE)
   }
 }
 
-cat("\n🔍 Vérification des autres packages requis...\n\n")
+cat("\n🔍 Checking for other required packages...\n\n")
 
 missing_packages <- packages_required[!sapply(packages_required, requireNamespace, quietly = TRUE)]
 
 if (length(missing_packages) > 0) {
-  cat("📦 Installation des packages manquants :", paste(missing_packages, collapse = ", "), "\n\n")
+  cat("📦 Installing missing packages :", paste(missing_packages, collapse = ", "), "\n\n")
   install.packages(missing_packages, dependencies = TRUE)
 }
 
 
 # ----------------------------------------------------------------------------
-# 4. CHARGEMENT DES PACKAGES
+# 4. LOADING PACKAGES
 # ----------------------------------------------------------------------------
 
-cat("📚 Chargement des packages...\n")
+cat("📚Loading packages...\n")
 
 for (pkg in packages_required) {
   suppressWarnings(suppressPackageStartupMessages(library(pkg, character.only = TRUE)))
 }
 
-cat("   ✅ Tous les packages chargés\n")
+cat("   ✅ All packages loaded\n")
 
 # ----------------------------------------------------------------------------
-# 5. VÉRIFICATION DES FICHIERS SOURCE
+# 5. VERIFICATION OF SOURCE FILES
 # ----------------------------------------------------------------------------
 
-cat("\n🔍 Vérification des fichiers sources...\n")
+cat("\n🔍 Source file verification...\n")
 
 source_files <- c(
   "Function/Read_2DNMR_spectrum.R",
   "Function/Vizualisation.R",
   "Function/Peak_picking.R",
+  "Function/Peak_fitting.R",
   "Function/CNN_shiny.R"
 )
 
@@ -169,39 +170,39 @@ for (f in source_files) {
   if (file.exists(f)) {
     cat("   ✅", f, "\n")
   } else {
-    cat("   ❌", f, "- MANQUANT!\n")
+    cat("   ❌", f, "- MISSING!\n")
     all_files_ok <- FALSE
   }
 }
 
 if (!file.exists("Shine.R")) {
-  cat("   ❌ Shine.R - MANQUANT!\n")
+  cat("   ❌ Shine.R - MISSING!\n")
   all_files_ok <- FALSE
 } else {
   cat("   ✅ Shine.R\n")
 }
 
 # ----------------------------------------------------------------------------
-# 6. LANCEMENT DE L'APPLICATION
+# 6. APPLICATION LAUNCH
 # ----------------------------------------------------------------------------
 
 if (all_files_ok) {
   cat("\n")
   cat("╔══════════════════════════════════════════════════════════════════╗\n")
-  cat("║                 🚀 Lancement de l'application                    ║\n")
+  cat("║                 🚀 App launch                                    ║\n")
   cat("╚══════════════════════════════════════════════════════════════════╝\n")
   cat("\n")
-  cat("L'application va s'ouvrir dans votre navigateur...\n")
-  cat("Pour arrêter : cliquez sur STOP dans RStudio ou appuyez sur Échap\n\n")
+  cat("The application will open in your browser...\n")
+  cat("To stop: click on STOP in RStudio or press Esc\n\n")
   
   shiny::runApp("Shine.R") 
   
 } else {
   cat("\n")
   cat("╔══════════════════════════════════════════════════════════════════╗\n")
-  cat("║  ❌ ERREUR : Fichiers manquants                                  ║\n")
+  cat("║            ❌ERROR: Missing files                                ║\n")
   cat("╚══════════════════════════════════════════════════════════════════╝\n")
   cat("\n")
-  cat("Veuillez vérifier que vous avez téléchargé tous les fichiers depuis :\n")
+  cat("Please check that you have downloaded all files from :\n")
   cat("https://github.com/JulienGuibertTlse3/2DNMR-Analyst\n\n")
 }
