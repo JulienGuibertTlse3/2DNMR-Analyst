@@ -662,7 +662,7 @@ ui <- fluidPage(
     
     tags$script(HTML("
 
-      // Fonction pour générer des ticks 'propres' pour une plage donnée
+      // Function to generate 'clean' ticks for a given range
 
       function generateNiceTicks(min, max, targetCount) {
 
@@ -1338,7 +1338,7 @@ ui <- fluidPage(
                                
                                div(class = "move-btn-grid",
                                    
-                                   # Ligne 1
+                                   # Line 1
                                    
                                    div(),
                                    
@@ -1346,7 +1346,7 @@ ui <- fluidPage(
                                    
                                    div(),
                                    
-                                   # Ligne 2
+                                   # Line 2
                                    
                                    actionButton("move_box_left", "←", class = "btn-default btn-xs"),
                                    
@@ -1360,7 +1360,7 @@ ui <- fluidPage(
                                    
                                    actionButton("move_box_right", "→", class = "btn-default btn-xs"),
                                    
-                                   # Ligne 3
+                                   # Line 3
                                    
                                    div(),
                                    
@@ -3002,10 +3002,7 @@ server <- function(input, output, session) {
   
   
   # SECTION 4: SPECTRUM TYPE PARAMETERS ----
-  
-  
-  
-  
+
   
   spectrum_params <- reactive({
     
@@ -3049,14 +3046,11 @@ server <- function(input, output, session) {
                          
                          pred_class_thres = 0.001, batch_size = 64, step = 4),
            
-           stop("Type de spectre inconnu pour CNN")
+           stop("Unknown spectrum type for CNN")
            
     )
     
   })
-  
-  
-  
   
   
   # SECTION 5: DATA LOADING ----
