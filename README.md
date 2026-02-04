@@ -251,9 +251,13 @@ For questions, bug reports, or feature requests:
 ---
 
 <p align="center">
-  <img src="https://www.metabohub.fr/sites/default/files/logo_metabohub.png" alt="MetaboHUB" height="60"/>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://www.inrae.fr/themes/custom/inrae_socle/logo.svg" alt="INRAe" height="60"/>
+  <a href="https://www.metabohub.fr/">
+    <img src="docs/images/metabohub_logo.png" alt="MetaboHUB" height="60"/>
+  </a>
+   <a href="https://toxalim.toulouse.hub.inrae.fr/">
+    <img src="docs/images/inrae_toxalim.png" alt="INRAe" height="60"/>
+  </a>
+  
 </p>
 
 <p align="center">
