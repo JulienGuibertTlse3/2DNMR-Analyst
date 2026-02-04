@@ -246,7 +246,7 @@ For questions, bug reports, or feature requests:
 ## 🙏 Acknowledgments
 
 - [MetaboHUB](https://www.metabohub.fr/) - French National Infrastructure for Metabolomics
-- [INRAe Toxalim](https://www6.toulouse.inrae.fr/toxalim) - Research unit
+- [INRAe Toxalim](https://toxalim.toulouse.hub.inrae.fr/) - Research unit
 
 ---
 
