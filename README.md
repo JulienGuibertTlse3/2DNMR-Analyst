@@ -1,42 +1,55 @@
 <p align="center">
-  <img src="" alt="Tool name" width="200"/>
+  <img src="docs/images/logo.png" alt="2DNMR-Analyst Logo" width="200"/>
 </p>
 
-<h1 align="center">Tool name</h1>
+<h1 align="center">2DNMR-Analyst</h1>
 
 <p align="center">
-  <strong>T</strong>ool <strong>N</strong>ame
+  <strong>S</strong>harp <strong>P</strong>eak <strong>I</strong>dentification for <strong>2D</strong> NMR (SPI2D)
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/R-Shiny-blue?logo=r" alt="R Shiny"/>
-  <img src="https://img.shields.io/badge/NMR-2D%20Analysis-green" alt="NMR 2D"/>
-  <img src="https://img.shields.io/badge/License-CeCILL-yellow" alt="License"/>
+  <a href="https://www.r-project.org/"><img src="https://img.shields.io/badge/R-%3E%3D%204.0-blue?logo=r&logoColor=white" alt="R Version"/></a>
+  <a href="https://shiny.posit.co/"><img src="https://img.shields.io/badge/Shiny-Interactive-blue?logo=r&logoColor=white" alt="R Shiny"/></a>
+  <a href="#-supported-spectrum-types"><img src="https://img.shields.io/badge/NMR-2D%20Analysis-green" alt="NMR 2D"/></a>
+  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-CeCILL--2.1-yellow" alt="License CeCILL-2.1"/></a>
+</p>
+
+<p align="center">
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-installation">Installation</a> •
+  <a href="#-documentation">Documentation</a> •
+  <a href="#-license">License</a>
 </p>
 
 ---
 
 ## 📋 Overview
 
-**...** is an interactive R Shiny application for analyzing 2D NMR spectra. It provides automated peak detection, manual editing tools, and batch processing capabilities for metabolomics research.
+**2DNMR-Analyst** is an interactive R Shiny application designed for analyzing 2D NMR spectra. It provides automated peak detection, manual editing tools, and batch processing capabilities tailored for metabolomics research.
+
+Developed at **INRAe Toxalim / MetaboHUB**, this tool streamlines the workflow from raw Bruker data to quantitative peak integration.
 
 ---
 
 ## 🚀 Quick Start
 
-1. **Load** → Select your Bruker data folder
-2. **Plot** → Generate contour plots
-3. **Pick** → Detect peaks automatically
-4. **Edit** → Refine boxes manually if needed
-5. **Integrate** → Calculate volumes (Sum or Fitting)
-6. **Export** → Save results to CSV or session 
+```
+1. Load    → Select your Bruker data folder
+2. Plot    → Generate contour plots  
+3. Pick    → Detect peaks automatically
+4. Edit    → Refine boxes manually if needed
+5. Integrate → Calculate volumes (Sum or Fitting)
+6. Export  → Save results to CSV or session
+```
 
 ---
 
 ## ✨ Features
 
 ### 📂 Data Loading
-- Load Bruker 2D NMR data (ser/fid files)
+- Load Bruker 2D NMR data (`ser`/`fid` files)
 - Batch processing of multiple spectra
 - Select specific spectra to analyze
 - Automatic detection of valid datasets
@@ -44,98 +57,113 @@
 ### 📈 Visualization
 - Interactive contour plots (zoom, pan)
 - Adjustable intensity threshold
-- Click to get coordinates
-- Real-time display of peaks and boxes
+- Click-to-get coordinates
+- Real-time display of peaks and bounding boxes
 
 ### 🎯 Peak Detection
-- **Local Max method:** Local maxima + DBSCAN clustering
-- **CNN method:** Deep learning detection
+| Method | Description |
+|--------|-------------|
+| **Local Max** | Local maxima detection + DBSCAN clustering |
+| **CNN** | Deep learning-based detection (optional) |
+
 - Automatic bounding box generation
-- Configurable clustering parameters
+- Configurable clustering parameters (epsilon, min points)
 
 ### ✏️ Manual Editing
-- Add and remove boxes by clicking (two-click mode)
-- Move and resize existing boxes
-- Delete unwanted peaks/boxes
+- Add/remove boxes by clicking (two-click mode)
+- Move and resize existing boxes with arrow controls
+- Delete unwanted peaks or boxes
 - Fuse multiple peaks into one
 
 ### 📐 Integration & Peak Fitting
-- Direct: Sum intensity
-- Fitting: Gaussian, Voigt models
-- Fit Quality tab with R² metrics
+| Method | Description |
+|--------|-------------|
+| **Sum** | Direct sum of intensities within box |
+| **Gaussian** | 2D Gaussian peak fitting |
+| **Voigt** | Pseudo-Voigt model (Gaussian-Lorentzian convolution) |
+
+- Dedicated **Fit Quality** tab with R² metrics
 - 2D fit visualization for each box
+- Residuals analysis
 
 ### 💾 Save & Export
-- Session: Save/Load complete work (.rds)
-- Import: CSV files for peaks and boxes
-- Export: CSV (French format ;), Batch export
-- Pending system: Apply/Discard changes
+- **Session**: Complete save/load in `.rds` format (peaks, boxes, parameters)
+- **Import**: CSV files for peaks and boxes
+- **Export**: CSV with semicolon separator (`;`), batch export for multiple spectra
+- **Pending system**: Apply or discard changes before export
 
 ---
 
 ## 🧪 Supported Spectrum Types
 
-| Type | Description |
-|------|-------------|
-| **TOCSY** | Total Correlation Spectroscopy |
-| **HSQC** | Heteronuclear Single Quantum Coherence |
-| **COSY** | Correlation Spectroscopy |
-| **UFCOSY** | Ultra-Fast COSY |
+| Type | Description | Typical Use |
+|------|-------------|-------------|
+| **TOCSY** | Total Correlation Spectroscopy | ¹H-¹H correlations through bonds |
+| **HSQC** | Heteronuclear Single Quantum Coherence | ¹H-¹³C direct correlations |
+| **COSY** | Correlation Spectroscopy | ¹H-¹H vicinal couplings |
+| **UFCOSY** | Ultra-Fast COSY | Rapid ¹H-¹H correlations |
 
 ---
 
 ## 📖 Detailed Workflow
 
 ### Step 1: Load Data
-Select a folder containing Bruker NMR data. The tool will automatically detect valid 2D spectra (folders containing `acqus` and `ser` or `fid` files). You can select which spectra to load using checkboxes.
+Select a folder containing Bruker NMR data. The tool automatically detects valid 2D spectra (folders containing `acqus` and `ser` or `fid` files). Use checkboxes to select which spectra to load.
 
 ### Step 2: Generate Plot
-Choose the spectrum type and adjust the intensity threshold. Click **Auto** to calculate an optimal threshold based on noise level or maximum intensity. Then click **Generate Plot** to create the contour visualization.
+1. Choose the spectrum type (TOCSY, HSQC, COSY, UFCOSY)
+2. Adjust the intensity threshold (or click **Auto** for automatic calculation)
+3. Click **Generate Plot** to create the contour visualization
 
 ### Step 3: Peak Picking
-- **Local Max method:** Uses local maxima detection followed by DBSCAN clustering to group nearby points. Adjust `epsilon` to control cluster size.
-- **CNN method:** Uses a trained convolutional neural network for peak detection. Better for complex or overlapping peaks.
+- **Local Max method**: Uses local maxima detection followed by DBSCAN clustering. Adjust `epsilon` to control cluster size.
+- **CNN method**: Uses a trained convolutional neural network for complex or overlapping peaks.
 
 ### Step 4: Manual Editing
-- **Add boxes:** Enable "Two clicks" mode, then click two opposite corners on the spectrum.
-- **Edit boxes:** Select a box in the Data tab, then use arrow buttons to move or +/- to resize.
-- **Fuse peaks:** Use the lasso tool to select multiple peaks, then click "Fuse".
+- **Add boxes**: Enable "Two clicks" mode, then click two opposite corners
+- **Edit boxes**: Select a box in the Data tab, use arrow buttons to move or +/- to resize
+- **Fuse peaks**: Use lasso tool to select multiple peaks, then click "Fuse"
 
-### Step 5: Integration & Peak Fitting
-- Direct Integration: Sum (sum of intensities)
-- Peak Fitting: Gaussian ou Voigt (convolution Gauss-Lorentz)
-- Fit Quality: Dedicated tab with R² metrics and 2D fit visualization
+### Step 5: Integration
+- **Direct (Sum)**: Sum of all intensities within bounding box
+- **Peak Fitting**: Gaussian or Voigt model fitting with quality metrics
 
 ### Step 6: Save & Export
-3 collapsible sections:
-  - 💼 Session: Complete Save/Load in .rds (peaks, boxes, parameters)
-  - 📥 Import: CSV files for peaks and boxes
-  - 📤 Export: CSV (semicolon separator), Batch Export (multiple spectra)
+Three collapsible sections available:
+- 💼 **Session**: Complete save/load in `.rds`
+- 📥 **Import**: CSV files for peaks and boxes
+- 📤 **Export**: CSV export, Batch Export for multiple spectra
 
 ---
 
-## 💡 Tips
+## 💡 Tips & Best Practices
 
-- Start with a QC sample or the most intense spectrum to optimize parameters
-- Use "No clustering" option if you do not want to group multiplets
-- Increase epsilon value to decrease size of cluster and get more solo peaks (e.g., TOCSY)
-- Click "Apply" to confirm changes before exporting
-- Use the "Data" tab to review and select boxes for editing
-- For batch processing: select the folder, process only a QC or the most intense spectrum first (Step 1), then reload all spectra and use "Batch Export" with the peaks selected from the first spectrum
-- For batch treatment, limit the number of sprectrum per batch to 25 for TOCSY, 50 for COSY and HSQC
+| Tip | Description |
+|-----|-------------|
+| 🎯 **Start with QC** | Use a QC sample or most intense spectrum first to optimize parameters |
+| 🔧 **No clustering** | Disable clustering if you don't want to group multiplets |
+| 📊 **Epsilon tuning** | Increase epsilon to get smaller clusters and more individual peaks |
+| ✅ **Apply changes** | Always click "Apply" to confirm changes before exporting |
+| 📋 **Data tab** | Use the Data tab to review and select boxes for editing |
+| 🔄 **Batch workflow** | Process QC first, then reload all spectra and use "Batch Export" |
+| ⚠️ **Batch limits** | Limit batches to ~25 spectra for TOCSY, ~50 for COSY/HSQC |
 
 ---
 
 ## 📄 Output Format
 
 ### Peaks CSV
-```
-stain_id, F2_ppm, F1_ppm, stain_intensity
+```csv
+stain_id;F2_ppm;F1_ppm;stain_intensity
+peak1;3.456;1.234;123456
+peak2;4.567;2.345;234567
 ```
 
 ### Boxes CSV
-```
-stain_id, xmin, xmax, ymin, ymax, stain_intensity
+```csv
+stain_id;xmin;xmax;ymin;ymax;stain_intensity
+box1;3.400;3.500;1.200;1.300;123456
+box2;4.500;4.600;2.300;2.400;234567
 ```
 
 ---
@@ -143,36 +171,103 @@ stain_id, xmin, xmax, ymin, ymax, stain_intensity
 ## 🛠️ Installation
 
 ### Prerequisites
-- R (>= 4.0)
-- RStudio (recommended)
+- **R** (>= 4.0)
+- **RStudio** (recommended)
 
-### Download
+### Option A: Download ZIP
+1. Click on the **Code** button on GitHub
+2. Select **Download ZIP**
+3. Extract the archive
 
-- Option A : Direcly download it as a ZIP folder.
-      Click on the "Code" button and select Download ZIP
-  
-- Option B : Cloning with git : git clone https://github.com/JulienGuibertTlse3/2DNMR-Analyst.git
+### Option B: Clone with Git
+```bash
+git clone https://github.com/JulienGuibertTlse3/2DNMR-Analyst.git
+cd 2DNMR-Analyst
+```
 
-### Launch the app
+### Launch the Application
+1. Open **RStudio**
+2. Open the `run_app.R` file
+3. Click **Source** or press `Ctrl+Shift+Enter`
 
-- Open RStudio
-- Open run_app.R file
-- Click on Source button or press Ctrl+Shift+Enter. The script will download anything necessary by itself.
+> 💡 The script will automatically install all required packages on first run.
+
+---
+
+## 📁 Project Structure
+
+```
+2DNMR-Analyst/
+├── run_app.R                 # Application launcher
+├── Shine.R                   # Main Shiny application
+├── Function/
+│   ├── Read_2DNMR_spectrum.R # Bruker data reader
+│   ├── Visualization.R       # Plot generation
+│   ├── Peak_picking.R        # Peak detection algorithms
+│   ├── Peak_fitting.R        # Gaussian/Voigt fitting
+│   └── CNN_shiny.R           # CNN-based detection (optional)
+├── docs/
+│   ├── USER_GUIDE.md         # User documentation
+│   └── DEVELOPER_GUIDE.md    # Developer documentation
+├── LICENSE.txt               # CeCILL-2.1 license
+└── README.md                 # This file
+```
+
+---
+
+## 📚 Documentation
+
+- [User Guide](docs/USER_GUIDE.md) - Detailed usage instructions
+- [Developer Guide](docs/DEVELOPER_GUIDE.md) - Technical documentation
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests on GitHub.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
 
 ## 📝 License
 
-This project is distributed under the CeCILL-2.1 (compatible GNU-GPL) license.
+This project is distributed under the **CeCILL-2.1** license (compatible with GNU-GPL).
 
-Please refer to LICENSE.txt file for further details.
+See the [LICENSE.txt](LICENSE.txt) file for details.
+
+---
+## 👥 Authors
+
+- **Julien Guibert** - *Development* - INRAe Toxalim / MetaboHUB
 
 ---
 
 ## 📧 Contact
 
-For questions or bug reports, please contact the development team or open an issue on GitHub.
+For questions, bug reports, or feature requests:
+- Open an [issue on GitHub](https://github.com/JulienGuibertTlse3/2DNMR-Analyst/issues)
+- Contact the development team at INRAe Toxalim
+
+---
+
+## 🙏 Acknowledgments
+
+- [MetaboHUB](https://www.metabohub.fr/) - French National Infrastructure for Metabolomics
+- [INRAe Toxalim](https://www6.toulouse.inrae.fr/toxalim) - Research unit
 
 ---
 
 <p align="center">
-  Developed for metabolomics research
+  <img src="https://www.metabohub.fr/sites/default/files/logo_metabohub.png" alt="MetaboHUB" height="60"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://www.inrae.fr/themes/custom/inrae_socle/logo.svg" alt="INRAe" height="60"/>
+</p>
+
+<p align="center">
+  <em>Developed for metabolomics research</em>
 </p>
