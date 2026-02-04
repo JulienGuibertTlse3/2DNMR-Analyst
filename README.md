@@ -161,7 +161,9 @@ stain_id, xmin, xmax, ymin, ymax, stain_intensity
 
 ## 📝 License
 
-This project is licensed under the CeCILL PUBLIC LICENSE
+This project is distributed under the CeCILL-2.1 (compatible GNU-GPL) license.
+
+Please refer to LICENSE.txt file for further details.
 
 ---
 
