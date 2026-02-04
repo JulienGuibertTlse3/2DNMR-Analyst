@@ -252,10 +252,10 @@ For questions, bug reports, or feature requests:
 
 <p align="center">
   <a href="https://www.metabohub.fr/">
-    <img src="docs/img/metabohub_logo.png" alt="MetaboHUB" height="100"/>
+    <img src="docs/img/metabohub_logo.png" alt="MetaboHUB" height="80"/>
   </a>
    <a href="https://toxalim.toulouse.hub.inrae.fr/">
-    <img src="docs/img/inrae_toxalim.png" alt="INRAe" height="100"/>
+    <img src="docs/img/inrae_toxalim.png" alt="INRAe" height="80"/>
   </a>
   
 </p>
