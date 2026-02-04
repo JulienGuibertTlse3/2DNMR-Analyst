@@ -2,7 +2,6 @@ library(dplyr)
 library(zoo)
 library(matrixStats)
 library(minpack.lm)  # For Gaussian fitting
-library(dplyr)
 library(imager)
 
 
@@ -31,7 +30,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
   
   significant_points <- which(mask, arr.ind = TRUE)
   
-  # === Tous les points au-dessus du seuil avec leurs coordonnées ppm ===
+  # === All points above the threshold with their ppm coordinates ===
   all_points <- data.frame(
     row_idx = significant_points[, 1],
     col_idx = significant_points[, 2],
@@ -40,12 +39,12 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
     Volume = bruker_data[significant_points]
   )
   
-  # === Clustering des points du contour pour trouver les régions connectées ===
+  # === Clustering of contour points to find connected regions ===
   contour_coords <- as.matrix(all_points[, c("row_idx", "col_idx")])
   contour_clustering <- dbscan(contour_coords, eps = 1.5, minPts = 1)
   all_points$contour_id <- contour_clustering$cluster
   
-  # === Identifier les pics locaux (maxima) ===
+  # === Identify local peaks (maxima) ===
   is_peak <- apply(significant_points, 1, function(idx) {
     x <- idx[1]
     y <- idx[2]
@@ -77,7 +76,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
     return(list(peaks = data.frame(), bounding_boxes = data.frame(), cluster_stats = data.frame()))
   }
   
-  # === Filtres de base ===
+  # === Basic filters ===
   if (!is.null(f2_exclude_range) && length(f2_exclude_range) == 2) {
     peaks_df <- peaks_df[!(peaks_df$F2_ppm >= f2_exclude_range[1] & peaks_df$F2_ppm <= f2_exclude_range[2]), ]
   }
@@ -86,7 +85,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
     return(list(peaks = data.frame(), bounding_boxes = data.frame(), cluster_stats = data.frame()))
   }
   
-  # === Calculer les statistiques par contour ===
+  # === Calculate statistics per contour ===
   valid_contours <- unique(peaks_df$contour_id)
   
   cluster_stats <- all_points %>%
@@ -143,7 +142,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
   cluster_stats <- cluster_stats %>%
     mutate(intensity_norm = intensity / max_intensity)
   
-  # === Calculer les scores de proximité aux seuils ===
+  # === Calculate proximity scores at thresholds ===
   cluster_stats <- cluster_stats %>%
     mutate(
       intensity_threshold = min_cluster_intensity * 0.3,
@@ -170,7 +169,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       is_artifact = is_horizontal_line | is_vertical_line | is_thin_vertical
     )
   
-  # === FILTRE selon le type de spectre ===
+  # === FILTER according to the type of spectrum ===
   
   if (spectrum_type == "HSQC") {
     
@@ -188,17 +187,17 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       pull(contour_id)
     
     # ══════════════════════════════════════════════════════════════════
-    # NOUVEAU: Filtrer les pics faibles sur la même colonne F2 qu'un pic intense
+    # NEW: Filter weak peaks on the same F2 column as a strong peak
     # ══════════════════════════════════════════════════════════════════
     
     valid_stats <- cluster_stats %>% filter(contour_id %in% valid_ids)
     
     if (nrow(valid_stats) > 1) {
       
-      f2_tolerance <- 0.02  # ppm - pics considérés sur la même "colonne"
-      intensity_ratio_threshold <- 0.05  # garder seulement si > 5% du pic max de la colonne
+      f2_tolerance <- 0.02  # ppm - peaks considered on the same "column"
+      intensity_ratio_threshold <- 0.05 # Keep only if > 5% of the column's maximum peak
       
-      # Pour chaque pic, trouver l'intensité max sur sa colonne F2
+      # For each peak, find the maximum intensity on its F2 column
       valid_stats <- valid_stats %>%
         mutate(
           f2_group = round(x_center / f2_tolerance) * f2_tolerance
@@ -211,13 +210,13 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
         ) %>%
         ungroup()
       
-      # Garder si : pic dominant OU ratio suffisant OU colonne avec peu de pics
+      # Keep if: dominant peak OR sufficient ratio OR column with few peaks
       valid_ids <- valid_stats %>%
         filter(
-          intensity == max_intensity_in_column |  # Toujours garder le plus intense
-            intensity_ratio >= intensity_ratio_threshold |  # Assez intense relativement
-            n_peaks_in_column <= 2 |  # Pas de problème si peu de pics
-            is_diagonal  # Toujours garder les diagonaux
+          intensity == max_intensity_in_column |  # Always keep the most intense
+            intensity_ratio >= intensity_ratio_threshold |  # Quite intense relatively
+            n_peaks_in_column <= 2 |  # No problem if there are few peaks
+            is_diagonal  # Always keep the diagonals
         ) %>%
         pull(contour_id)
     }
@@ -231,19 +230,19 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
           (intensity_norm > 0.2 & elongation <= 20) |
             (intensity_norm > 0.05 & elongation <= 12) |
             (elongation <= 20) |
-            # NOUVEAU: Multiplets verticaux (fins mais avec bonne densité)
+            # NEW: Vertical multiplets (thin but with good density)
             (is_vertical & density > density_q05 & n_points >= 15 & elongation <= 50)
         ),
         !(is_horizontal & aspect_ratio_x > 20 & y_span < 0.03),
         density > density_q05 | intensity_norm > 0.1,
-        # NOUVEAU: Ne pas rejeter les artefacts verticaux si c'est un multiplet probable
+        # NEW: Do not reject vertical artifacts if it is a probable multiplet
         !(is_vertical_line & density <= density_q05),
         !(is_thin_vertical & n_points < 15)
       ) %>%
       pull(contour_id)
   }
   
-  # Ajouter le statut de validation
+  # Add the validation status
   cluster_stats <- cluster_stats %>%
     mutate(status = case_when(
       contour_id %in% valid_ids ~ "ACCEPTED",
@@ -253,8 +252,8 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
   
   valid_clusters <- cluster_stats %>% filter(status == "ACCEPTED")
   invalid_clusters <- cluster_stats %>% filter(status != "ACCEPTED")
-  # === Redistribution des intensités perdues ===
-  if (nrow(invalid_clusters) > 0 && nrow(valid_clusters) > 0) {
+  # === Redistribution of lost intensities ===
+    if (nrow(invalid_clusters) > 0 && nrow(valid_clusters) > 0) {
     for (i in seq_len(nrow(invalid_clusters))) {
       inv <- invalid_clusters[i, ]
       
@@ -275,7 +274,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
     return(list(peaks = data.frame(), bounding_boxes = data.frame(), cluster_stats = cluster_stats))
   }
   
-  # === Fusionner les pics par contour ===
+  # === Merge peaks by contour ===
   peak_list <- peaks_df %>%
     filter(contour_id %in% valid_ids) %>%
     group_by(contour_id) %>%
@@ -286,14 +285,15 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       .groups = "drop"
     )
   
-  # === Joindre les bounding boxes ===
+  # === Join the bounding boxes ===
+  
   bounding_boxes_data <- valid_clusters %>%
     select(contour_id, F2_min, F2_max, F1_min, F1_max)
   
   peak_list <- peak_list %>%
     left_join(bounding_boxes_data, by = "contour_id")
   
-  # === Sélection par zone ===
+  # === Selection by area ===
   if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
     filtered_peaks <- data.frame()
     
@@ -332,7 +332,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       dplyr::distinct()
   }
   
-  # === Suppression centroïdes inclus plus faibles ===
+  # === Suppression of weaker included centroids ===
   if (nrow(peak_list) > 1) {
     to_remove <- c()
     for (i in seq_len(nrow(peak_list))) {
@@ -352,7 +352,7 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
     peak_list <- peak_list %>% filter(!contour_id %in% to_remove)
   }
   
-  # === Finalisation ===
+  # === Finalization ===
   peak_list <- peak_list %>%
     mutate(stain_id = paste0("peak", seq_len(n()))) %>%
     select(stain_id, F2_ppm, F1_ppm, Volume, F2_min, F2_max, F1_min, F1_max)
@@ -376,9 +376,9 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
   ))
 }
 
-# ---- Filtrage des pics de bruit résiduel dans les spectres TOCSY ----
+# ---- Filtering of residual noise peaks in TOCSY spectra ----
 filter_noise_peaks <- function(peaks, min_neighbors = 4, neighbor_radius = 0.03, min_relative_intensity = 0.03) {
-  if (nrow(peaks) < 2) return(peaks)  # Aucun filtrage nécessaire
+  if (nrow(peaks) < 2) return(peaks)  # No filtering needed
   
   peaks <- peaks %>%
     dplyr::mutate(
@@ -388,11 +388,11 @@ filter_noise_peaks <- function(peaks, min_neighbors = 4, neighbor_radius = 0.03,
         intensity <- peaks$Volume[i]
         max_intensity <- max(peaks$Volume)
         
-        # Distance aux autres pics
+        # Distance to other peaks
         dist <- sqrt((peaks$F2_ppm - x)^2 + (peaks$F1_ppm - y)^2)
-        neighbors <- sum(dist < neighbor_radius) - 1  # Exclure soi-même
-        
-        # Critères de rejet : isolement + intensité trop faible
+        neighbors <- sum(dist < neighbor_radius) - 1  # Exclude oneself
+
+        # Rejection criteria: isolation + intensity too low
         neighbors >= min_neighbors || (intensity / max_intensity > min_relative_intensity)
       })
     ) %>%
@@ -413,7 +413,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     stop("No contours data available for processing.")
   }
   
-  # --- 2. Normalisation adaptée ---
+  # --- 2. Adapted standardization ---
   if (spectrum_type == "HSQC") {
     contour_data <- contour_data %>%
       mutate(
@@ -435,7 +435,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
   contour_data$stain_id <- as.character(clusters$cluster)
   contour_data <- contour_data %>% filter(stain_id != "0")
   
-  # --- 4. Statistiques des clusters AMÉLIORÉES ---
+  # --- 4. IMPROVED cluster statistics ---
   cluster_stats <- contour_data %>%
     group_by(stain_id) %>%
     summarise(
@@ -447,7 +447,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       n_points = n(),
       x_sd = sd(x, na.rm = TRUE),
       y_sd = sd(y, na.rm = TRUE),
-      # ✅ NOUVEAU: Variance pour détecter l'alignement
+      # ✅ NOUVEAU: VVariance for detecting alignment
       x_var = var(x, na.rm = TRUE),
       y_var = var(y, na.rm = TRUE),
       .groups = "drop"
@@ -455,48 +455,50 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     mutate(
       elongation = pmax(x_span / (y_span + 1e-10), y_span / (x_span + 1e-10)),
       
-      # ✅ Calculer si c'est un pic diagonal (TOCSY)
+      # ✅ Calculate if it's a diagonal peak (TOCSY)
       is_diagonal = abs(abs(x_center) - abs(y_center)) < 0.1,
       
-      # ✅ Ratio de compacité avec direction
+      # ✅ Compactness ratio with steering
       aspect_ratio_x = x_span / (y_span + 1e-10),
       aspect_ratio_y = y_span / (x_span + 1e-10),
       
-      # ✅ Direction d'élongation
+      # ✅ Direction of elongation
       is_horizontal = aspect_ratio_x > aspect_ratio_y,
       is_vertical = aspect_ratio_y > aspect_ratio_x,
       
-      # ✅ NOUVEAU: Détecter les "lignes" (artefacts) vs "formes" (vrais pics)
-      # Les artefacts ont une très faible variance sur un axe ET peu de points
+      # ✅ NEW: Detect "lines" (artifacts) vs. "shapes" (true peaks)
+      
+      # Artifacts have very low variance along an axis AND few points
       is_horizontal_line = is_horizontal & (y_var < 0.0001) & (x_span > 0.08) & (n_points < 200),
-      is_vertical_line = is_vertical & (x_var < 0.00005) & (y_span > 0.15) & (n_points < 200),  # ✅ Seuils ajustés
+      is_vertical_line = is_vertical & (x_var < 0.00005) & (y_span > 0.15) & (n_points < 200),  # ✅ Thresholds adjusted
       
-      # ✅ NOUVEAU: Pour les pics verticaux, ratio largeur/hauteur
-      # Vrais multiplets: largeur raisonnable même si allongés
-      # Artefacts: très fins (x_span très petit) ET longs
+      # ✅ NEW: For vertical peaks, width/height ratio
+      # True multiplets: reasonable width even when elongated
+      # Artifacts: very thin (very small x_span) AND long
       width_to_height = x_span / (y_span + 1e-10),
-      is_thin_vertical = is_vertical & (x_span < 0.015) & (y_span > 0.1),  # ✅ Seuil réduit de 0.02 à 0.015
+      is_thin_vertical = is_vertical & (x_span < 0.015) & (y_span > 0.1),  # ✅Reduced threshold from 0.02 to 0.015
       
-      # ✅ Densité
+      # ✅ Density
       area = x_span * y_span,
       density = intensity / (area + 1e-10),
       
-      # ✅ Coefficient de variation
+      # ✅ Coefficient of variation
+      
       cv_x = x_sd / (abs(x_center) + 1e-10),
       cv_y = y_sd / (abs(y_center) + 1e-10),
       
-      # ✅ NOUVEAU: Score de "linearité" (0 = compact, 1 = ligne parfaite)
+      # ✅ NEW: "Linearity" score (0 = compact, 1 = perfect line)
       linearity_x = 1 - pmin(1, x_var / (x_span^2 / 12 + 1e-10)),
       linearity_y = 1 - pmin(1, y_var / (y_span^2 / 12 + 1e-10))
     )
   
-  # --- 4.5 NOUVEAU: Normalisation de l'intensité pour seuils adaptatifs ---
+  #--- 4.5 NEW: Intensity normalization for adaptive thresholds ---
   max_intensity <- max(cluster_stats$intensity, na.rm = TRUE)
   cluster_stats <- cluster_stats %>%
     mutate(intensity_norm = intensity / max_intensity)
   
   
-  # --- 5. FILTRE AMÉLIORÉ avec critères adaptatifs ---
+  # --- 5. IMPROVED FILTER with adaptive criteria ---
   
   if (spectrum_type == "HSQC") {
     
@@ -509,79 +511,98 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     
   } else if (spectrum_type %in% c("TOCSY", "COSY")) {
     
-    # ✅ CRITÈRES POUR TOCSY: Distinguer vrais multiplets vs artefacts
+    # ✅ TOCSY CRITERIA: Distinguishing between true multiplets and artifacts
     valid_ids <- cluster_stats %>%
       filter(
-        # Critère 1: Intensité minimale TRÈS ASSOUPLIE avec exceptions
+        # Criterion 1: Minimum intensity VERY LESS ENHANCED with exceptions
         (
           intensity >= min_cluster_intensity * 0.3 |
             
-            # ✅ EXCEPTION: Pics avec excellentes caractéristiques morphologiques
+            # ✅ EXCEPTION: Woodpeckers with excellent morphological characteristics
             (elongation <= 8 & n_points >= 50 & density > quantile(cluster_stats$density, 0.3, na.rm = TRUE)) |
             
-            # ✅ NOUVELLE EXCEPTION: Pics verticaux avec beaucoup de points (vrais multiplets)
+            # ✅ NEW EXCEPTION: Vertical peaks with many points (true multiplets)
             (is_vertical & x_span >= 0.02 & n_points >= 100 & density > quantile(cluster_stats$density, 0.2, na.rm = TRUE))
         ),
         
-        # Critère 2: Rejeter les LIGNES (artefacts horizontaux et verticaux)
+        # Criterion 2: Reject LINES (horizontal and vertical artifacts)
         !is_horizontal_line,
         !is_vertical_line,
         !is_thin_vertical,
         
-        # Critère 3: Élongation adaptative SELON LE TYPE DE PIC
+        # Criterion 3: Adaptive elongation ACCORDING TO PEAK TYPE
         (
-          # Cas A: Pics diagonaux (autopeaks) - permissifs
+          # Case A: Diagonal peaks (autopeaks) - permissive
+          
           (is_diagonal & elongation <= 25) |
             
-            # Cas B: Pics très intenses - tolérants
+            # Case B: Very intense peaks - tolerant
+            
             (intensity_norm > 0.2 & elongation <= 20) |
             
-            # Cas C: Multiplets verticaux VRAIS (pas trop fins)
-            # ✅ ASSOUPLI: linearity_y peut aller jusqu'à 0.9 pour vrais multiplets
+            # Case C: TRUE vertical multiplets (not too narrow)
+            
+            # ✅ MORE FLEXIBLE: linearity_y can go up to 0.9 for true multiplets
+            
             (is_vertical & x_span >= 0.02 & elongation <= 30 & (linearity_y < 0.9 | n_points >= 200)) |
             
-            # Cas D: Pics moyens - modérés
+            # Case D: Medium peaks - moderate
+            
             (intensity_norm > 0.05 & elongation <= 12) |
             
-            # Cas E: Pics faibles - assouplis
+            # Case E: Weak peaks - softened
+            
             (intensity_norm > 0.01 & elongation <= 10) |
             
-            # Cas F: Pics très faibles mais compacts
+            # Case F: Very weak but compact peaks
+            
             (elongation <= 6) |
             
-            # ✅ NOUVEAU Cas G: Pics verticaux bien structurés (beaucoup de points)
+            # ✅ NEW Case G: Well-structured vertical peaks (many points)
+            
             (is_vertical & x_span >= 0.025 & n_points >= 100 & elongation <= 35)
         ),
         
-        # Critère 4: Densité TRÈS ASSOUPLIE
-        density > quantile(cluster_stats$density, 0.02, na.rm = TRUE) |
-          intensity_norm > 0.05 |
-          elongation <= 6 |
-          n_points >= 100,  # ✅ Les pics bien structurés exemptés
+        # Criterion 4: Density VERY LEAN
         
-        # Critère 5: Nombre de points ASSOUPLI
+        density > quantile(cluster_stats$density, 0.02, na.rm = TRUE) |
+          
+          intensity_norm > 0.05 |
+          
+          elongation <= 6 |
+          
+          n_points >= 100, # ✅ Well-structured peaks exempted
+        
+        # Criterion 5: Number of points LEAN
+        
         n_points >= 1 |
+          
           intensity_norm > 0.05
         
       ) %>%
+      
       pull(stain_id)
     
   } else {  #UFCOSY
     
-    # ✅ CRITÈRES ASSOUPLIS pour COSY/UFCOSY
+    # ✅ EASIER CRITERIA for COSY/UFCOSY
     valid_ids <- cluster_stats %>%
+      
       filter(
         intensity >= min_cluster_intensity * 0.5,
         
-        # Élongation adaptative ASSOUPLIE
-        (
-          (intensity_norm > 0.2 & elongation <= 20) |
-            (intensity_norm > 0.05 & elongation <= 12) |
-            (elongation <= 8)
+        # EASIER Adaptive Elongation
+        
+        ((intensity_norm > 0.2 & elongation <= 20) |
+           
+           (intensity_norm > 0.05 & elongation <= 12) |
+           
+           (elongation <= 8)
+         
         ),
         
-        # Éviter artefacts TRÈS évidents seulement
-        !(is_horizontal & aspect_ratio_x > 20 & y_span < 0.03),  # ✅ CORRIGÉ
+        # Avoid only VERY obvious artifacts
+        !(is_horizontal & aspect_ratio_x > 20 & y_span < 0.03),
         density > quantile(cluster_stats$density, 0.05, na.rm = TRUE) | intensity_norm > 0.1
       ) %>%
       pull(stain_id)
@@ -591,154 +612,154 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
   valid_clusters <- cluster_stats %>% filter(stain_id %in% valid_ids)
   invalid_clusters <- cluster_stats %>% filter(!stain_id %in% valid_ids)
   
-  # ✅ DIAGNOSTIC: Afficher les raisons de rejet
-  if (nrow(invalid_clusters) > 0) {
-    message(sprintf("🗑️  %d clusters rejetés:", nrow(invalid_clusters)))
-    
-    # Compter par type de rejet
-    n_horizontal_lines <- sum(invalid_clusters$is_horizontal_line, na.rm = TRUE)
-    n_vertical_lines <- sum(invalid_clusters$is_vertical_line, na.rm = TRUE)
-    n_thin_vertical <- sum(invalid_clusters$is_thin_vertical, na.rm = TRUE)
-    
-    message(sprintf("  📊 Artefacts horizontaux (lignes): %d", n_horizontal_lines))
-    message(sprintf("  📊 Artefacts verticaux (lignes): %d", n_vertical_lines))
-    message(sprintf("  📊 Pics trop fins (artefacts): %d", n_thin_vertical))
-    
-    # ✅ Calculer le seuil de densité
-    density_threshold <- quantile(cluster_stats$density, 0.05, na.rm = TRUE)
-    
-    for (i in seq_len(min(10, nrow(invalid_clusters)))) {
-      inv <- invalid_clusters[i, ]
-      reasons <- c()
-      
-      if (inv$intensity < min_cluster_intensity * 0.5) {
-        reasons <- c(reasons, sprintf("intensité=%.3f", inv$intensity))
-      }
-      if (inv$is_horizontal_line) {
-        reasons <- c(reasons, sprintf("ARTEFACT horizontal (x_span=%.3f)", inv$x_span))
-      }
-      if (inv$is_vertical_line) {
-        reasons <- c(reasons, sprintf("ARTEFACT vertical (y_span=%.3f)", inv$y_span))
-      }
-      if (inv$is_thin_vertical) {
-        reasons <- c(reasons, sprintf("trop fin (x_span=%.4f)", inv$x_span))
-      }
-      if (inv$elongation > 30 & !inv$is_diagonal) {
-        reasons <- c(reasons, sprintf("elong=%.1f", inv$elongation))
-      }
-      if (inv$is_vertical & inv$x_span >= 0.02 & inv$linearity_y >= 0.8) {
-        reasons <- c(reasons, sprintf("⚠️ vertical linéaire (lin_y=%.2f)", inv$linearity_y))
-      }
-      # ✅ NOUVEAU: Vérifier densité
-      if (inv$density <= density_threshold & inv$intensity_norm <= 0.1) {
-        reasons <- c(reasons, sprintf("densité=%.2e (seuil=%.2e)", inv$density, density_threshold))
-      }
-      # ✅ NOUVEAU: Vérifier nombre de points
-      if (inv$n_points < 2 & inv$intensity_norm <= 0.15) {
-        reasons <- c(reasons, sprintf("n_pts=%d", inv$n_points))
-      }
-      
-      # ✅ Si aucune raison trouvée, afficher les stats clés
-      if (length(reasons) == 0) {
-        reasons <- c(reasons, sprintf("⚠️ RAISON INCONNUE - elong=%.1f, dens=%.2e, n_pts=%d, int_norm=%.3f",
-                                      inv$elongation, inv$density, inv$n_points, inv$intensity_norm))
-      }
-      
-      message(sprintf("  - Cluster %s @ (%.2f, %.2f): %s", 
-                      inv$stain_id, -inv$x_center, -inv$y_center, 
-                      paste(reasons, collapse = ", ")))
-    }
-    
-    # ✅ Avertir si des multiplets potentiels ont été rejetés
-    potential_good_peaks <- invalid_clusters %>%
-      filter(
-        !is_horizontal_line, 
-        !is_vertical_line, 
-        !is_thin_vertical,
-        elongation <= 10,  # Pics compacts
-        n_points >= 50,    # Beaucoup de points
-        density > quantile(cluster_stats$density, 0.2, na.rm = TRUE)  # Bonne densité
-      )
-    
-    if (nrow(potential_good_peaks) > 0) {
-      message(sprintf("\n⚠️⚠️ ALERTE: %d pics avec BONNES caractéristiques rejetés (probablement intensité trop faible):", 
-                      nrow(potential_good_peaks)))
-      for (i in seq_len(min(5, nrow(potential_good_peaks)))) {
-        pg <- potential_good_peaks[i, ]
-        message(sprintf("    @ (%.2f, %.2f): int=%.3f (norm=%.4f), x_span=%.4f, y_span=%.3f, elong=%.1f, dens=%.2e, n_pts=%d",
-                        -pg$x_center, -pg$y_center, pg$intensity, pg$intensity_norm,
-                        pg$x_span, pg$y_span, pg$elongation, pg$density, pg$n_points))
-      }
-      message(sprintf("  💡 Suggestion: Réduire min_cluster_intensity de %.3f à %.3f", 
-                      min_cluster_intensity, 
-                      min(potential_good_peaks$intensity) * 0.8))
-    }
-    
-    # Multiplets verticaux potentiels
-    potential_multiplets <- invalid_clusters %>%
-      filter(is_vertical, x_span >= 0.02, x_span < 0.05, elongation <= 40, linearity_y < 0.8)
-    
-    if (nrow(potential_multiplets) > 0) {
-      message(sprintf("\n⚠️  WARNING: %d multiplets verticaux POTENTIELS rejetés:", 
-                      nrow(potential_multiplets)))
-      for (i in seq_len(min(3, nrow(potential_multiplets)))) {
-        pm <- potential_multiplets[i, ]
-        
-        # ✅ DIAGNOSTIC DÉTAILLÉ: Afficher TOUS les flags
-        flags <- c()
-        if (pm$is_horizontal_line) flags <- c(flags, "HORIZ_LINE")
-        if (pm$is_vertical_line) flags <- c(flags, "VERT_LINE")
-        if (pm$is_thin_vertical) flags <- c(flags, "THIN_VERT")
-        if (pm$is_diagonal) flags <- c(flags, "DIAGONAL")
-        
-        message(sprintf("    @ (%.2f, %.2f): int=%.3f, x_span=%.4f, y_span=%.3f, elong=%.1f, dens=%.2e, n_pts=%d",
-                        -pm$x_center, -pm$y_center, pm$intensity,
-                        pm$x_span, pm$y_span, pm$elongation, pm$density, pm$n_points))
-        message(sprintf("      x_var=%.6f, y_var=%.6f, linearity_y=%.3f, flags=[%s]",
-                        pm$x_var, pm$y_var, pm$linearity_y, 
-                        if(length(flags) > 0) paste(flags, collapse=", ") else "NONE"))
-        
-        # ✅ Tester chaque condition du filtre
-        message("      Tests de filtre:")
-        message(sprintf("        - intensity >= min*0.3: %s (%.3f >= %.3f)",
-                        pm$intensity >= min_cluster_intensity * 0.3, pm$intensity, min_cluster_intensity * 0.3))
-        message(sprintf("        - !is_horizontal_line: %s", !pm$is_horizontal_line))
-        message(sprintf("        - !is_vertical_line: %s", !pm$is_vertical_line))
-        message(sprintf("        - !is_thin_vertical: %s", !pm$is_thin_vertical))
-      }
-    }
-  }
+  # # ✅ DIAGNOSTIC: Afficher les raisons de rejet
+  # if (nrow(invalid_clusters) > 0) {
+  #   message(sprintf("🗑️  %d clusters rejetés:", nrow(invalid_clusters)))
+  #   
+  #   # Compter par type de rejet
+  #   n_horizontal_lines <- sum(invalid_clusters$is_horizontal_line, na.rm = TRUE)
+  #   n_vertical_lines <- sum(invalid_clusters$is_vertical_line, na.rm = TRUE)
+  #   n_thin_vertical <- sum(invalid_clusters$is_thin_vertical, na.rm = TRUE)
+  #   
+  #   message(sprintf("  📊 Artefacts horizontaux (lignes): %d", n_horizontal_lines))
+  #   message(sprintf("  📊 Artefacts verticaux (lignes): %d", n_vertical_lines))
+  #   message(sprintf("  📊 Pics trop fins (artefacts): %d", n_thin_vertical))
+  #   
+  #   # ✅ Calculer le seuil de densité
+  #   density_threshold <- quantile(cluster_stats$density, 0.05, na.rm = TRUE)
+  #   
+  #   for (i in seq_len(min(10, nrow(invalid_clusters)))) {
+  #     inv <- invalid_clusters[i, ]
+  #     reasons <- c()
+  #     
+  #     if (inv$intensity < min_cluster_intensity * 0.5) {
+  #       reasons <- c(reasons, sprintf("intensité=%.3f", inv$intensity))
+  #     }
+  #     if (inv$is_horizontal_line) {
+  #       reasons <- c(reasons, sprintf("ARTEFACT horizontal (x_span=%.3f)", inv$x_span))
+  #     }
+  #     if (inv$is_vertical_line) {
+  #       reasons <- c(reasons, sprintf("ARTEFACT vertical (y_span=%.3f)", inv$y_span))
+  #     }
+  #     if (inv$is_thin_vertical) {
+  #       reasons <- c(reasons, sprintf("trop fin (x_span=%.4f)", inv$x_span))
+  #     }
+  #     if (inv$elongation > 30 & !inv$is_diagonal) {
+  #       reasons <- c(reasons, sprintf("elong=%.1f", inv$elongation))
+  #     }
+  #     if (inv$is_vertical & inv$x_span >= 0.02 & inv$linearity_y >= 0.8) {
+  #       reasons <- c(reasons, sprintf("⚠️ vertical linéaire (lin_y=%.2f)", inv$linearity_y))
+  #     }
+  #     # ✅ NOUVEAU: Vérifier densité
+  #     if (inv$density <= density_threshold & inv$intensity_norm <= 0.1) {
+  #       reasons <- c(reasons, sprintf("densité=%.2e (seuil=%.2e)", inv$density, density_threshold))
+  #     }
+  #     # ✅ NOUVEAU: Vérifier nombre de points
+  #     if (inv$n_points < 2 & inv$intensity_norm <= 0.15) {
+  #       reasons <- c(reasons, sprintf("n_pts=%d", inv$n_points))
+  #     }
+  #     
+  #     # ✅ Si aucune raison trouvée, afficher les stats clés
+  #     if (length(reasons) == 0) {
+  #       reasons <- c(reasons, sprintf("⚠️ RAISON INCONNUE - elong=%.1f, dens=%.2e, n_pts=%d, int_norm=%.3f",
+  #                                     inv$elongation, inv$density, inv$n_points, inv$intensity_norm))
+  #     }
+  #     
+  #     message(sprintf("  - Cluster %s @ (%.2f, %.2f): %s", 
+  #                     inv$stain_id, -inv$x_center, -inv$y_center, 
+  #                     paste(reasons, collapse = ", ")))
+  #   }
+  #   
+  #   # ✅ Avertir si des multiplets potentiels ont été rejetés
+  #   potential_good_peaks <- invalid_clusters %>%
+  #     filter(
+  #       !is_horizontal_line, 
+  #       !is_vertical_line, 
+  #       !is_thin_vertical,
+  #       elongation <= 10,  # Pics compacts
+  #       n_points >= 50,    # Beaucoup de points
+  #       density > quantile(cluster_stats$density, 0.2, na.rm = TRUE)  # Bonne densité
+  #     )
+  #   
+  #   if (nrow(potential_good_peaks) > 0) {
+  #     message(sprintf("\n⚠️⚠️ ALERTE: %d pics avec BONNES caractéristiques rejetés (probablement intensité trop faible):", 
+  #                     nrow(potential_good_peaks)))
+  #     for (i in seq_len(min(5, nrow(potential_good_peaks)))) {
+  #       pg <- potential_good_peaks[i, ]
+  #       message(sprintf("    @ (%.2f, %.2f): int=%.3f (norm=%.4f), x_span=%.4f, y_span=%.3f, elong=%.1f, dens=%.2e, n_pts=%d",
+  #                       -pg$x_center, -pg$y_center, pg$intensity, pg$intensity_norm,
+  #                       pg$x_span, pg$y_span, pg$elongation, pg$density, pg$n_points))
+  #     }
+  #     message(sprintf("  💡 Suggestion: Réduire min_cluster_intensity de %.3f à %.3f", 
+  #                     min_cluster_intensity, 
+  #                     min(potential_good_peaks$intensity) * 0.8))
+  #   }
+  #   
+  #   # Multiplets verticaux potentiels
+  #   potential_multiplets <- invalid_clusters %>%
+  #     filter(is_vertical, x_span >= 0.02, x_span < 0.05, elongation <= 40, linearity_y < 0.8)
+  #   
+  #   if (nrow(potential_multiplets) > 0) {
+  #     message(sprintf("\n⚠️  WARNING: %d multiplets verticaux POTENTIELS rejetés:", 
+  #                     nrow(potential_multiplets)))
+  #     for (i in seq_len(min(3, nrow(potential_multiplets)))) {
+  #       pm <- potential_multiplets[i, ]
+  #       
+  #       # ✅ DIAGNOSTIC DÉTAILLÉ: Afficher TOUS les flags
+  #       flags <- c()
+  #       if (pm$is_horizontal_line) flags <- c(flags, "HORIZ_LINE")
+  #       if (pm$is_vertical_line) flags <- c(flags, "VERT_LINE")
+  #       if (pm$is_thin_vertical) flags <- c(flags, "THIN_VERT")
+  #       if (pm$is_diagonal) flags <- c(flags, "DIAGONAL")
+  #       
+  #       message(sprintf("    @ (%.2f, %.2f): int=%.3f, x_span=%.4f, y_span=%.3f, elong=%.1f, dens=%.2e, n_pts=%d",
+  #                       -pm$x_center, -pm$y_center, pm$intensity,
+  #                       pm$x_span, pm$y_span, pm$elongation, pm$density, pm$n_points))
+  #       message(sprintf("      x_var=%.6f, y_var=%.6f, linearity_y=%.3f, flags=[%s]",
+  #                       pm$x_var, pm$y_var, pm$linearity_y, 
+  #                       if(length(flags) > 0) paste(flags, collapse=", ") else "NONE"))
+  #       
+  #       # ✅ Tester chaque condition du filtre
+  #       message("      Tests de filtre:")
+  #       message(sprintf("        - intensity >= min*0.3: %s (%.3f >= %.3f)",
+  #                       pm$intensity >= min_cluster_intensity * 0.3, pm$intensity, min_cluster_intensity * 0.3))
+  #       message(sprintf("        - !is_horizontal_line: %s", !pm$is_horizontal_line))
+  #       message(sprintf("        - !is_vertical_line: %s", !pm$is_vertical_line))
+  #       message(sprintf("        - !is_thin_vertical: %s", !pm$is_thin_vertical))
+  #     }
+  #   }
+  # }
   
   
-  # --- 6. Redistribution des intensités perdues ---
+  # --- 6. Redistribution of lost intensities ---
   if (nrow(invalid_clusters) > 0 && nrow(valid_clusters) > 0) {
     
     for (i in seq_len(nrow(invalid_clusters))) {
       inv <- invalid_clusters[i, ]
       
-      # Distance sur l'axe X
+      # Distance along the X-axis
       valid_clusters <- valid_clusters %>%
         mutate(x_dist = abs(x_center - inv$x_center))
       
-      # Trouver le plus proche sur X (et le plus intense si égalité)
+      # Find the closest on X (and the most intense if equal)
       idx_target <- valid_clusters %>%
         arrange(x_dist, desc(intensity)) %>%
         slice(1) %>%
         pull(stain_id)
-      
-      # Ajouter l'intensité
+
+      # Add intensity
       cluster_stats$intensity[cluster_stats$stain_id == idx_target] <-
         cluster_stats$intensity[cluster_stats$stain_id == idx_target] + inv$intensity
     }
     
-    message(sprintf("✅ Redistribution vers %d clusters valides.", nrow(valid_clusters)))
+    message(sprintf("✅ Redistribution to %d valid clusters.", nrow(valid_clusters)))
   }
   
-  # --- 7. Filtrage final des données de contour ---
+  # ---7. Final filtering of contour data ---
   contour_data <- contour_data %>% filter(stain_id %in% valid_ids)
   
   
-  # --- 8. Centroïdes ---
+  # --- 8. Centroïds ---
   centroids <- contour_data %>%
     group_by(stain_id) %>%
     summarise(
@@ -763,7 +784,7 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       .groups = "drop"
     )
   
-  # --- 10. Suppression centroïdes inclus plus faibles ---
+  # --- 10. Suppression of weaker included centroids ---
   if (nrow(centroids) > 1) {
     centroids_with_boxes <- centroids %>%
       left_join(bounding_boxes, by = "stain_id")
@@ -787,7 +808,8 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     bounding_boxes <- bounding_boxes %>% filter(!stain_id %in% to_remove)
   }
   
-  # --- 11. Sélection par zone ---
+  # --- 11. Selection by area ---
+  
   if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges)) {
     for (i in seq_along(keep_peak_ranges)) {
       range <- keep_peak_ranges[[i]]
@@ -804,16 +826,18 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
     }
   }
   
-  # --- 12. Renommage ---
+  # --- 12. Renaming ---
   centroids <- centroids %>%
     mutate(stain_id = paste0("peak", seq_len(n()))) %>%
     select(stain_id, F2_ppm, F1_ppm, Volume)
   
-  message(sprintf("✅ %d pics valides détectés après filtrage.", nrow(centroids)))
+  message(sprintf("✅ %d valid peaks detected after filtering.", nrow(centroids)))
   
   return(list(
     centroids = centroids,
     bounding_boxes = bounding_boxes,
-    cluster_stats = cluster_stats  # ✅ NOUVEAU: Retourner les stats pour diagnostic
+    cluster_stats = cluster_stats  # ✅ NEW: Return stats for diagnosis
+    
+    
   ))
 }

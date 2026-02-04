@@ -5,6 +5,8 @@
 #' @param threshold Minimum intensity relative to max (0-1)
 #' @param min_distance Minimum distance between peaks (in pixels)
 #' @return Data frame with local maxima coordinates
+
+
 detect_local_maxima <- function(mat, threshold = 0.3, min_distance = 2) {
   nr <- nrow(mat)
   nc <- ncol(mat)
@@ -64,6 +66,7 @@ detect_local_maxima <- function(mat, threshold = 0.3, min_distance = 2) {
 #' @param gamma_y Lorentzian width in Y
 #' @param eta Mixing parameter (0 = pure Gaussian, 1 = pure Lorentzian)
 #' @return Intensity value
+
 pseudo_voigt_2d <- function(x, y, A, x0, y0, sigma_x, sigma_y, gamma_x, gamma_y, eta) {
   # Gaussian component
   gauss <- exp(-((x - x0)^2 / (2 * sigma_x^2) + (y - y0)^2 / (2 * sigma_y^2)))
@@ -85,6 +88,7 @@ pseudo_voigt_2d <- function(x, y, A, x0, y0, sigma_x, sigma_y, gamma_x, gamma_y,
 #' @param model Type of peak model: "gaussian", "voigt"
 #' @param min_points Minimum number of points required for fitting
 #' @return List with fitted parameters and volume
+
 fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points = 25) {
   
   # Extract region
@@ -96,9 +100,10 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
                 method = "failed", error = "No points in region"))
   }
   
-  # Vérifier qu'on a assez de points
+  # Check that we have enough points
+  
   if (length(x_idx) * length(y_idx) < min_points) {
-    # Fallback sur la somme
+    # Fallbac on sum
     region <- mat[y_idx, x_idx, drop = FALSE]
     volume_sum <- sum(region, na.rm = TRUE)
     return(list(
@@ -114,7 +119,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
   x_sub <- ppm_x[x_idx]
   y_sub <- ppm_y[y_idx]
   
-  # Vérifier que la région n'est pas vide ou constante
+  # Check that the region is not empty or constant
   if (all(is.na(region)) || sd(as.vector(region), na.rm = TRUE) < 1e-10) {
     return(list(
       volume = sum(region, na.rm = TRUE),
@@ -125,16 +130,16 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     ))
   }
   
-  # ========== DÉTECTION DE MULTIPLETS ==========
-  # Détecter si on a plusieurs pics dans la région
+  # ========== MULTIPLET DETECTION ==========
+  # Detect if there are multiple peaks in the region
   local_max <- detect_local_maxima(region, threshold = 0.3, min_distance = 2)
   n_peaks <- nrow(local_max)
   is_multiplet <- n_peaks > 1
   
-  # Si multiplet détecté, fitter chaque pic séparément
+  # If multiplet detected, fit each peak separately
   if (is_multiplet) {
     
-    # Résultats pour chaque pic
+    # Results for each peak
     peak_volumes <- numeric(n_peaks)
     peak_r_squared <- numeric(n_peaks)
     peak_centers_x <- numeric(n_peaks)
@@ -144,15 +149,16 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     total_fitted_vals <- rep(0, length(x_sub) * length(y_sub))
     
     for (p in seq_len(n_peaks)) {
-      # Coordonnées du pic
+      # Peak coordinates
       peak_row <- local_max$row[p]
       peak_col <- local_max$col[p]
       peak_x <- x_sub[peak_col]
       peak_y <- y_sub[peak_row]
       peak_amplitude <- local_max$value[p]
       
-      # Créer une sous-région autour de ce pic
-      # Estimer la largeur du pic (distance au pic voisin le plus proche / 2)
+      # Create a subregion around this peak
+      # Estimate the width of the peak (distance to the nearest neighboring peak / 2)
+      
       if (n_peaks > 1) {
         distances <- sqrt((local_max$col - peak_col)^2 + (local_max$row - peak_row)^2)
         distances[p] <- Inf  # Exclure le pic lui-même
@@ -162,7 +168,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
         half_width_pixels <- 3
       }
       
-      # Indices pour la sous-région
+      # Indices for the sub-region
       col_start <- max(1, peak_col - half_width_pixels)
       col_end <- min(ncol(region), peak_col + half_width_pixels)
       row_start <- max(1, peak_row - half_width_pixels)
@@ -172,13 +178,13 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       sub_x <- x_sub[col_start:col_end]
       sub_y <- y_sub[row_start:row_end]
       
-      # Créer le grid pour ce pic
+      # Create the grid for this peak
       sub_grid <- expand.grid(x = sub_x, y = sub_y)
       sub_grid$z <- as.vector(t(sub_region))
       sub_grid <- sub_grid[!is.na(sub_grid$z), ]
       
       if (nrow(sub_grid) < 9) {
-        # Pas assez de points, utiliser la somme pour ce pic
+        # Not enough points, use the sum for this peak
         peak_volumes[p] <- sum(sub_region, na.rm = TRUE)
         peak_r_squared[p] <- NA
         peak_centers_x[p] <- peak_x
@@ -186,17 +192,17 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
         next
       }
       
-      # Normalisation
+      # Normalization
       z_scale <- max(abs(sub_grid$z), na.rm = TRUE)
       if (z_scale < 1e-10) z_scale <- 1
       sub_grid$z_norm <- sub_grid$z / z_scale
       
-      # Paramètres initiaux pour ce pic
+      # Initial parameters for this peak
       baseline_init <- quantile(sub_grid$z, 0.1, na.rm = TRUE) / z_scale
       sigma_x_init <- diff(range(sub_x)) / 4
       sigma_y_init <- diff(range(sub_y)) / 4
       
-      # Tenter le fit
+      # Trying to fit
       fit_single <- tryCatch({
         if (model == "gaussian") {
           fit <- minpack.lm::nlsLM(
@@ -235,13 +241,13 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
         params <- coef(fit)
         fitted_vals <- fitted(fit) * z_scale
         
-        # Calculer R²
+        # Calculate R²
         residuals <- sub_grid$z - fitted_vals
         ss_res <- sum(residuals^2)
         ss_tot <- sum((sub_grid$z - mean(sub_grid$z))^2)
         r2 <- max(0, 1 - (ss_res / ss_tot))
         
-        # Volume = somme des valeurs fittées
+        # Volume = sum of fitted values
         vol <- sum(fitted_vals, na.rm = TRUE)
         
         list(volume = vol, r_squared = r2, 
@@ -249,7 +255,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
              fitted_vals = fitted_vals, success = TRUE)
         
       }, error = function(e) {
-        # Fallback: somme pour ce pic
+        # Fallback: sum for this peak
         list(volume = sum(sub_region, na.rm = TRUE), r_squared = NA,
              center_x = peak_x, center_y = peak_y,
              fitted_vals = NULL, success = FALSE)
@@ -262,11 +268,11 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       peak_fitted_values[[p]] <- fit_single$fitted_vals
     }
     
-    # Agréger les résultats
+    # Aggregate the results
     total_volume <- sum(peak_volumes, na.rm = TRUE)
     mean_r_squared <- mean(peak_r_squared, na.rm = TRUE)
     
-    # Centre pondéré par les volumes
+    # Volume-weighted center
     if (sum(peak_volumes, na.rm = TRUE) > 0) {
       weights <- peak_volumes / sum(peak_volumes, na.rm = TRUE)
       center_x <- sum(peak_centers_x * weights, na.rm = TRUE)
@@ -308,9 +314,9 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     ))
   }
   
-  # ========== ESTIMATION ROBUSTE DES PARAMÈTRES INITIAUX ==========
+  # ========== ROBUST ESTIMATE OF INITIAL PARAMETERS ==========
   
-  # Trouver le maximum global pour centrer
+  # Find the overall maximum for centering
   max_idx <- which.max(grid$z)
   center_x_init <- grid$x[max_idx]
   center_y_init <- grid$y[max_idx]
@@ -318,30 +324,31 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
   
   baseline_init <- quantile(grid$z, 0.1, na.rm = TRUE)  # 10e percentile comme baseline
   
-  # Estimations des largeurs basées sur FWHM approximatif
-  # Trouver les points > 50% du max
+  # Width estimates based on approximate FWHM
+  # Find points > 50% of the max
+  
   half_max <- (amplitude_init + baseline_init) / 2
   points_half <- grid[grid$z > half_max, ]
   
   if (nrow(points_half) > 3) {
-    sigma_x_init <- sd(points_half$x) * 1.5  # Facteur empirique
+    sigma_x_init <- sd(points_half$x) * 1.5  # Empirical factor
     sigma_y_init <- sd(points_half$y) * 1.5
   } else {
-    # Fallback sur la taille de la box
+    # Fallback on box size
     sigma_x_init <- (box$xmax - box$xmin) / 4
     sigma_y_init <- (box$ymax - box$ymin) / 4
   }
   
-  # S'assurer que les sigma ne sont pas trop petits
+  # Ensure that the sigma values are not too small
   sigma_x_init <- max(sigma_x_init, diff(range(x_sub)) / 10)
   sigma_y_init <- max(sigma_y_init, diff(range(y_sub)) / 10)
   
-  # Normaliser les données pour améliorer la convergence
+  # Standardize data to improve convergence
   z_scale <- max(abs(grid$z), na.rm = TRUE)
   if (z_scale < 1e-10) z_scale <- 1
   grid$z_norm <- grid$z / z_scale
   
-  # ========== MODÈLE ET FITTING ==========
+  # ========== MODEL AND FITTING ==========
   
   if (model == "gaussian") {
     
@@ -356,12 +363,12 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       b = baseline_init / z_scale
     )
     
-    # Contraintes pour éviter les paramètres aberrants
+    # Constraints to avoid aberrant parameters
     lower_bounds <- c(
-      A = 0,  # Amplitude positive
+      A = 0,  # Positive amplitude
       x0 = min(x_sub),
       y0 = min(y_sub),
-      sx = diff(range(x_sub)) / 20,  # Largeur min
+      sx = diff(range(x_sub)) / 20,  # Min width
       sy = diff(range(y_sub)) / 20,
       b = -Inf
     )
@@ -370,15 +377,16 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       A = Inf,
       x0 = max(x_sub),
       y0 = max(y_sub),
-      sx = diff(range(x_sub)) * 2,  # Largeur max
+      sx = diff(range(x_sub)) * 2,  # Max width
       sy = diff(range(y_sub)) * 2,
       b = Inf
     )
     
   } else if (model == "voigt") {
     
-    # Pseudo-Voigt 2D: combinaison linéaire de Gaussienne et Lorentzienne
-    # eta = paramètre de mélange (0 = Gaussien pur, 1 = Lorentzien pur)
+    # Pseudo-Voigt 2D: linear combination of Gaussian and Lorentzian
+    # eta = mixing parameter (0 = pure Gaussian, 1 = pure Lorentzian)
+    
     fit_formula <- z_norm ~ A * (eta / (1 + ((x - x0) / gx)^2 + ((y - y0) / gy)^2) + 
                                    (1 - eta) * exp(-((x - x0)^2 / (2 * sx^2) + (y - y0)^2 / (2 * sy^2)))) + b
     
@@ -386,11 +394,11 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       A = amplitude_init / z_scale,
       x0 = center_x_init,
       y0 = center_y_init,
-      sx = sigma_x_init,      # Largeur Gaussienne
+      sx = sigma_x_init,      # Gaussian Width
       sy = sigma_y_init,
-      gx = sigma_x_init,      # Largeur Lorentzienne
+      gx = sigma_x_init,      # Lorentzian Width
       gy = sigma_y_init,
-      eta = 0.5,              # Mélange 50-50 par défaut
+      eta = 0.5,              # 50-50 mix by default
       b = baseline_init / z_scale
     )
     
@@ -402,7 +410,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       sy = diff(range(y_sub)) / 20,
       gx = diff(range(x_sub)) / 20,
       gy = diff(range(y_sub)) / 20,
-      eta = 0,                # Pur Gaussien
+      eta = 0,                # Pure Gaussian
       b = -Inf
     )
     
@@ -414,7 +422,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       sy = diff(range(y_sub)) * 2,
       gx = diff(range(x_sub)) * 2,
       gy = diff(range(y_sub)) * 2,
-      eta = 1,                # Pur Lorentzien
+      eta = 1,                # Pure Lorentzian
       b = Inf
     )
     
@@ -422,7 +430,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     stop("Model not supported. Use 'gaussian' or 'voigt'")
   }
   
-  # ========== TENTATIVE DE FITTING ==========
+  # ========== ATTEMPTED FITTING ==========
   
   fit_result <- tryCatch({
     
@@ -436,39 +444,43 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
         maxiter = 200,
         ftol = 1e-6,
         ptol = 1e-6,
-        gtol = 0  # Désactiver le test de gradient pour éviter "singular gradient"
+        gtol = 0  # Disable gradient testing to avoid "singular gradient"
       )
     )
     
     params <- coef(fit)
     
-    # Rescaler les paramètres
+    # Rescale settings
     params["A"] <- params["A"] * z_scale
     params["b"] <- params["b"] * z_scale
     
-    # Calculer R² sur les données originales
+    # Calculate R² on the original data
     fitted_vals <- fitted(fit) * z_scale
     residuals <- grid$z - fitted_vals
     ss_res <- sum(residuals^2)
     ss_tot <- sum((grid$z - mean(grid$z))^2)
-    r_squared <- max(0, 1 - (ss_res / ss_tot))  # Forcer entre 0 et 1
+    r_squared <- max(0, 1 - (ss_res / ss_tot)) # Force between 0 and 1
+
     
-    # ========== CALCUL DU VOLUME ==========
-    # Option 1: Somme des valeurs fittées (intensité intégrée dans la box)
-    # C'est la méthode la plus fiable et comparable à la méthode "sum"
+    # ========== VOLUME CALCULATION ==========
+    # Option 1: Sum of fitted values ​​(intensity integrated into the box)
+    
+    # This is the most reliable method and comparable to the "sum" method
+    
     volume_fitted_sum <- sum(fitted_vals, na.rm = TRUE)
     
-    # Option 2: Volume analytique (pour référence, mais moins utile en pratique)
+    # Option 2: Analytical volume (for reference, but less useful in practice)
     if (model == "gaussian") {
-      # Volume analytique d'une Gaussienne 2D (intégrale sur tout l'espace)
+      # Analytical volume of a 2D Gaussian (integral over all space)
       volume_analytical <- 2 * pi * params["A"] * abs(params["sx"]) * abs(params["sy"])
     } else if (model == "lorentzian") {
-      # Volume analytique d'une Lorentzienne 2D
+      # Analytical volume of a 2D Lorentzian
       volume_analytical <- pi^2 * params["A"] * abs(params["gx"]) * abs(params["gy"])
     }
     
-    # Utiliser la somme des valeurs fittées comme volume principal
-    # (plus cohérent avec la méthode sum et donne des valeurs comparables)
+    # Use the sum of the fitted values ​​as the principal volume
+    # (more consistent with the sum method and gives comparable values)
+    
     volume <- volume_fitted_sum
     
     list(
@@ -484,7 +496,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     
   }, error = function(e) {
     
-    # En cas d'échec, fallback sur la somme
+    # In case of failure, fallback on the sum
     volume_sum <- sum(region, na.rm = TRUE)
     
     list(
@@ -498,7 +510,10 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     )
   })
   
-  # Ajouter l'info sur le nombre de pics (pour les non-multiplets, n_peaks = 1)
+  
+  
+  # Add information on the number of peaks (for non-multiplets, n_peaks = 1)
+  
   fit_result$n_peaks <- 1
   fit_result$is_multiplet <- FALSE
   
@@ -523,7 +538,7 @@ calculate_fitted_volumes <- function(mat, ppm_x, ppm_y, boxes,
   n_boxes <- nrow(boxes)
   results <- vector("list", n_boxes)
   
-  # Compteurs pour diagnostics
+  # Meters for diagnostics
   n_success <- 0
   n_fallback <- 0
   n_failed <- 0
@@ -539,7 +554,7 @@ calculate_fitted_volumes <- function(mat, ppm_x, ppm_y, boxes,
                               model = model, 
                               min_points = min_points)
     
-    # Statistiques
+    # Statistics
     if (fit_result$method == model) {
       n_success <- n_success + 1
     } else if (fit_result$method == "multiplet_fit") {
@@ -565,9 +580,6 @@ calculate_fitted_volumes <- function(mat, ppm_x, ppm_y, boxes,
     )
   }
   
-  # Message de diagnostic
-  message(sprintf("Fitting complete: %d successful (%d multiplets fitted), %d fallback to sum, %d failed",
-                  n_success, n_multiplets, n_fallback, n_failed))
   
   do.call(rbind, results)
 }
