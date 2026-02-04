@@ -252,12 +252,12 @@ For questions, bug reports, or feature requests:
 
 <p align="center">
   <a href="https://www.metabohub.fr/">
-    <img src="docs/img/metabohub_logo.png" alt="MetaboHUB" height="80"/>
+    <img src="docs/img/metabohub_logo.png" alt="MetaboHUB" height="60"/>
   </a>
-   <a href="https://toxalim.toulouse.hub.inrae.fr/">
-    <img src="docs/img/inrae_toxalim.png" alt="INRAe" height="80"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   <!-- 10 espaces -->
+  <a href="https://toxalim.toulouse.hub.inrae.fr/">
+    <img src="docs/img/inrae_toxalim.png" alt="INRAe Toxalim" height="60"/>
   </a>
-  
 </p>
 
 <p align="center">
