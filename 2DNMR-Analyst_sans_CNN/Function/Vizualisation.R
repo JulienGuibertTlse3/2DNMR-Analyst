@@ -15,6 +15,8 @@ library(dbscan)     # for DBSCAN clustering
 library(magrittr)   # for piping (%>%)
 
 
+## ---- Spectra displaying function ----
+
 #' Generate Optimized Contour Plot for 2D NMR Spectrum
 #'
 #' Creates a contour plot from a 2D NMR intensity matrix with performance optimizations

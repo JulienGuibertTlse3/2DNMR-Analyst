@@ -1,5 +1,7 @@
 # Function/Peak_fitting.R
 
+# DETECT LOCAL MAX ----
+
 #' Detect local maxima in a 2D region
 #' @param mat Matrix of intensities
 #' @param threshold Minimum intensity relative to max (0-1)
@@ -53,7 +55,8 @@ detect_local_maxima <- function(mat, threshold = 0.3, min_distance = 2) {
 }
 
 
-#' Pseudo-Voigt 2D profile function
+# Pseudo-Voigt 2D profile function ----
+
 #' Approximation of the Voigt profile as a linear combination of Gaussian and Lorentzian
 #' @param x X coordinate
 #' @param y Y coordinate
@@ -79,7 +82,7 @@ pseudo_voigt_2d <- function(x, y, A, x0, y0, sigma_x, sigma_y, gamma_x, gamma_y,
 }
 
 
-#' Fit 2D peak to a spectral region (VERSION ROBUSTE avec support MULTIPLET)
+# Fit 2D peak to a spectral region (VERSION ROBUSTE avec support MULTIPLET) ----
 #' 
 #' @param mat Matrix of spectral intensities
 #' @param ppm_x Vector of F2 chemical shifts
@@ -130,7 +133,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     ))
   }
   
-  # ========== MULTIPLET DETECTION ==========
+  #  MULTIPLET DETECTION 
   # Detect if there are multiple peaks in the region
   local_max <- detect_local_maxima(region, threshold = 0.3, min_distance = 2)
   n_peaks <- nrow(local_max)
@@ -314,7 +317,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     ))
   }
   
-  # ========== ROBUST ESTIMATE OF INITIAL PARAMETERS ==========
+  #  ROBUST ESTIMATE OF INITIAL PARAMETERS 
   
   # Find the overall maximum for centering
   max_idx <- which.max(grid$z)
@@ -348,7 +351,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
   if (z_scale < 1e-10) z_scale <- 1
   grid$z_norm <- grid$z / z_scale
   
-  # ========== MODEL AND FITTING ==========
+  # MODEL AND FITTING 
   
   if (model == "gaussian") {
     
@@ -430,7 +433,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     stop("Model not supported. Use 'gaussian' or 'voigt'")
   }
   
-  # ========== ATTEMPTED FITTING ==========
+  # ATTEMPTED FITTING 
   
   fit_result <- tryCatch({
     
@@ -462,7 +465,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     r_squared <- max(0, 1 - (ss_res / ss_tot)) # Force between 0 and 1
 
     
-    # ========== VOLUME CALCULATION ==========
+    #  VOLUME CALCULATION 
     # Option 1: Sum of fitted values ​​(intensity integrated into the box)
     
     # This is the most reliable method and comparable to the "sum" method
@@ -520,6 +523,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
   return(fit_result)
 }
 
+# BATCH Peak Fitting ----
 
 #' Batch peak fitting for all boxes avec gestion robuste des erreurs
 #' 
@@ -530,6 +534,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
 #' @param model Peak model type
 #' @param progress_callback Optional function for progress updates
 #' @param min_points Minimum points required for fitting
+
 calculate_fitted_volumes <- function(mat, ppm_x, ppm_y, boxes, 
                                      model = "gaussian",
                                      progress_callback = NULL,
