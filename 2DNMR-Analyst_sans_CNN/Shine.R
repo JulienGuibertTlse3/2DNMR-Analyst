@@ -4,7 +4,6 @@
 #                          SHINY APPLICATION ----
 #
 
-# 
 # Application: 2DNMR-Analyst (SPI2D - Sharp Peak Identification for 2D NMR)
 # Author:      Julien Guibert
 # Institution: INRAe Toxalim / MetaboHub
