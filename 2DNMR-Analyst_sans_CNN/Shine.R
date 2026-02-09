@@ -596,9 +596,9 @@ server <- function(input, output, session) {
            "TOCSY"  = list(intensity_threshold = 80000, contour_num = 40, contour_factor = 1.5, 
                            eps_value = 0.0068, neighborhood_size = 3),
            "HSQC"   = list(intensity_threshold = 20000, contour_num = 30, contour_factor = 1.3, 
-                           eps_value = 0.002, neighborhood_size = 3),
+                           eps_value = 0.068, neighborhood_size = 3),
            "COSY"   = list(intensity_threshold = 60000, contour_num = 30, contour_factor = 1.3, 
-                           eps_value = 0.014, neighborhood_size = 9),
+                           eps_value = 0.068, neighborhood_size = 9),
            "UFCOSY" = list(intensity_threshold = 50000, contour_num = 70, contour_factor = 1.3, 
                            eps_value = 0.014, neighborhood_size = 2)
     )
