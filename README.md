@@ -12,6 +12,7 @@
   <a href="https://www.r-project.org/"><img src="https://img.shields.io/badge/R-%3E%3D%204.0-blue?logo=r&logoColor=white" alt="R Version"/></a>
   <a href="https://shiny.posit.co/"><img src="https://img.shields.io/badge/Shiny-Interactive-blue?logo=r&logoColor=white" alt="R Shiny"/></a>
   <a href="#-supported-spectrum-types"><img src="https://img.shields.io/badge/NMR-2D%20Analysis-green" alt="NMR 2D"/></a>
+  <a href="#-supported-spectrum-types"><img src="https://img.shields.io/badge/MetaboHub-blue" alt="MTH"/></a>
   <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-CeCILL--2.1-yellow" alt="License CeCILL-2.1"/></a>
 </p>
 
