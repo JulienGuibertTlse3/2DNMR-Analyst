@@ -199,27 +199,101 @@ cd 2DNMR-Analyst
 
 ```
 2DNMR-Analyst/
-├── run_app.R                 # Application launcher
-├── Shine.R                   # Main Shiny application
-├── Function/
-│   ├── Read_2DNMR_spectrum.R # Bruker data reader
-│   ├── Visualization.R       # Plot generation
-│   ├── Peak_picking.R        # Peak detection algorithms
-│   ├── Peak_fitting.R        # Gaussian/Voigt fitting
-│   └── CNN_shiny.R           # CNN-based detection (optional)
-├── docs/
-│   ├── USER_GUIDE.md         # User documentation
-│   └── DEVELOPER_GUIDE.md    # Developer documentation
-├── LICENSE.txt               # CeCILL-2.1 license
-└── README.md                 # This file
+│
+├── Shine.R                        # Application principale (~2063 lignes)
+│                                  # Contient UI + Server principal
+│                                  # Initialise et connecte les modules
+│
+├── run_app.R                      # Point d'entrée
+│                                  # Auto-installation des packages manquants
+│                                  # Lance shinyApp()
+│
+├── README.md                      # Documentation utilisateur
+│
+├── R/                             # ═══ MODULES SHINY ═══
+│   ├── utils.R                    # Fonctions utilitaires partagées
+│   │                              #   - parse_keep_peak_ranges()
+│   │                              #   - %||% opérateur (null coalescing)
+│   │
+│   ├── mod_load_data.R            # Module: Chargement données (~200 lignes)
+│   │                              #   - Sélection répertoire Bruker
+│   │                              #   - Liste et sélection des spectres
+│   │                              #   - Cache de lecture
+│   │
+│   ├── mod_peak_picking.R         # Module: Détection pics (~274 lignes)
+│   │                              #   - Local Max + DBSCAN
+│   │                              #   - Options de clustering
+│   │                              #   - Zones d'exclusion
+│   │
+│   ├── mod_manual_editing.R       # Module wrapper: Édition manuelle (~122 lignes)
+│   │   ├── mod_click_mode.R       #   - Sous-module: Modes de clic (~201 lignes)
+│   │   ├── mod_box_editor.R       #   - Sous-module: Édition box (~348 lignes)
+│   │   ├── mod_manual_add.R       #   - Sous-module: Ajout manuel (~163 lignes)
+│   │   ├── mod_fusion.R           #   - Sous-module: Fusion pics (~166 lignes)
+│   │   └── mod_pending_changes.R  #   - Sous-module: Apply/Discard (~431 lignes)
+│   │
+│   ├── mod_integration.R          # Module: Intégration (~345 lignes)
+│   │                              #   - Méthode Sum (AUC)
+│   │                              #   - Fitting Gaussian/Voigt
+│   │                              #   - Seuil R² et fallback
+│   │
+│   ├── mod_save_export.R          # Module wrapper: Sauvegarde/Export (~110 lignes)
+│   │   ├── mod_session.R          #   - Sous-module: Save/Load session (~238 lignes)
+│   │   ├── mod_import.R           #   - Sous-module: Import CSV (~178 lignes)
+│   │   ├── mod_export.R           #   - Sous-module: Export CSV/batch (~177 lignes)
+│   │   └── mod_reset.R            #   - Sous-module: Reset all (~121 lignes)
+│
+├── Function/                      # ═══ FONCTIONS MÉTIER ═══
+│   ├── Read_2DNMR_spectrum.R      # Lecture fichiers Bruker (165 lignes)
+│   │                              #   - read_bruker()
+│   │                              #   - Parsing procs, proc2s, acqu
+│   │
+│   ├── Vizualisation.R            # Graphiques + DBSCAN (224 lignes)
+│   │                              #   - find_nmr_peak_centroids_optimized()
+│   │                              #   - process_nmr_centroids()
+│   │                              #   - make_bbox_outline()
+│   │
+│   ├── Peak_picking.R             # Détection maxima locaux (819 lignes)
+│   │                              #   - peak_pick_2d_nt2()
+│   │                              #   - filter_noise_peaks()
+│   │                              #   - Filtres par type de spectre
+│   │
+│   └── Peak_fitting.R             # Fitting 2D (570 lignes)
+│                                  #   - fit_2d_peak()
+│                                  #   - detect_local_maxima()
+│                                  #   - pseudo_voigt_2d()
+│                                  #   - calculate_fitted_volumes()
+│
+├── www/                           # ═══ ASSETS WEB ═══
+    ├── styles.css                 # Styles CSS externalisés (~200 lignes)
+    │                              #   - Classes pour accordéons
+    │                              #   - Styles des info-boxes
+    │                              #   - Responsive design
+    │
+    └── plotly_ticks.js            # JavaScript custom (~150 lignes)
+                                   #   - generateNiceTicks()
+                                   #   - updateTicksOnZoom()
+                                   #   - Communication Shiny <-> JS
+│
+└── tests/                         # ═══ TESTS UNITAIRES ═══
+    ├── testthat/                  # Tests avec testthat (76 tests)
+    │   ├── test-read_bruker.R     #   - Tests lecture Bruker
+    │   ├── test-threshold.R       #   - Tests seuillage bruit
+    │   ├── test-peak_fitting.R    #   - Tests fitting Voigt/Gaussien
+    │   ├── test-peak_picking.R    #   - Tests détection pics
+    │   ├── test-visualization.R   #   - Tests visualisation
+    │   └── test-utils.R           #   - Tests fonctions utilitaires
+    ├── run_tests.R                # Script principal d’exécution
+    └── README_TESTS.md            # Documentation des tests
+
 ```
 
 ---
 
 ## 📚 Documentation
 
-- [User Guide](docs/USER_GUIDE.md) - Detailed usage instructions
-- [Developer Guide](docs/DEVELOPER_GUIDE.md) - Technical documentation
+- [User Guide](Guide/USER_GUIDE.md) - Detailed usage instructions
+- [Developer Guide](Guide/DEVELOPER_GUIDE.md) - Technical documentation
 
 ---
 
