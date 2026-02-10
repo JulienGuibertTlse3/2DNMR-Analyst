@@ -8,7 +8,6 @@
 
 [![R](https://img.shields.io/badge/R-≥4.0-blue.svg)](https://cran.r-project.org/)
 [![Shiny](https://img.shields.io/badge/Shiny-App-green.svg)](https://shiny.posit.co/)
-[![License]("https://img.shields.io/badge/License-CeCILL--2.1-yellow")](LICENSE)
 
 *A comprehensive solution for metabolomics 2D NMR data analysis*
 
