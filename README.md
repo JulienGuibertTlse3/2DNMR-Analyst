@@ -308,6 +308,8 @@ See the [LICENSE.txt](LICENSE.txt) file for details.
 
 - **Julien Guibert** - *Development* - INRAe Toxalim / MetaboHUB
 
+- **Project Maintainer:** Marie TREMBLAY-FRANCO    //   Email: marie.tremblay-franco@inrae.fr
+
 ---
 
 ## 📧 Contact
