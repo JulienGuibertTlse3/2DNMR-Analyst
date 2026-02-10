@@ -138,7 +138,7 @@ blockquote p { margin: 0; }
 
 *A comprehensive solution for metabolomics 2D NMR data analysis*
 
-`R ≥ 4.0` | `Shiny App` | `MIT License`
+`R ≥ 4.0` | `Shiny App` 
 </center>
 
 ---
@@ -204,26 +204,91 @@ cd 2DNMR-Analyst
 ```
 2DNMR-Analyst/
 │
-├── run_app.R                 # 🚀 Entry point - run this file
-├── Shine.R                   # Main application
+├── Shine.R                    # Main application (~2063 lines)
+│                              # Contains UI + main Server
+│                              # Initializes and connects modules
 │
-├── R/                        # Shiny modules
-│   ├── utils.R
-│   ├── mod_load_data.R
-│   ├── mod_peak_picking.R
-│   ├── mod_manual_editing.R
-│   ├── mod_integration.R
-│   └── mod_save_export.R
+├── run_app.R                  # Entry point
+│                              # Auto-installation of missing packages
+│                              # Launches shinyApp()
 │
-├── Function/                 # Core algorithms
-│   ├── Read_2DNMR_spectrum.R
-│   ├── Vizualisation.R
-│   ├── Peak_picking.R
-│   └── Peak_fitting.R
+├── README.md                  # User documentation
 │
-└── www/                      # Web assets
-    ├── styles.css
-    └── plotly_ticks.js
+├── R/                         # ═══ SHINY MODULES ═══
+│   ├── utils.R                # Shared utility functions
+│   │                          # - parse_keep_peak_ranges()
+│   │                          # - %||% operator (null coalescing)
+│   │
+│   ├── mod_load_data.R        # Module: Data loading (~200 lines)
+│   │                          # - Bruker directory selection
+│   │                          # - Spectra listing and selection
+│   │                          # - Read cache
+│   │
+│   ├── mod_peak_picking.R     # Module: Peak detection (~274 lines)
+│   │                          # - Local Max + DBSCAN
+│   │                          # - Clustering options
+│   │                          # - Exclusion zones
+│   │
+│   ├── mod_manual_editing.R   # Wrapper module: Manual editing (~122 lines)
+│   │   ├── mod_click_mode.R   # - Submodule: Click modes (~201 lines)
+│   │   ├── mod_box_editor.R   # - Submodule: Box editing (~348 lines)
+│   │   ├── mod_manual_add.R   # - Submodule: Manual addition (~163 lines)
+│   │   ├── mod_fusion.R       # - Submodule: Peak fusion (~166 lines)
+│   │   └── mod_pending_changes.R # - Submodule: Apply/Discard (~431 lines)
+│   │
+│   ├── mod_integration.R      # Module: Integration (~345 lines)
+│   │                          # - Sum method (AUC)
+│   │                          # - Gaussian/Voigt fitting
+│   │                          # - R² threshold and fallback
+│   │
+│   ├── mod_save_export.R      # Wrapper module: Save/Export (~110 lines)
+│   │   ├── mod_session.R      # - Submodule: Save/Load session (~238 lines)
+│   │   ├── mod_import.R       # - Submodule: CSV import (~178 lines)
+│   │   ├── mod_export.R       # - Submodule: CSV/batch export (~177 lines)
+│   │   └── mod_reset.R        # - Submodule: Reset all (~121 lines)
+│
+├── Function/                  # ═══ BUSINESS FUNCTIONS ═══
+│   ├── Read_2DNMR_spectrum.R  # Bruker file reading (165 lines)
+│   │                          # - read_bruker()
+│   │                          # - Parsing procs, proc2s, acqu
+│   │
+│   ├── Vizualisation.R        # Graphics + DBSCAN (224 lines)
+│   │                          # - find_nmr_peak_centroids_optimized()
+│   │                          # - process_nmr_centroids()
+│   │                          # - make_bbox_outline()
+│   │
+│   ├── Peak_picking.R         # Local maxima detection (819 lines)
+│   │                          # - peak_pick_2d_nt2()
+│   │                          # - filter_noise_peaks()
+│   │                          # - Filters by spectrum type
+│   │
+│   └── Peak_fitting.R         # 2D fitting (570 lines)
+│                              # - fit_2d_peak()
+│                              # - detect_local_maxima()
+│                              # - pseudo_voigt_2d()
+│                              # - calculate_fitted_volumes()
+│
+├── www/                       # ═══ WEB ASSETS ═══
+│   ├── styles.css             # Externalized CSS styles (~200 lines)
+│   │                          # - Accordion classes
+│   │                          # - Info-box styles
+│   │                          # - Responsive design
+│   │
+│   └── plotly_ticks.js        # Custom JavaScript (~150 lines)
+│                              # - generateNiceTicks()
+│                              # - updateTicksOnZoom()
+│                              # - Shiny <-> JS communication
+│
+└── tests/                     # ═══ UNIT TESTS ═══
+    ├── testthat/              # Tests with testthat (76 tests)
+    │   ├── test-read_bruker.R # - Bruker reading tests
+    │   ├── test-threshold.R   # - Noise thresholding tests
+    │   ├── test-peak_fitting.R # - Voigt/Gaussian fitting tests
+    │   ├── test-peak_picking.R # - Peak detection tests
+    │   ├── test-visualization.R # - Visualization tests
+    │   └── test-utils.R       # - Utility function tests
+    ├── run_tests.R            # Main execution script
+    └── README_TESTS.md        # Test documentation
 ```
 
 ---
