@@ -39,11 +39,11 @@ mod_peak_picking_ui <- function(id) {
       tags$summary("⚙️ Options"),
       div(
         checkboxInput(ns("disable_clustering"), "No clustering", value = FALSE),
-        numericInput(ns("eps_value"), "Epsilon:", value = 0.01, min = 0, step = 0.001),
+        numericInput(ns("eps_value"), "Epsilon:", value = 0.0068, min = 0, step = 0.001),
         textAreaInput(
           ns("keep_peak_ranges_text"), 
           "Delete ranges:",
-          value = "0.5,-0.5; 1,0.8; 1.55,1.45", 
+          value = "0.5,-0.5; 1,0.8; 1.55,1.45; 5.1,4.7;", 
           rows = 2
         )
       )

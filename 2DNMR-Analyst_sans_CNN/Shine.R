@@ -4,10 +4,11 @@
 #                          SHINY APPLICATION ----
 #
 
-# Application: 2DNMR-Analyst (SPI2D - Sharp Peak Identification for 2D NMR)
+# Application: 2DNMR-Analyst 
 # Author:      Julien Guibert
 # Institution: INRAe Toxalim / MetaboHub
 # GitHub:      https://github.com/JulienGuibertTlse3/2DNMR-Analyst
+# Date : 09/02/2026
 # 
 # Description:
 #   Interactive Shiny application for analyzing 2D NMR spectra from Bruker 
@@ -74,10 +75,19 @@ source("Function/Peak_fitting.R")
 # Shiny modules (R/ folder)
 source("R/utils.R")
 source("R/mod_load_data.R")
+source("R/mod_session.R")
+source("R/mod_import.R")
+source("R/mod_export.R")
+source("R/mod_reset.R")
 source("R/mod_save_export.R")
 source("R/mod_peak_picking.R")
 source("R/mod_integration.R")
-source("R/mod_manual_editing.R")
+source("R/mod_click_mode.R")
+source("R/mod_box_editor.R")
+source("R/mod_manual_add.R")
+source("R/mod_fusion.R")
+source("R/mod_pending_changes.R")
+source("R/mod_manual_editing.R") 
 
 # Optional: C++ acceleration
 if (file.exists("Function_test/petit_test.cpp")) {
