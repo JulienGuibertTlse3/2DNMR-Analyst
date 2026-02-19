@@ -8,6 +8,7 @@
 
 [![R](https://img.shields.io/badge/R-≥4.0-blue.svg)](https://cran.r-project.org/)
 [![Shiny](https://img.shields.io/badge/Shiny-App-green.svg)](https://shiny.posit.co/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 *A comprehensive solution for metabolomics 2D NMR data analysis*
 
@@ -29,7 +30,8 @@
 | Feature | Description |
 |---------|-------------|
 | 🔬 **Multi-format Support** | TOCSY, COSY, HSQC, and UFCOSY experiments |
-| 🎯 **Smart Peak Detection** | Local maxima with optional DBSCAN clustering |
+| 🎯 **Smart Peak Detection** | Local maxima with DBSCAN clustering + CNN neural network |
+| 🧠 **CNN Detection** | Deep learning-based peak detection for complex spectra |
 | ✏️ **Interactive Editing** | Manual creation, modification, and fusion of peaks/boxes |
 | 📊 **Advanced Integration** | Sum, Gaussian, and Voigt fitting methods |
 | 📈 **Quality Metrics** | R² analysis and residuals visualization |
@@ -78,91 +80,36 @@ cd 2DNMR-Analyst
 ```
 2DNMR-Analyst/
 │
-├── Shine.R                    # Main application (~2063 lines)
-│                              # Contains UI + main Server
-│                              # Initializes and connects modules
+├── run_app.R                 # 🚀 Entry point - run this file
+├── Shine.R                   # Main application
 │
-├── run_app.R                  # Entry point
-│                              # Auto-installation of missing packages
-│                              # Launches shinyApp()
+├── R/                        # Shiny modules
+│   ├── utils.R
+│   ├── mod_load_data.R
+│   ├── mod_peak_picking.R    # Local Max + CNN detection
+│   ├── mod_manual_editing.R
+│   ├── mod_integration.R
+│   └── mod_save_export.R
 │
-├── README.md                  # User documentation
+├── Function/                 # Core functions
+│   ├── Read_2DNMR_spectrum.R # Bruker data reading
+│   ├── Vizualisation.R       # Visualization & clustering
+│   ├── Peak_picking.R        # Peak detection algorithms
+│   ├── Peak_fitting.R        # Gaussian/Voigt fitting
+│   │
+│   ├── CNN_shiny.R           # 🧠 CNN entry point (sources modules)
+│   ├── CNN_model.R           # CNN architecture & weights loading
+│   ├── CNN_detection.R       # Peak detection (batch + sequential)
+│   ├── CNN_filtering.R       # Peak filtering functions
+│   ├── CNN_clustering.R      # DBSCAN clustering & bounding boxes
+│   └── CNN_main.R            # Main CNN pipeline function
 │
-├── R/                         # ═══ SHINY MODULES ═══
-│   ├── utils.R                # Shared utility functions
-│   │                          # - parse_keep_peak_ranges()
-│   │                          # - %||% operator (null coalescing)
-│   │
-│   ├── mod_load_data.R        # Module: Data loading (~200 lines)
-│   │                          # - Bruker directory selection
-│   │                          # - Spectra listing and selection
-│   │                          # - Read cache
-│   │
-│   ├── mod_peak_picking.R     # Module: Peak detection (~274 lines)
-│   │                          # - Local Max + DBSCAN
-│   │                          # - Clustering options
-│   │                          # - Exclusion zones
-│   │
-│   ├── mod_manual_editing.R   # Wrapper module: Manual editing (~122 lines)
-│   │   ├── mod_click_mode.R   # - Submodule: Click modes (~201 lines)
-│   │   ├── mod_box_editor.R   # - Submodule: Box editing (~348 lines)
-│   │   ├── mod_manual_add.R   # - Submodule: Manual addition (~163 lines)
-│   │   ├── mod_fusion.R       # - Submodule: Peak fusion (~166 lines)
-│   │   └── mod_pending_changes.R # - Submodule: Apply/Discard (~431 lines)
-│   │
-│   ├── mod_integration.R      # Module: Integration (~345 lines)
-│   │                          # - Sum method (AUC)
-│   │                          # - Gaussian/Voigt fitting
-│   │                          # - R² threshold and fallback
-│   │
-│   ├── mod_save_export.R      # Wrapper module: Save/Export (~110 lines)
-│   │   ├── mod_session.R      # - Submodule: Save/Load session (~238 lines)
-│   │   ├── mod_import.R       # - Submodule: CSV import (~178 lines)
-│   │   ├── mod_export.R       # - Submodule: CSV/batch export (~177 lines)
-│   │   └── mod_reset.R        # - Submodule: Reset all (~121 lines)
+├── saved_model/              # 🧠 CNN pre-trained weights
+│   └── weights/
 │
-├── Function/                  # ═══ BUSINESS FUNCTIONS ═══
-│   ├── Read_2DNMR_spectrum.R  # Bruker file reading (165 lines)
-│   │                          # - read_bruker()
-│   │                          # - Parsing procs, proc2s, acqu
-│   │
-│   ├── Vizualisation.R        # Graphics + DBSCAN (224 lines)
-│   │                          # - find_nmr_peak_centroids_optimized()
-│   │                          # - process_nmr_centroids()
-│   │                          # - make_bbox_outline()
-│   │
-│   ├── Peak_picking.R         # Local maxima detection (819 lines)
-│   │                          # - peak_pick_2d_nt2()
-│   │                          # - filter_noise_peaks()
-│   │                          # - Filters by spectrum type
-│   │
-│   └── Peak_fitting.R         # 2D fitting (570 lines)
-│                              # - fit_2d_peak()
-│                              # - detect_local_maxima()
-│                              # - pseudo_voigt_2d()
-│                              # - calculate_fitted_volumes()
-│
-├── www/                       # ═══ WEB ASSETS ═══
-│   ├── styles.css             # Externalized CSS styles (~200 lines)
-│   │                          # - Accordion classes
-│   │                          # - Info-box styles
-│   │                          # - Responsive design
-│   │
-│   └── plotly_ticks.js        # Custom JavaScript (~150 lines)
-│                              # - generateNiceTicks()
-│                              # - updateTicksOnZoom()
-│                              # - Shiny <-> JS communication
-│
-└── tests/                     # ═══ UNIT TESTS ═══
-    ├── testthat/              # Tests with testthat (76 tests)
-    │   ├── test-read_bruker.R # - Bruker reading tests
-    │   ├── test-threshold.R   # - Noise thresholding tests
-    │   ├── test-peak_fitting.R # - Voigt/Gaussian fitting tests
-    │   ├── test-peak_picking.R # - Peak detection tests
-    │   ├── test-visualization.R # - Visualization tests
-    │   └── test-utils.R       # - Utility function tests
-    ├── run_tests.R            # Main execution script
-    └── README_TESTS.md        # Test documentation
+└── www/                      # Web assets
+    ├── styles.css
+    └── plotly_ticks.js
 ```
 
 ---
@@ -250,12 +197,16 @@ Click **"Generate Plot"** to display the spectrum.
 
 #### Detection Methods
 
-| Method | Description |
-|--------|-------------|
-| **Local Max** | Detects local maxima with optional DBSCAN clustering |
-| **CNN** | Convolutional neural network detection (if available) |
+| Method | Description | Best For |
+|--------|-------------|----------|
+| **Local Max** | Detects local maxima with optional DBSCAN clustering | Fast detection, well-resolved spectra |
+| **CNN** | Convolutional neural network for intelligent peak detection | Complex spectra, overlapping peaks |
 
-#### Clustering Options
+---
+
+#### 🔬 Local Max Method
+
+Uses traditional local maximum detection with optional DBSCAN clustering to group nearby peaks.
 
 | Option | Effect |
 |--------|--------|
@@ -263,16 +214,65 @@ Click **"Generate Plot"** to display the spectrum.
 | **Epsilon (eps)** | Maximum distance between points in a cluster |
 | **Delete ranges** | Remove peaks from specified ppm regions |
 
-#### Epsilon Guidelines
+**Recommended epsilon values:**
+- TOCSY/HSQC/COSY: `0.0068`
+- UFCOSY: `0.014`
+
+---
+
+#### 🧠 CNN Method (Neural Network)
+
+The CNN (Convolutional Neural Network) method uses a trained deep learning model to detect peaks more intelligently than traditional methods. It's particularly effective for:
+
+- Spectra with overlapping peaks
+- Low signal-to-noise conditions
+- Complex multiplet patterns
+- TOCSY spectra with t1 noise artifacts
+
+##### CNN Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| **Prediction threshold** | Minimum CNN confidence to detect a peak (0-1) | 0.3 |
+| **Trace filter** | Removes t1 noise artifacts along F2 lines (% of line max) | 50% |
+
+##### How CNN Detection Works
+
+1. **Spectrum Normalization** — The spectrum is normalized using the 99.9th percentile
+2. **Sliding Window Scan** — The CNN scans rows and columns using a sliding window approach
+3. **Peak Classification** — Each point is classified as: background, peak edge, or peak center
+4. **DBSCAN Clustering** — Detected points are grouped into peak clusters
+5. **Bounding Box Generation** — Each cluster gets a bounding box with padding
+
+##### CNN Tips
+
+| Goal | Action |
+|------|--------|
+| Detect more peaks | ↓ Lower prediction threshold (e.g., 0.2) |
+| Reduce false positives | ↑ Higher prediction threshold (e.g., 0.5) |
+| Remove t1 noise traces | ↑ Higher trace filter (e.g., 70%) |
+| Keep weak correlations | ↓ Lower trace filter (e.g., 30%) |
+
+##### Progress Indicator
+
+When running CNN detection, a progress bar displays the current step:
+1. Preparing spectrum (5%)
+2. Running neural network (20%)
+3. Clustering contour data (45%)
+4. Filtering by CNN detections (70%)
+5. Updating plot (90%)
+6. Complete (100%)
+
+> 💡 **Note:** CNN detection may take longer than Local Max but typically produces better results on complex spectra.
+
+---
+
+#### Epsilon Guidelines (Both Methods)
 
 | Epsilon | Result |
 |---------|--------|
 | ↑ Higher | More peaks grouped together |
 | ↓ Lower | More individual peaks detected |
-
-**Recommended values:**
-- TOCSY/HSQC/COSY: `0.0068`
-- UFCOSY: `0.014`
 
 </details>
 
@@ -452,6 +452,11 @@ peak1;1.200;1.268;3.400;3.512
 | **Application slow** | Reduce number of contours in Advanced settings |
 | **Poor fit quality** | Use Sum method or adjust box boundaries |
 | **Session won't load** | Ensure spectral data is available |
+| **CNN model not loaded** | Verify `saved_model/weights` folder exists |
+| **CNN too slow** | Normal for large spectra; progress bar shows status |
+| **CNN finds no peaks** | Lower prediction threshold (e.g., 0.2) |
+| **CNN too many false positives** | Increase prediction threshold and trace filter |
+| **CNN t1 noise artifacts** | Increase trace filter to 60-80% |
 
 ---
 
@@ -468,11 +473,8 @@ peak1;1.200;1.268;3.400;3.512
 
 **Author:** Julien Guibert  
 **Email:** julien.guibert@inrae.fr  
-
 **Project Maintainer:**  Marie TREMBLAY-FRANCO
-
 **Email:**  marie.tremblay-franco@inrae.fr
-
 **Institution:** INRAe Toxalim / MetaboHUB
 
 ---

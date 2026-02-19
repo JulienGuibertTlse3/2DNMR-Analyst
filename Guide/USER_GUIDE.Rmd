@@ -153,7 +153,8 @@ blockquote p { margin: 0; }
 | Feature | Description |
 |:--------|:------------|
 | 🔬 **Multi-format Support** | TOCSY, COSY, HSQC, and UFCOSY experiments |
-| 🎯 **Smart Peak Detection** | Local maxima with optional DBSCAN clustering |
+| 🎯 **Smart Peak Detection** | Local maxima with DBSCAN clustering + CNN neural network |
+| 🧠 **CNN Detection** | Deep learning-based peak detection for complex spectra |
 | ✏️ **Interactive Editing** | Manual creation, modification, and fusion of peaks/boxes |
 | 📊 **Advanced Integration** | Sum, Gaussian, and Voigt fitting methods |
 | 📈 **Quality Metrics** | R² analysis and residuals visualization |
@@ -262,11 +263,36 @@ cd 2DNMR-Analyst
 │   │                          # - filter_noise_peaks()
 │   │                          # - Filters by spectrum type
 │   │
-│   └── Peak_fitting.R         # 2D fitting (570 lines)
-│                              # - fit_2d_peak()
-│                              # - detect_local_maxima()
-│                              # - pseudo_voigt_2d()
-│                              # - calculate_fitted_volumes()
+│   ├── Peak_fitting.R         # 2D fitting (570 lines)
+│   │                          # - fit_2d_peak()
+│   │                          # - detect_local_maxima()
+│   │                          # - pseudo_voigt_2d()
+│   │                          # - calculate_fitted_volumes()
+│   │
+│   ├── CNN_shiny.R            # 🧠 CNN entry point (~60 lines)
+│   │                          # - Sources all CNN modules
+│   │
+│   ├── CNN_model.R            # CNN architecture (~110 lines)
+│   │                          # - build_peak_predictor()
+│   │                          # - Focal loss function
+│   │
+│   ├── CNN_detection.R        # Peak detection (~320 lines)
+│   │                          # - predict_peaks_1D_batch()
+│   │                          # - Sliding window approach
+│   │
+│   ├── CNN_filtering.R        # Peak filtering (~265 lines)
+│   │                          # - filter_tocsy_traces()
+│   │                          # - filter_peaks_by_proportion()
+│   │
+│   ├── CNN_clustering.R       # Clustering (~210 lines)
+│   │                          # - merge_overlapping_boxes()
+│   │                          # - process_peaks_with_dbscan()
+│   │
+│   └── CNN_main.R             # Main pipeline (~305 lines)
+│                              # - run_cnn_peak_picking()
+│
+├── saved_model/               # 🧠 CNN PRE-TRAINED WEIGHTS
+│   └── weights/               # TensorFlow model weights
 │
 ├── www/                       # ═══ WEB ASSETS ═══
 │   ├── styles.css             # Externalized CSS styles (~200 lines)
@@ -365,10 +391,57 @@ Click **"Generate Plot"** to display the spectrum.
 
 ### Detection Methods
 
-| Method | Description |
-|:-------|:------------|
-| **Local Max** | Detects local maxima with optional DBSCAN clustering |
-| **CNN** | Convolutional neural network detection (if available) |
+| Method | Description | Best For |
+|:-------|:------------|:---------|
+| **Local Max** | Detects local maxima with optional DBSCAN clustering | Fast detection, well-resolved spectra |
+| **CNN** | Convolutional neural network for intelligent peak detection | Complex spectra, overlapping peaks |
+
+### 🔬 Local Max Method
+
+Uses traditional local maximum detection with optional DBSCAN clustering.
+
+| Option | Effect |
+|:-------|:-------|
+| **No clustering** | Each local maximum becomes a separate peak |
+| **Epsilon (eps)** | Maximum distance between points in a cluster |
+| **Delete ranges** | Remove peaks from specified ppm regions |
+
+> 📝 **Recommended epsilon:** TOCSY/HSQC/COSY: `0.0068` — UFCOSY: `0.014`
+
+### 🧠 CNN Method
+
+The CNN (Convolutional Neural Network) method uses deep learning for intelligent peak detection.
+
+**Best for:**
+
+- Spectra with overlapping peaks
+- Low signal-to-noise conditions
+- Complex multiplet patterns
+- TOCSY spectra with t1 noise artifacts
+
+**CNN Parameters:**
+
+| Parameter | Description | Default |
+|:----------|:------------|:--------|
+| **Prediction threshold** | Minimum CNN confidence (0-1) | 0.3 |
+| **Trace filter** | Removes t1 noise artifacts (% of line max) | 50% |
+
+**How it works:**
+
+1. Spectrum normalization (99.9th percentile)
+2. Sliding window scan with CNN inference
+3. Peak classification (background/edge/center)
+4. DBSCAN clustering
+5. Bounding box generation with merging
+
+**Tuning tips:**
+
+| Goal | Action |
+|:-----|:-------|
+| Detect more peaks | ↓ Lower prediction threshold (0.2) |
+| Reduce false positives | ↑ Higher prediction threshold (0.5) |
+| Remove t1 noise | ↑ Higher trace filter (70%) |
+| Keep weak correlations | ↓ Lower trace filter (30%) |
 
 ### Epsilon Guidelines
 
@@ -376,8 +449,6 @@ Click **"Generate Plot"** to display the spectrum.
 |:--------|:-------|
 | ↑ Higher | More peaks grouped together |
 | ↓ Lower | More individual peaks detected |
-
-> 📝 **Recommended values:** TOCSY/HSQC/COSY: `0.0068` — UFCOSY: `0.014`
 
 ---
 
@@ -514,6 +585,11 @@ peak1;1.200;1.268;3.400;3.512
 | **Application slow** | Reduce number of contours in Advanced settings |
 | **Poor fit quality** | Use Sum method or adjust box boundaries |
 | **Session won't load** | Ensure spectral data is available |
+| **CNN model not loaded** | Verify `saved_model/weights` folder exists |
+| **CNN too slow** | Normal for large spectra; progress bar shows status |
+| **CNN finds no peaks** | Lower prediction threshold (e.g., 0.2) |
+| **CNN too many false positives** | Increase prediction threshold and trace filter |
+| **CNN t1 noise artifacts** | Increase trace filter to 60-80% |
 
 ---
 
