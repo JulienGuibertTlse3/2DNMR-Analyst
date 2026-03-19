@@ -905,12 +905,10 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
         num_peaks_to_keep <- if (i <= 1) 1 else 4
         top_peaks <- centroids_in_range %>% arrange(desc(Volume)) %>% slice_head(n = num_peaks_to_keep)
         centroids <- centroids %>% filter(!(F2_ppm >= range[2] & F2_ppm <= range[1])) %>% bind_rows(top_peaks)
-        
-        boxes_in_range <- bounding_boxes %>% filter(xmin >= range[2] & xmax <= range[1])
-        top_boxes <- boxes_in_range %>% arrange(desc(intensity)) %>% slice_head(n = num_peaks_to_keep)
-        bounding_boxes <- bounding_boxes %>% filter(!(xmin >= range[2] & xmax <= range[1])) %>% bind_rows(top_boxes)
       }
     }
+    # Sync boxes: keep only boxes whose stain_id survived the centroid filtering
+    bounding_boxes <- bounding_boxes %>% filter(stain_id %in% centroids$stain_id)
   }
   
   # --- Step 12: Rename peaks with sequential IDs ---
