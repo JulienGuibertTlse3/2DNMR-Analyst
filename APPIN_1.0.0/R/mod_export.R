@@ -65,49 +65,58 @@ mod_export_server <- function(id, status_msg, rv, load_data, data_reactives) {
     )
     
     # EXPORT BOXES ----
+    # Now uses the same calculate_batch_box_intensities() function as batch export
+    # to ensure consistent intensity values across both export methods
     output$export_boxes <- downloadHandler(
-      filename = function() paste0("combined_box_intensities_", Sys.Date(), ".csv"),
+      filename = function() {
+        method <- data_reactives$effective_integration_method()
+        method_suffix <- if (method == "sum") "" else paste0("_", method)
+        paste0("box_intensities", method_suffix, "_", Sys.Date(), ".csv")
+      },
       content = function(file) {
-        req(data_reactives$result_data_list(), data_reactives$bounding_boxes_data())
+        req(data_reactives$bounding_boxes_data(), load_data$spectra_list())
         
-        boxes_ref <- data_reactives$bounding_boxes_data() %>%
-          dplyr::mutate(stain_id = dplyr::row_number(), 
-                        F2_ppm = (xmin + xmax)/2, 
-                        F1_ppm = (ymin + ymax)/2)
+        # Get chosen method (same as batch export)
+        method <- data_reactives$effective_integration_method()
+        model <- if (method %in% c("gaussian", "voigt")) method else "gaussian"
         
-        intensity_list <- list()
+        status_msg(paste0("🔄 Calculating box intensities (", method, " method)..."))
         
-        for (name in names(data_reactives$result_data_list())) {
-          result <- data_reactives$result_data_list()[[name]]
-          if (is.null(result$contour_data)) next
-          contour_data <- result$contour_data
+        tryCatch({
+          ref_boxes <- data_reactives$bounding_boxes_data()
           
-          Intensity <- vapply(seq_len(nrow(boxes_ref)), FUN.VALUE = 0.0, FUN = function(i) {
-            rowb <- boxes_ref[i, ]
-            sum(contour_data$level[
-              contour_data$x >= -rowb$xmax & contour_data$x <= -rowb$xmin &
-                contour_data$y >= -rowb$ymax & contour_data$y <= -rowb$ymin
-            ], na.rm = TRUE)
-          })
+          if (is.null(ref_boxes) || nrow(ref_boxes) == 0) {
+            showNotification("⚠️ No boxes found", type = "warning")
+            write.csv2(data.frame(message = "No boxes found."), file, row.names = FALSE)
+            return(invisible(NULL))
+          }
           
-          tmp_df <- data.frame(stain_id = boxes_ref$stain_id, Intensity = Intensity)
-          col_name <- paste0("Intensity_", make.names(basename(name)))
-          colnames(tmp_df)[2] <- col_name
-          intensity_list[[name]] <- tmp_df
-        }
-        
-        if (length(intensity_list) == 0) {
-          write.csv2(data.frame(message = "No contour_data found."), file, row.names = FALSE)
-          return(invisible(NULL))
-        }
-        
-        merged_data <- Reduce(function(x, y) dplyr::full_join(x, y, by = "stain_id"), intensity_list)
-        final_data <- dplyr::left_join(boxes_ref, merged_data, by = "stain_id") %>%
-          dplyr::select(stain_id, F2_ppm, F1_ppm, xmin, xmax, ymin, ymax, 
-                        dplyr::starts_with("Intensity_"))
-        
-        # Use write.csv2 for ";" separator (French Excel compatible)
-        write.csv2(final_data, file, row.names = FALSE)
+          # Use the same function as batch export for consistency
+          box_intensities <- calculate_batch_box_intensities(
+            reference_boxes = ref_boxes,
+            spectra_list = load_data$spectra_list(),
+            apply_shift = FALSE,
+            method = method,
+            model = model,
+            progress = NULL  # No progress bar for single export
+          )
+          
+          # Replace negative values with 0 (same as batch export)
+          intensity_cols <- grep("^Intensity_", names(box_intensities), value = TRUE)
+          for (col in intensity_cols) {
+            box_intensities[[col]] <- pmax(box_intensities[[col]], 0, na.rm = TRUE)
+          }
+          
+          # Use write.csv2 for ";" separator (French Excel compatible)
+          write.csv2(box_intensities, file, row.names = FALSE)
+          
+          status_msg("✅ Box export complete")
+          showNotification(paste("✅ Exported", nrow(ref_boxes), "boxes"), type = "message")
+          
+        }, error = function(e) {
+          showNotification(paste("❌ Export error:", e$message), type = "error")
+          status_msg(paste("❌ Error:", e$message))
+        })
       }
     )
     
