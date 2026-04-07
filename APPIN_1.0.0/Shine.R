@@ -1720,7 +1720,7 @@ server <- function(input, output, session) {
       if (!is.null(x_range) && !is.null(y_range)) {
         
         # Very dense grid: 100x100 = 10000 points for maximum precision
-        n_points <- 150
+        n_points <- 80
         grid <- expand.grid(x = seq(x_range[1], x_range[2], length.out = n_points),
                             y = seq(y_range[1], y_range[2], length.out = n_points))
         p <- p %>%
