@@ -18,6 +18,7 @@
 #' @param threshold_class Numeric, probability threshold
 #' @param batch_size Integer, batch size (default: 64)
 #' @param step Integer, downsampling factor (default: 4)
+#' @param keep_peak_ranges List of numeric vectors. Specific F2 ranges where only top peaks are kept.
 #' @param verbose Logical, print progress
 #' @return List containing peaks, boxes, shapes
 #' @export
@@ -27,6 +28,7 @@ run_cnn_peak_picking <- function(rr_norm, model = NULL, params,
                                  target_length = 2048,
                                  threshold_class = params$pred_class_thres,
                                  batch_size = 64, step = 4,
+                                 keep_peak_ranges = NULL,
                                  verbose = TRUE) {
   
   if (is.null(rr_norm) || !is.matrix(rr_norm)) {
@@ -178,17 +180,69 @@ run_cnn_peak_picking <- function(rr_norm, model = NULL, params,
   if (disable_clustering) {
     x_vals <- as.numeric(colnames(rr_norm))
     y_vals <- as.numeric(rownames(rr_norm))
+    
+    # SWAP F1/F2 to match Peak_picking.R convention (same as CNN_clustering.R)
+    # CNN F1 -> our F2_ppm, CNN F2 -> our F1_ppm
     peaks_ppm <- peaks_clean_filtered %>%
       mutate(
-        F1_idx = pmin(pmax(round(F1), 1), length(x_vals)),
-        F2_idx = pmin(pmax(round(F2), 1), length(y_vals)),
-        F1_ppm = x_vals[F1_idx],
-        F2_ppm = y_vals[F2_idx],
+        F2_idx = pmin(pmax(round(F1), 1), length(x_vals)),  # CNN F1 -> our F2
+        F1_idx = pmin(pmax(round(F2), 1), length(y_vals)),  # CNN F2 -> our F1
+        F2_ppm = x_vals[F2_idx],
+        F1_ppm = y_vals[F1_idx],
         stain_id = paste0("cnn_", row_number()),
         stain_intensity = Intensity,
         cluster_db = row_number()
       ) %>%
       select(F2_ppm, F1_ppm, stain_intensity, cluster_db, stain_id)
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # FILTER VERTICAL TRACES (bleeding artifacts) - Same logic as Peak_picking.R
+    # Groups peaks by F2 column and keeps only top N per column
+    # ═══════════════════════════════════════════════════════════════════════════
+    if (nrow(peaks_ppm) > 1 && spectrum_type %in% c("TOCSY", "COSY", "UFCOSY")) {
+      
+      f2_tolerance <- switch(spectrum_type,
+                             "TOCSY" = 0.02,
+                             "COSY" = 0.02,
+                             "UFCOSY" = 0.025,
+                             0.02
+      )
+      
+      keep_top_n <- switch(spectrum_type,
+                           "TOCSY" = 6,
+                           "COSY" = 4,
+                           "UFCOSY" = 5,
+                           5
+      )
+      
+      n_before <- nrow(peaks_ppm)
+      
+      # Group by F2 column and rank by intensity
+      peaks_ppm <- peaks_ppm %>%
+        dplyr::mutate(
+          f2_group = round(F2_ppm / f2_tolerance) * f2_tolerance
+        ) %>%
+        dplyr::group_by(f2_group) %>%
+        dplyr::mutate(
+          intensity_rank = dplyr::row_number(dplyr::desc(stain_intensity))
+        ) %>%
+        dplyr::ungroup() %>%
+        dplyr::filter(intensity_rank <= keep_top_n) %>%
+        dplyr::select(-f2_group, -intensity_rank)
+      
+      # Reassign stain_id after filtering
+      peaks_ppm <- peaks_ppm %>%
+        dplyr::mutate(
+          stain_id = paste0("cnn_", dplyr::row_number()),
+          cluster_db = dplyr::row_number()
+        )
+      
+      n_removed <- n_before - nrow(peaks_ppm)
+      if (verbose && n_removed > 0) {
+        cat(sprintf("🧹 [%s] Filtered %d vertical trace peaks (kept top %d per F2 column)\n",
+                    spectrum_type, n_removed, keep_top_n))
+      }
+    }
     
     box_padding <- params$eps_value * 2
     boxes <- peaks_ppm %>%
@@ -196,10 +250,89 @@ run_cnn_peak_picking <- function(rr_norm, model = NULL, params,
              ymin = F1_ppm - box_padding, ymax = F1_ppm + box_padding) %>%
       select(xmin, xmax, ymin, ymax, stain_id, stain_intensity)
     
+    # ═══════════════════════════════════════════════════════════════════════════
+    # FILTER BY KEEP_PEAK_RANGES (same logic as clustering mode)
+    # Keeps only top N peaks in each specified F2 range
+    # ═══════════════════════════════════════════════════════════════════════════
+    if (!is.null(keep_peak_ranges) && is.list(keep_peak_ranges) && length(keep_peak_ranges) > 0) {
+      if (verbose) cat("Applying keep_peak_ranges filter (no-clustering mode)...\n")
+      
+      # DEBUG: Show F2_ppm range and the filter ranges
+      if (verbose) {
+        cat(sprintf("  DEBUG: peaks F2_ppm range = [%.3f, %.3f]\n", 
+                    min(peaks_ppm$F2_ppm), max(peaks_ppm$F2_ppm)))
+        cat(sprintf("  DEBUG: %d ranges to apply:\n", length(keep_peak_ranges)))
+        for (r in seq_along(keep_peak_ranges)) {
+          rng <- keep_peak_ranges[[r]]
+          n_in_range <- sum(peaks_ppm$F2_ppm >= min(rng) & peaks_ppm$F2_ppm <= max(rng))
+          cat(sprintf("    Range %d: [%.3f, %.3f] -> %d peaks in range\n", 
+                      r, min(rng), max(rng), n_in_range))
+        }
+      }
+      
+      filtered_peaks <- data.frame()
+      filtered_boxes <- data.frame()
+      
+      for (i in seq_along(keep_peak_ranges)) {
+        range <- keep_peak_ranges[[i]]
+        
+        if (length(range) == 2) {
+          lower_bound <- min(range)
+          upper_bound <- max(range)
+          
+          # Filter peaks in this range
+          peaks_in_range <- peaks_ppm %>%
+            dplyr::filter(F2_ppm >= lower_bound & F2_ppm <= upper_bound)
+          
+          # Keep fewer peaks in first range (typically reference peak region)
+          num_peaks_to_keep <- if (i <= 1) 1 else 4
+          
+          top_peaks_in_range <- peaks_in_range %>%
+            dplyr::arrange(desc(stain_intensity)) %>%
+            dplyr::slice_head(n = num_peaks_to_keep)
+          
+          filtered_peaks <- dplyr::bind_rows(filtered_peaks, top_peaks_in_range)
+          
+          # Also filter corresponding boxes
+          if (nrow(top_peaks_in_range) > 0) {
+            boxes_in_range <- boxes %>%
+              dplyr::filter(stain_id %in% top_peaks_in_range$stain_id)
+            filtered_boxes <- dplyr::bind_rows(filtered_boxes, boxes_in_range)
+          }
+        }
+      }
+      
+      # Keep peaks outside any specified range
+      peaks_outside_ranges <- peaks_ppm %>%
+        dplyr::filter(!(
+          sapply(1:nrow(peaks_ppm), function(j) {
+            any(sapply(keep_peak_ranges, function(range) {
+              lower_bound <- min(range)
+              upper_bound <- max(range)
+              peaks_ppm$F2_ppm[j] >= lower_bound && peaks_ppm$F2_ppm[j] <= upper_bound
+            }))
+          })
+        ))
+      
+      boxes_outside_ranges <- boxes %>%
+        dplyr::filter(stain_id %in% peaks_outside_ranges$stain_id)
+      
+      peaks_ppm <- dplyr::bind_rows(peaks_outside_ranges, filtered_peaks) %>%
+        dplyr::distinct()
+      boxes <- dplyr::bind_rows(boxes_outside_ranges, filtered_boxes) %>%
+        dplyr::distinct()
+      
+      if (verbose) {
+        cat(sprintf("After keep_peak_ranges filter: %d peaks, %d boxes\n", 
+                    nrow(peaks_ppm), nrow(boxes)))
+      }
+    }
+    
     return(list(peaks = peaks_ppm, boxes = boxes, shapes = list()))
   }
   
   # === DBSCAN Clustering ===
-  processed <- process_peaks_with_dbscan(peaks_clean_filtered, rr_norm, params, step)
+  processed <- process_peaks_with_dbscan(peaks_clean_filtered, rr_norm, params, step,
+                                         keep_peak_ranges = keep_peak_ranges)
   return(processed)
 }

@@ -223,16 +223,21 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       is_vertical = aspect_ratio_y > aspect_ratio_x,
       
       # === Artifact detection flags ===
+      # NOTE: Thresholds are set here for TOCSY. For COSY, they are recalculated below
+      #       after the mutate block, since COSY has more intense bleeding artifacts.
+      
       # Horizontal lines: low y variance, wide span, few points (t1 noise)
       is_horizontal_line = is_horizontal & (y_var < 0.0001) & (x_span > 0.01) & (n_points < 100),
       
       # Vertical lines: low x variance, tall span, few points (bleeding artifacts)
+      # TOCSY default - will be overridden for COSY
       is_vertical_line = is_vertical & (x_var < 1e-09) & (y_span > 0.015) & (n_points < 30),
       
       # Width to height ratio
       width_to_height = x_span / (y_span + 1e-10),
       
       # Thin vertical streaks: very narrow but tall (truncation artifacts)
+      # TOCSY default - will be overridden for COSY
       is_thin_vertical = is_vertical & (x_span < 0.00002) & (y_span > 0.01),
       
       # === Quality metrics ===
@@ -249,6 +254,34 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       linearity_x = 1 - pmin(1, x_var / (x_span^2 / 12 + 1e-10)),
       linearity_y = 1 - pmin(1, y_var / (y_span^2 / 12 + 1e-10))
     )
+  
+  # ════════════════════════════════════════════════════════════════════════════
+  # COSY-SPECIFIC: Recalculate artifact detection with more permissive thresholds
+  
+  # COSY spectra have more intense diagonal and bleeding artifacts than TOCSY
+  # ════════════════════════════════════════════════════════════════════════════
+  if (spectrum_type == "COSY") {
+    cluster_stats <- cluster_stats %>%
+      mutate(
+        # COSY: More permissive thresholds to catch bleeding artifacts
+        # - Higher x_var tolerance (1e-06 vs 1e-09)
+        # - Lower y_span requirement (0.01 vs 0.015)
+        # - More points allowed (100 vs 30)
+        is_vertical_line = is_vertical & (x_var < 1e-06) & (y_span > 0.01) & (n_points < 100),
+        
+        # COSY: Wider thin vertical detection
+        # - Larger x_span tolerance (0.0001 vs 0.00002)
+        is_thin_vertical = is_vertical & (x_span < 0.0001) & (y_span > 0.008),
+        
+        # COSY: Also detect elongated vertical shapes as potential artifacts
+        # High elongation + vertical + not on diagonal = likely artifact
+        is_vertical_artifact = is_vertical & (elongation > 8) & !is_diagonal & (x_span < 0.05)
+      )
+  } else {
+    # For non-COSY spectra, add the column with FALSE (not used in filtering)
+    cluster_stats <- cluster_stats %>%
+      mutate(is_vertical_artifact = FALSE)
+  }
   
   # Calculate density quantiles for adaptive filtering
   max_intensity <- max(cluster_stats$intensity, na.rm = TRUE)
@@ -307,8 +340,8 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       ) %>%
       pull(contour_id)
     
-  } else if (spectrum_type %in% c("TOCSY", "COSY")) {
-    # TOCSY/COSY: Complex filtering due to multiplet patterns and bleeding
+  } else if (spectrum_type == "TOCSY") {
+    # TOCSY: Complex filtering due to multiplet patterns and bleeding
     valid_ids <- cluster_stats %>%
       pull(contour_id)
     
@@ -323,6 +356,67 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       
       f2_tolerance <- 0.02  # ppm - peaks considered on the same "column"
       intensity_ratio_threshold <- 0.05 # Keep only if > 5% of the column's maximum peak
+      
+      # Group peaks by F2 position and find column maxima
+      valid_stats <- valid_stats %>%
+        mutate(
+          f2_group = round(x_center / f2_tolerance) * f2_tolerance
+        ) %>%
+        group_by(f2_group) %>%
+        mutate(
+          max_intensity_in_column = max(intensity, na.rm = TRUE),
+          intensity_ratio = intensity / max_intensity_in_column,
+          n_peaks_in_column = n()
+        ) %>%
+        ungroup()
+      
+      # Keep if: dominant peak OR sufficient ratio OR column with few peaks
+      valid_ids <- valid_stats %>%
+        filter(
+          intensity == max_intensity_in_column |  # Always keep the most intense
+            intensity_ratio >= intensity_ratio_threshold |  # Quite intense relatively
+            n_peaks_in_column <= 2 |  # No problem if there are few peaks
+            is_diagonal  # Always keep the diagonals
+        ) %>%
+        pull(contour_id)
+    }
+    
+  } else if (spectrum_type == "COSY") {
+    # ══════════════════════════════════════════════════════════════════════════
+    # COSY: Stricter filtering than TOCSY due to more intense bleeding artifacts
+    # ══════════════════════════════════════════════════════════════════════════
+    
+    # First pass: reject obvious artifacts
+    valid_ids <- cluster_stats %>%
+      filter(
+        # Reject line artifacts (using COSY-specific thresholds set above)
+        !is_horizontal_line,
+        !is_vertical_line,
+        !is_thin_vertical,
+        
+        # Reject elongated vertical artifacts (COSY-specific)
+        !is_vertical_artifact | is_diagonal | intensity_norm > 0.15,
+        
+        # Minimum intensity
+        intensity >= min_cluster_intensity * 0.5,
+        
+        # Elongation limits - stricter for COSY
+        (
+          is_diagonal |  # Diagonal peaks OK
+            (intensity_norm > 0.2 & elongation <= 15) |  # Strong peaks
+            (intensity_norm > 0.05 & elongation <= 10) |  # Medium peaks
+            (elongation <= 6)  # Weak peaks must be compact
+        )
+      ) %>%
+      pull(contour_id)
+    
+    # Second pass: Remove weak peaks in the same F2 column as strong peaks (bleeding)
+    valid_stats <- cluster_stats %>% filter(contour_id %in% valid_ids)
+    
+    if (nrow(valid_stats) > 1) {
+      
+      f2_tolerance <- 0.025  # ppm - slightly wider grouping for COSY
+      intensity_ratio_threshold <- 0.08  # Stricter ratio for COSY (8% vs 5% for TOCSY)
       
       # Group peaks by F2 position and find column maxima
       valid_stats <- valid_stats %>%
@@ -487,6 +581,51 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
       }
     }
     peak_list <- peak_list %>% filter(!contour_id %in% to_remove)
+  }
+  
+  # === Step 9b: Filter vertical traces (bleeding artifacts) ===
+  # Group peaks by F2 column and keep only top N per column
+  # This removes bleeding artifacts that appear as vertical streaks
+  if (nrow(peak_list) > 1 && spectrum_type %in% c("TOCSY", "COSY", "UFCOSY")) {
+    
+    # Parameters by spectrum type
+    f2_tolerance <- switch(spectrum_type,
+                           "TOCSY" = 0.02,
+                           "COSY" = 0.02,
+                           "UFCOSY" = 0.025,
+                           0.02
+    )
+    
+    keep_top_n <- switch(spectrum_type,
+                         "TOCSY" = 6,
+                         "COSY" = 4,   # Stricter for COSY (more bleeding)
+                         "UFCOSY" = 5,
+                         5
+    )
+    
+    # Group by F2 column
+    peak_list <- peak_list %>%
+      dplyr::mutate(
+        f2_group = round(F2_ppm / f2_tolerance) * f2_tolerance
+      ) %>%
+      dplyr::group_by(f2_group) %>%
+      dplyr::mutate(
+        intensity_rank = dplyr::row_number(dplyr::desc(Volume))
+      ) %>%
+      dplyr::ungroup()
+    
+    n_before <- nrow(peak_list)
+    
+    # Keep only top N per F2 column
+    peak_list <- peak_list %>%
+      dplyr::filter(intensity_rank <= keep_top_n) %>%
+      dplyr::select(-f2_group, -intensity_rank)
+    
+    n_removed <- n_before - nrow(peak_list)
+    if (n_removed > 0 && verbose) {
+      message(sprintf("🧹 [%s] Filtered %d vertical trace peaks (kept top %d per F2 column)",
+                      spectrum_type, n_removed, keep_top_n))
+    }
   }
   
   # === Step 10: Finalize output ===
@@ -908,6 +1047,53 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
       }
     }
     # Sync boxes: keep only boxes whose stain_id survived the centroid filtering
+    bounding_boxes <- bounding_boxes %>% filter(stain_id %in% centroids$stain_id)
+  }
+  
+  # --- Step 11b: Filter vertical traces (bleeding artifacts) ---
+  # Group peaks by F2 column and keep only top N per column
+  if (nrow(centroids) > 1 && spectrum_type %in% c("TOCSY", "COSY", "UFCOSY")) {
+    
+    # Parameters by spectrum type
+    f2_tolerance <- switch(spectrum_type,
+                           "TOCSY" = 0.02,
+                           "COSY" = 0.02,
+                           "UFCOSY" = 0.025,
+                           0.02
+    )
+    
+    keep_top_n <- switch(spectrum_type,
+                         "TOCSY" = 6,
+                         "COSY" = 4,   # Stricter for COSY (more bleeding)
+                         "UFCOSY" = 5,
+                         5
+    )
+    
+    # Group by F2 column and rank by intensity
+    centroids <- centroids %>%
+      dplyr::mutate(
+        f2_group = round(F2_ppm / f2_tolerance) * f2_tolerance
+      ) %>%
+      dplyr::group_by(f2_group) %>%
+      dplyr::mutate(
+        intensity_rank = dplyr::row_number(dplyr::desc(Volume))
+      ) %>%
+      dplyr::ungroup()
+    
+    n_before <- nrow(centroids)
+    
+    # Keep only top N per F2 column
+    centroids <- centroids %>%
+      dplyr::filter(intensity_rank <= keep_top_n) %>%
+      dplyr::select(-f2_group, -intensity_rank)
+    
+    n_removed <- n_before - nrow(centroids)
+    if (n_removed > 0) {
+      message(sprintf("🧹 [%s] Filtered %d vertical trace peaks (kept top %d per F2 column)",
+                      spectrum_type, n_removed, keep_top_n))
+    }
+    
+    # Sync boxes with filtered centroids
     bounding_boxes <- bounding_boxes %>% filter(stain_id %in% centroids$stain_id)
   }
   
