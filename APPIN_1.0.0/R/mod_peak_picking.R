@@ -4,6 +4,46 @@
 # Description: Shiny module for automatic peak detection using local maxima
 #              and DBSCAN clustering
 
+## Helper function: Parse keep_peak_ranges text ----
+#' Parse keep_peak_ranges from text input
+#' @param text Character string like "0.5,-0.5; 1,0.8; 1.55,1.45;"
+#' @return List of numeric vectors, each with 2 elements (min, max)
+parse_keep_peak_ranges <- function(text) {
+  if (is.null(text) || text == "" || is.na(text)) {
+    return(NULL)
+  }
+  
+  # Split by semicolon
+  ranges_text <- strsplit(text, ";")[[1]]
+  ranges_text <- trimws(ranges_text)
+  ranges_text <- ranges_text[ranges_text != ""]
+  
+  if (length(ranges_text) == 0) {
+    return(NULL)
+  }
+  
+  ranges_list <- lapply(ranges_text, function(r) {
+    parts <- strsplit(r, ",")[[1]]
+    parts <- trimws(parts)
+    if (length(parts) == 2) {
+      vals <- as.numeric(parts)
+      if (!any(is.na(vals))) {
+        return(vals)
+      }
+    }
+    return(NULL)
+  })
+  
+  # Remove NULLs
+  ranges_list <- ranges_list[!sapply(ranges_list, is.null)]
+  
+  if (length(ranges_list) == 0) {
+    return(NULL)
+  }
+  
+  return(ranges_list)
+}
+
 ## Module UI ----
 
 mod_peak_picking_ui <- function(id) {
@@ -323,13 +363,20 @@ mod_peak_picking_server <- function(id,
           trace_filter_ratio = input$cnn_trace_filter / 100  # Filtre traces TOCSY (% -> ratio)
         )
         
+        # Parse keep_peak_ranges for CNN filtering
+        cnn_keep_ranges <- parse_keep_peak_ranges(input$keep_peak_ranges_text)
+        if (!is.null(cnn_keep_ranges)) {
+          cat(sprintf("CNN: keep_peak_ranges = %d plages\n", length(cnn_keep_ranges)))
+        }
+        
         cnn_result <- tryCatch({
           run_cnn_peak_picking(
             rr_norm = rr_norm,
-            model = cnn_model,                      # ← MODIFIÉ
+            model = cnn_model,
             params = cnn_params,
-            spectrum_type = current_spectrum_type,  # ← NOUVEAU
+            spectrum_type = current_spectrum_type,
             method = "batch",
+            keep_peak_ranges = cnn_keep_ranges,
             verbose = TRUE
           )
         }, error = function(e) {

@@ -3,7 +3,7 @@
 # Description: Combines all manual editing sub-modules into a single interface
 # 
 # Sub-modules:
-#   - mod_click_mode.R      : Click modes (two-click, delete-click)
+#   - mod_click_mode.R      : Click modes (add peak, two-click box, delete-click)
 #   - mod_box_editor.R      : Box editing (move, resize, preview)
 #   - mod_manual_add.R      : Manual addition of peaks and boxes
 #   - mod_fusion.R          : Peak and box fusion
@@ -79,7 +79,8 @@ mod_manual_editing_server <- function(id,
     click_mode_result <- mod_click_mode_server(
       id = "click_mode",
       rv = rv,
-      data_reactives = data_reactives
+      data_reactives = data_reactives,
+      peak_picking = peak_picking
     )
     
     # 2. Fusion
@@ -88,11 +89,11 @@ mod_manual_editing_server <- function(id,
       rv = rv
     )
     
-      # 2b. Delete Selected                      # <-- AJOUTER CE BLOC
-      mod_delete_server(
-        id = "delete",
-        rv = rv
-      )
+    # 2b. Delete Selected
+    mod_delete_server(
+      id = "delete",
+      rv = rv
+    )
     
     # 3. Box Editor
     mod_box_editor_server(
