@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/images/logo.png" alt="2DNMR-Analyst Logo" width="200"/>
+  <img src="docs/images/logo.png" alt="APPIN Logo" width="200"/>
 </p>
 
-<h1 align="center">2DNMR-Analyst</h1>
+<h1 align="center">APPIN</h1>
 
 <p align="center">
   
