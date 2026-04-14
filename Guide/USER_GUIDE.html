@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>APPIN - User Guide v2.1</title>
+    <style>
+        :root {
+            --primary-color: #2c7bb6;
+            --secondary-color: #00a6ca;
+            --accent-color: #90eb9d;
+            --warning-color: #f9a825;
+            --error-color: #d62728;
+            --success-color: #2ca02c;
+            --text-color: #333;
+            --bg-color: #fafafa;
+            --card-bg: #ffffff;
+            --border-color: #e0e0e0;
+            --code-bg: #f5f5f5;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 3rem;
+            font-weight: 300;
+        }
+
+        header h1 .emoji {
+            font-size: 2.5rem;
+        }
+
+        header .subtitle {
+            font-size: 1.3rem;
+            opacity: 0.9;
+            margin-top: 10px;
+        }
+
+        header .version {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-top: 15px;
+            font-size: 0.9rem;
+        }
+
+        .badges {
+            margin-top: 20px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 12px;
+            margin: 3px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .badge-r { background: #276dc3; color: white; }
+        .badge-shiny { background: #4caf50; color: white; }
+        .badge-license { background: #f9a825; color: #333; }
+
+        /* Navigation */
+        nav {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        nav ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        nav li a {
+            display: block;
+            padding: 15px 20px;
+            color: var(--text-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        nav li a:hover {
+            color: var(--primary-color);
+            background: rgba(44, 123, 182, 0.1);
+        }
+
+        /* Main content */
+        main {
+            padding: 40px 0;
+        }
+
+        section {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        h2 {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+
+        h3 {
+            color: var(--secondary-color);
+            margin-top: 30px;
+        }
+
+        h4 {
+            color: #555;
+            margin-top: 25px;
+        }
+
+        /* New feature badge */
+        .new-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--primary-color);
+            color: white;
+            font-weight: 500;
+        }
+
+        tr:hover {
+            background: rgba(44, 123, 182, 0.05);
+        }
+
+        /* Code blocks */
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            overflow-x: auto;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        code {
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 6px;
+            margin: 20px 0;
+            border-left: 4px solid;
+        }
+
+        .alert-info {
+            background: #e3f2fd;
+            border-color: var(--primary-color);
+            color: #1565c0;
+        }
+
+        .alert-warning {
+            background: #fff8e1;
+            border-color: var(--warning-color);
+            color: #f57f17;
+        }
+
+        .alert-success {
+            background: #e8f5e9;
+            border-color: var(--success-color);
+            color: #2e7d32;
+        }
+
+        .alert-danger {
+            background: #ffebee;
+            border-color: var(--error-color);
+            color: #c62828;
+        }
+
+        .alert strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        /* Feature cards */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #f8f9fa, #fff);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .feature-card .icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .feature-card h4 {
+            margin: 10px 0;
+            color: var(--primary-color);
+        }
+
+        .feature-card p {
+            margin: 0;
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        /* Collapsible sections */
+        details {
+            background: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+
+        summary {
+            padding: 15px 20px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--primary-color);
+            user-select: none;
+        }
+
+        summary:hover {
+            background: rgba(44, 123, 182, 0.05);
+        }
+
+        details[open] summary {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        details > div {
+            padding: 20px;
+        }
+
+        /* File structure */
+        .file-tree {
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.85rem;
+            background: #263238;
+            color: #aed581;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+
+        .file-tree .comment {
+            color: #78909c;
+        }
+
+        /* Footer */
+        footer {
+            background: #263238;
+            color: #b0bec5;
+            padding: 40px 20px;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        footer h3 {
+            color: white;
+            margin-top: 0;
+        }
+
+        footer a {
+            color: var(--accent-color);
+        }
+
+        footer .contact-info {
+            margin: 20px 0;
+        }
+
+        footer .contact-info p {
+            margin: 5px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            header .subtitle {
+                font-size: 1rem;
+            }
+
+            nav ul {
+                flex-direction: column;
+            }
+
+            nav li a {
+                padding: 12px 15px;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            section {
+                padding: 20px;
+            }
+
+            table {
+                font-size: 0.85rem;
+            }
+
+            th, td {
+                padding: 8px 10px;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            nav, .badges {
+                display: none;
+            }
+
+            header {
+                background: none;
+                color: var(--text-color);
+                padding: 20px;
+            }
+
+            section {
+                box-shadow: none;
+                border: 1px solid #ddd;
+                page-break-inside: avoid;
+            }
+
+            details {
+                display: block;
+            }
+
+            details > div {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1><span class="emoji">🧪</span> APPIN</h1>
+    <p class="subtitle">Automated Peak Picking and INtegration for 2D NMR</p>
+    <span class="version">User Guide v2.1</span>
+    <div class="badges">
+        <span class="badge badge-r">R ≥ 4.0</span>
+        <span class="badge badge-shiny">Shiny App</span>
+        <span class="badge badge-license">MIT License</span>
+    </div>
+</header>
+
+<nav>
+    <ul>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#getting-started">Getting Started</a></li>
+        <li><a href="#workflow">Workflow</a></li>
+        <li><a href="#new-features">New Features</a></li>
+        <li><a href="#tips">Tips</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+    </ul>
+</nav>
+
+<main class="container">
+
+    <!-- Overview Section -->
+    <section id="overview">
+        <h2>📖 Overview</h2>
+        <p><strong>APPIN</strong> is a powerful Shiny application designed for loading, visualizing, processing, and exporting 2D NMR spectra from Bruker instruments. It provides a complete interactive interface optimized for metabolomics research.</p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">🔬</div>
+                <h4>Multi-format Support</h4>
+                <p>TOCSY, COSY, HSQC, and UFCOSY experiments</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🎯</div>
+                <h4>Smart Peak Detection</h4>
+                <p>Local maxima with DBSCAN clustering + CNN neural network</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🧠</div>
+                <h4>CNN Detection</h4>
+                <p>Deep learning-based peak detection for complex spectra</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">✏️</div>
+                <h4>Interactive Editing</h4>
+                <p>Manual creation, modification, and fusion of peaks/boxes</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🖱️</div>
+                <h4>Box Select Tool <span class="new-badge">New</span></h4>
+                <p>Add or delete peaks/boxes directly via rectangular selection</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">📊</div>
+                <h4>Advanced Integration</h4>
+                <p>Sum, Gaussian, and Voigt fitting methods</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">📈</div>
+                <h4>Quality Metrics</h4>
+                <p>R² analysis and residuals visualization</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">⚡</div>
+                <h4>Batch Processing <span class="new-badge">Enhanced</span></h4>
+                <p>Analyze multiple spectra with dynamic shift recentering</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Getting Started Section -->
+    <section id="getting-started">
+        <h2>🚀 Getting Started</h2>
+
+        <h3>Prerequisites</h3>
+        <p>Before installing APPIN, ensure you have:</p>
+        <ul>
+            <li><strong>R</strong> (version ≥ 4.0) — <a href="https://cran.r-project.org/">Download from CRAN</a></li>
+            <li><strong>RStudio</strong> (recommended) — <a href="https://posit.co/download/rstudio-desktop/">Download RStudio Desktop</a></li>
+        </ul>
+
+        <h3>Installation</h3>
+
+        <h4>Option A: Direct Download</h4>
+        <ol>
+            <li>Visit the <a href="https://github.com/JulienGuibertTlse3/APPIN">GitHub repository</a></li>
+            <li>Click the green <strong>"Code"</strong> button</li>
+            <li>Select <strong>"Download ZIP"</strong></li>
+            <li>Extract the archive to your preferred location</li>
+        </ol>
+
+        <h4>Option B: Git Clone</h4>
+        <pre><code>git clone https://github.com/JulienGuibertTlse3/APPIN.git
+cd APPIN</code></pre>
+
+        <h3>Launching the Application</h3>
+        <ol>
+            <li>Open <strong>RStudio</strong></li>
+            <li>Open the <code>run_app.R</code> file</li>
+            <li>Click <strong>"Source"</strong> or press <code>Ctrl+Shift+Enter</code></li>
+        </ol>
+
+        <div class="alert alert-info">
+            <strong>💡 Note</strong>
+            The script automatically installs all required packages on first run.
+        </div>
+
+        <h3>Project Structure</h3>
+        <div class="file-tree">
+APPIN/
+│
+├── run_app.R                 <span class="comment"># 🚀 Entry point - run this file</span>
+├── Shine.R                   <span class="comment"># Main application</span>
+│
+├── R/                        <span class="comment"># Shiny modules</span>
+│   ├── utils.R
+│   ├── mod_load_data.R
+│   ├── mod_peak_picking.R    <span class="comment"># Local Max + CNN detection</span>
+│   ├── mod_manual_editing.R
+│   ├── mod_integration.R
+│   └── mod_save_export.R
+│
+├── Function/                 <span class="comment"># Core functions</span>
+│   ├── Read_2DNMR_spectrum.R
+│   ├── Vizualisation.R
+│   ├── Peak_picking.R
+│   ├── Peak_fitting.R
+│   ├── CNN_shiny.R           <span class="comment"># 🧠 CNN entry point</span>
+│   ├── CNN_model.R
+│   ├── CNN_detection.R
+│   ├── CNN_filtering.R
+│   ├── CNN_clustering.R
+│   └── CNN_main.R
+│
+├── saved_model/              <span class="comment"># 🧠 CNN pre-trained weights</span>
+│   └── weights/
+│
+└── www/                      <span class="comment"># Web assets</span>
+    ├── styles.css
+    └── plotly_ticks.js
+        </div>
+    </section>
+
+    <!-- Workflow Section -->
+    <section id="workflow">
+        <h2>📋 Workflow</h2>
+
+        <details>
+            <summary>📂 Step 1: Load Data</summary>
+            <div>
+                <h4>Bruker File Requirements</h4>
+                <p>Your Bruker data must follow this structure:</p>
+                <pre><code>/&lt;experiment_folder&gt;/pdata/1/
+    ├── 2rr        # Processed data
+    ├── procs      # Processing parameters (F2)
+    ├── proc2s     # Processing parameters (F1)
+    └── ...</code></pre>
+
+                <h4>Loading Steps</h4>
+                <ol>
+                    <li>Navigate to the <strong>Analysis</strong> tab</li>
+                    <li>Expand <strong>"1. Load Data"</strong> section</li>
+                    <li>Click <strong>"Select Folder"</strong></li>
+                    <li>Browse to your Bruker experiment folder</li>
+                    <li>Check the spectra you want to analyze</li>
+                    <li>Click <strong>"Load Selected"</strong></li>
+                </ol>
+
+                <div class="alert alert-info">
+                    <strong>💡 Tip</strong>
+                    Use "Load All" for quick selection of all available spectra.
+                </div>
+            </div>
+        </details>
+
+        <details>
+            <summary>📈 Step 2: Configure Plot</summary>
+            <div>
+                <h4>Spectrum Types</h4>
+                <table>
+                    <thead>
+                        <tr><th>Type</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>TOCSY</strong></td><td>Homonuclear correlations through multiple bonds</td></tr>
+                        <tr><td><strong>COSY</strong></td><td>Direct homonuclear correlations (2-3 bonds)</td></tr>
+                        <tr><td><strong>HSQC</strong></td><td>Heteronuclear ¹H-¹³C single-bond correlations</td></tr>
+                        <tr><td><strong>UFCOSY</strong></td><td>Ultrafast COSY acquisition</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>Parameters</h4>
+                <table>
+                    <thead>
+                        <tr><th>Parameter</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Threshold</strong></td><td>Minimum intensity for contour display</td></tr>
+                        <tr><td><strong>Auto</strong></td><td>Automatically calculates optimal threshold</td></tr>
+                        <tr><td><strong>Advanced</strong></td><td>Fine-tune noise threshold and contour settings</td></tr>
+                    </tbody>
+                </table>
+
+                <p>Click <strong>"Generate Plot"</strong> to display the spectrum.</p>
+            </div>
+        </details>
+
+        <details>
+            <summary>🎯 Step 3: Peak Detection</summary>
+            <div>
+                <h4>Detection Methods</h4>
+                <table>
+                    <thead>
+                        <tr><th>Method</th><th>Description</th><th>Best For</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Local Max</strong></td>
+                            <td>Detects local maxima with optional DBSCAN clustering</td>
+                            <td>Fast detection, well-resolved spectra</td>
+                        </tr>
+                        <tr>
+                            <td><strong>CNN</strong></td>
+                            <td>Convolutional neural network for intelligent peak detection</td>
+                            <td>Complex spectra, overlapping peaks</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>🔬 Local Max Method</h4>
+                <table>
+                    <thead>
+                        <tr><th>Option</th><th>Effect</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>No clustering</strong></td><td>Each local maximum becomes a separate peak</td></tr>
+                        <tr><td><strong>Epsilon (eps)</strong></td><td>Maximum distance between points in a cluster</td></tr>
+                        <tr><td><strong>Delete ranges</strong></td><td>Remove peaks from specified ppm regions</td></tr>
+                    </tbody>
+                </table>
+
+                <p><strong>Recommended epsilon values:</strong></p>
+                <ul>
+                    <li>TOCSY/HSQC/COSY: <code>0.0068</code></li>
+                    <li>UFCOSY: <code>0.014</code></li>
+                </ul>
+
+                <h4>🧠 CNN Method (Neural Network)</h4>
+                <p>The CNN method uses a trained deep learning model to detect peaks more intelligently. It's particularly effective for:</p>
+                <ul>
+                    <li>Spectra with overlapping peaks</li>
+                    <li>Low signal-to-noise conditions</li>
+                    <li>Complex multiplet patterns</li>
+                    <li>TOCSY spectra with t1 noise artifacts</li>
+                </ul>
+
+                <h5>CNN Parameters</h5>
+                <table>
+                    <thead>
+                        <tr><th>Parameter</th><th>Description</th><th>Default</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Prediction threshold</strong></td><td>Minimum CNN confidence (0-1)</td><td>0.3</td></tr>
+                        <tr><td><strong>Trace filter</strong></td><td>Removes t1 noise artifacts (% of line max)</td><td>50%</td></tr>
+                    </tbody>
+                </table>
+
+                <h5>CNN Tips</h5>
+                <table>
+                    <thead>
+                        <tr><th>Goal</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Detect more peaks</td><td>↓ Lower prediction threshold (e.g., 0.2)</td></tr>
+                        <tr><td>Reduce false positives</td><td>↑ Higher prediction threshold (e.g., 0.5)</td></tr>
+                        <tr><td>Remove t1 noise traces</td><td>↑ Higher trace filter (e.g., 70%)</td></tr>
+                        <tr><td>Keep weak correlations</td><td>↓ Lower trace filter (e.g., 30%)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </details>
+
+        <details>
+            <summary>✏️ Step 4: Manual Editing</summary>
+            <div>
+                <h4>🖱️ Click Modes</h4>
+                <table>
+                    <thead>
+                        <tr><th>Mode</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Off</strong></td><td>Clicks have no effect</td></tr>
+                        <tr><td><strong>Add box (2 clicks)</strong></td><td>Click two corners to create a bounding box</td></tr>
+                        <tr><td><strong>Delete box on click</strong></td><td>Click inside a box to mark for deletion</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>🔲 Box Select Tool <span class="new-badge">New</span></h4>
+                <p>The <strong>Box Select Tool</strong> allows you to add or delete peaks and boxes by drawing a rectangular selection directly on the spectrum.</p>
+                <table>
+                    <thead>
+                        <tr><th>Action</th><th>How to Use</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Add peaks/boxes</strong></td>
+                            <td>Select "Add" mode, then draw a rectangle on the spectrum to create a new integration zone</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Delete peaks/boxes</strong></td>
+                            <td>Select "Delete" mode, then draw a rectangle to remove all peaks/boxes within the selection area</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="alert alert-info">
+                    <strong>💡 Tip</strong>
+                    The Box Select Tool is particularly useful for quickly cleaning up regions with many false positives or for adding multiple integration zones in a specific area.
+                </div>
+
+                <h4>🔗 Fusing Peaks</h4>
+                <ol>
+                    <li>Go to the <strong>Data</strong> tab</li>
+                    <li>Select multiple peaks/boxes using <code>Ctrl+Click</code></li>
+                    <li>Return to <strong>Manual Editing</strong></li>
+                    <li>Click <strong>"Fuse Selected"</strong></li>
+                </ol>
+
+                <h4>🗑️ Delete Selected <span class="new-badge">New</span></h4>
+                <p>Similar to "Fuse Selected", you can now delete multiple selected items at once:</p>
+                <ol>
+                    <li>Go to the <strong>Data</strong> tab</li>
+                    <li>Select multiple peaks/boxes using <code>Ctrl+Click</code></li>
+                    <li>Return to <strong>Manual Editing</strong></li>
+                    <li>Click <strong>"Delete Selected"</strong></li>
+                </ol>
+
+                <div class="alert alert-success">
+                    <strong>💡 Tip</strong>
+                    This is a mirror function of "Fuse Selected" — useful for bulk cleanup operations.
+                </div>
+
+                <h4>📦 Edit Selected Box</h4>
+                <table>
+                    <thead>
+                        <tr><th>Control</th><th>Function</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Coordinates</strong></td><td>Manually enter xmin, xmax, ymin, ymax</td></tr>
+                        <tr><td><strong>Arrow buttons</strong></td><td>Move box (↑ ↓ ← →)</td></tr>
+                        <tr><td><strong>+/- buttons</strong></td><td>Expand or shrink box size</td></tr>
+                        <tr><td><strong>Step</strong></td><td>Movement increment in ppm</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="alert alert-warning">
+                    <strong>⚠️ Important</strong>
+                    Click <strong>"Apply"</strong> to confirm changes or <strong>"Discard"</strong> to cancel.
+                </div>
+            </div>
+        </details>
+
+        <details>
+            <summary>📐 Step 5: Integration</summary>
+            <div>
+                <h4>Integration Methods</h4>
+                <table>
+                    <thead>
+                        <tr><th>Method</th><th>Description</th><th>Best For</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Sum (AUC)</strong></td><td>Direct summation of intensities</td><td>Fast analysis, robust</td></tr>
+                        <tr><td><strong>Gaussian</strong></td><td>2D Gaussian peak fitting</td><td>Symmetric peaks</td></tr>
+                        <tr><td><strong>Voigt</strong></td><td>Gaussian + Lorentzian profile</td><td>Asymmetric peaks</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>Fitting Options</h4>
+                <table>
+                    <thead>
+                        <tr><th>Option</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Include R² in export</strong></td><td>Add quality metrics to output</td></tr>
+                        <tr><td><strong>Min R² threshold</strong></td><td>Fallback to Sum if fit quality is below threshold</td></tr>
+                    </tbody>
+                </table>
+
+                <p>Click <strong>"Run Integration"</strong> to process all boxes.</p>
+            </div>
+        </details>
+
+        <details>
+            <summary>📊 Step 6: Quality Analysis</summary>
+            <div>
+                <p>When using Gaussian or Voigt fitting, the <strong>Fit Quality</strong> tab provides:</p>
+                <table>
+                    <thead>
+                        <tr><th>Section</th><th>Content</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Fit Summary</strong></td><td>Statistics grouped by fitting method</td></tr>
+                        <tr><td><strong>Fitted Boxes</strong></td><td>Sortable table with R² for each box</td></tr>
+                        <tr><td><strong>R² Distribution</strong></td><td>Histogram of fit quality</td></tr>
+                        <tr><td><strong>2D Fit View</strong></td><td>Visual representation of selected fit</td></tr>
+                        <tr><td><strong>Residuals</strong></td><td>Distribution of fitting residuals</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>R² Interpretation Guide</h4>
+                <table>
+                    <thead>
+                        <tr><th>R² Value</th><th>Quality</th><th>Recommendation</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>> 0.9</strong></td><td>✅ Excellent</td><td>Peak is well-defined</td></tr>
+                        <tr><td><strong>0.7 - 0.9</strong></td><td>⚠️ Good</td><td>Acceptable for quantification</td></tr>
+                        <tr><td><strong>< 0.7</strong></td><td>❌ Poor</td><td>Use Sum method or adjust box</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </details>
+
+        <details>
+            <summary>💾 Step 7: Save & Export</summary>
+            <div>
+                <h4>Session Management</h4>
+                <table>
+                    <thead>
+                        <tr><th>Action</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Save</strong></td><td>Save complete session as <code>.rds</code> file</td></tr>
+                        <tr><td><strong>Load</strong></td><td>Restore a previously saved session</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>Import/Export Options</h4>
+                <table>
+                    <thead>
+                        <tr><th>Format</th><th>Content</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Peaks CSV</strong></td><td>Peak coordinates (stain_id, F2_ppm, F1_ppm)</td></tr>
+                        <tr><td><strong>Boxes CSV</strong></td><td>Box boundaries (stain_id, xmin, xmax, ymin, ymax)</td></tr>
+                        <tr><td><strong>Batch Export</strong></td><td>Project boxes onto all spectra and export intensities</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>🔄 Dynamic Shift Recentering <span class="new-badge">New</span></h4>
+                <p>When using <strong>Batch Export</strong>, APPIN now supports <strong>dynamic chemical shift recentering</strong> to compensate for slight variations in peak positions across spectra.</p>
+
+                <table>
+                    <thead>
+                        <tr><th>Parameter</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Shift Tolerance (ppm)</strong></td><td>Maximum allowed deviation from the reference position</td></tr>
+                    </tbody>
+                </table>
+
+                <h5>How It Works</h5>
+                <ol>
+                    <li>For each integration box, APPIN searches for the local maximum within the tolerance window</li>
+                    <li>The box is recentered on this maximum for each spectrum</li>
+                    <li>This ensures optimal integration even when peaks shift slightly between samples</li>
+                </ol>
+
+                <h5>When to Use</h5>
+                <table>
+                    <thead>
+                        <tr><th>Scenario</th><th>Recommendation</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Stable peak positions</strong></td><td>Disable or use small tolerance (0.01 ppm)</td></tr>
+                        <tr><td><strong>Variable pH/temperature</strong></td><td>Enable with moderate tolerance (0.02-0.05 ppm)</td></tr>
+                        <tr><td><strong>Complex matrices</strong></td><td>Enable with larger tolerance (0.05-0.1 ppm)</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="alert alert-info">
+                    <strong>💡 Tip</strong>
+                    Start with a small tolerance and increase if needed. Too large a tolerance may cause boxes to jump to neighboring peaks.
+                </div>
+
+                <h4>CSV File Formats</h4>
+                <p><strong>Peaks:</strong></p>
+                <pre><code>stain_id;F2_ppm;F1_ppm;Volume
+peak1;1.234;3.456;123456</code></pre>
+
+                <p><strong>Boxes:</strong></p>
+                <pre><code>stain_id;xmin;xmax;ymin;ymax
+peak1;1.200;1.268;3.400;3.512</code></pre>
+
+                <div class="alert alert-info">
+                    <strong>💡 Batch Processing Limits</strong>
+                    For optimal performance, limit to 25 spectra for TOCSY, or 50 for COSY/HSQC.
+                </div>
+            </div>
+        </details>
+    </section>
+
+    <!-- New Features Section -->
+    <section id="new-features">
+        <h2>🆕 New Features in v2.1</h2>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">🔲</div>
+                <h4>Box Select Tool</h4>
+                <p>Add or delete peaks and integration boxes by drawing a rectangular selection directly on the spectrum. Much faster than individual clicks for bulk operations.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🗑️</div>
+                <h4>Delete Selected</h4>
+                <p>Mirror function of "Fuse Selected" — select multiple items in the Data tab, then delete them all at once. Perfect for bulk cleanup operations.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🔄</div>
+                <h4>Dynamic Shift Recentering</h4>
+                <p>Batch export now supports automatic peak recentering based on a configurable tolerance (ppm). Compensates for chemical shift variations across samples.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tips Section -->
+    <section id="tips">
+        <h2>💡 Tips & Best Practices</h2>
+
+        <h3>Workflow Optimization</h3>
+        <ol>
+            <li><strong>Start with QC samples</strong> — Optimize parameters on your most intense spectrum before batch analysis</li>
+            <li><strong>Use Auto threshold</strong> — Let the algorithm find optimal contour levels</li>
+            <li><strong>Check Pending tab</strong> — Always review modifications before clicking Apply</li>
+            <li><strong>Validate with Fit Quality</strong> — When using Gaussian/Voigt, check R² values</li>
+            <li><strong>Use Box Select for bulk operations</strong> — Faster than individual clicks for adding/removing multiple items</li>
+            <li><strong>Enable shift recentering for batch</strong> — Compensates for inter-sample variability</li>
+        </ol>
+
+        <h3>Parameter Tuning</h3>
+        <table>
+            <thead>
+                <tr><th>Goal</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Group more peaks</td><td>↑ Increase epsilon</td></tr>
+                <tr><td>Separate overlapping peaks</td><td>↓ Decrease epsilon</td></tr>
+                <tr><td>Reduce noise</td><td>↑ Increase threshold</td></tr>
+                <tr><td>Detect weak signals</td><td>↓ Decrease threshold</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Troubleshooting Section -->
+    <section id="troubleshooting">
+        <h2>🔧 Troubleshooting</h2>
+
+        <table>
+            <thead>
+                <tr><th>Problem</th><th>Solution</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>No spectrum detected</strong></td><td>Verify Bruker folder structure (<code>pdata/1/</code>)</td></tr>
+                <tr><td><strong>Empty or error plot</strong></td><td>Adjust threshold or use Auto</td></tr>
+                <tr><td><strong>Too many/few peaks</strong></td><td>Adjust epsilon and intensity threshold</td></tr>
+                <tr><td><strong>Import fails</strong></td><td>Check CSV format (separator <code>;</code> or <code>,</code>)</td></tr>
+                <tr><td><strong>Application slow</strong></td><td>Reduce number of contours in Advanced settings</td></tr>
+                <tr><td><strong>Poor fit quality</strong></td><td>Use Sum method or adjust box boundaries</td></tr>
+                <tr><td><strong>Session won't load</strong></td><td>Ensure spectral data is available</td></tr>
+                <tr><td><strong>CNN model not loaded</strong></td><td>Verify <code>saved_model/weights</code> folder exists</td></tr>
+                <tr><td><strong>CNN too slow</strong></td><td>Normal for large spectra; progress bar shows status</td></tr>
+                <tr><td><strong>CNN finds no peaks</strong></td><td>Lower prediction threshold (e.g., 0.2)</td></tr>
+                <tr><td><strong>CNN too many false positives</strong></td><td>Increase prediction threshold and trace filter</td></tr>
+                <tr><td><strong>CNN t1 noise artifacts</strong></td><td>Increase trace filter to 60-80%</td></tr>
+                <tr><td><strong>Box Select not working</strong></td><td>Ensure correct mode (Add/Delete) is selected</td></tr>
+                <tr><td><strong>Shift recentering jumps to wrong peak</strong></td><td>Reduce tolerance value</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Resources Section -->
+    <section>
+        <h2>📚 Additional Resources</h2>
+        <ul>
+            <li><strong>GitHub Repository:</strong> <a href="https://github.com/JulienGuibertTlse3/APPIN">JulienGuibertTlse3/APPIN</a></li>
+            <li><strong>Issue Tracker:</strong> Report bugs and request features on GitHub</li>
+        </ul>
+    </section>
+
+</main>
+
+<footer>
+    <h3>📬 Contact</h3>
+    <div class="contact-info">
+        <p><strong>Author:</strong> Julien Guibert — <a href="mailto:julien.guibert@inrae.fr">julien.guibert@inrae.fr</a></p>
+        <p><strong>Project Maintainer:</strong> Marie TREMBLAY-FRANCO — <a href="mailto:marie.tremblay-franco@inrae.fr">marie.tremblay-franco@inrae.fr</a></p>
+        <p><strong>Institution:</strong> INRAe Toxalim / MetaboHUB</p>
+    </div>
+    <p style="margin-top: 30px; opacity: 0.7;">
+        <em>APPIN v2.1 — Developed for metabolomics research</em><br>
+        <em>Last updated: April 2026</em>
+    </p>
+</footer>
+
+</body>
+</html>

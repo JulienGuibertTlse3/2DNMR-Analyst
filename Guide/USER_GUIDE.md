@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🧪 2DNMR-Analyst
+# 🧪 APPIN
 
-### Interactive 2D NMR Spectroscopy Analysis Tool
+### Automated Peak Picking and INtegration for 2D NMR
 
-**User Guide v2.0**
+**User Guide v2.1**
 
 [![R](https://img.shields.io/badge/R-≥4.0-blue.svg)](https://cran.r-project.org/)
 [![Shiny](https://img.shields.io/badge/Shiny-App-green.svg)](https://shiny.posit.co/)
@@ -23,7 +23,7 @@
 
 ## 📖 Overview
 
-**2DNMR-Analyst** is a powerful Shiny application designed for loading, visualizing, processing, and exporting 2D NMR spectra from Bruker instruments. It provides a complete interactive interface optimized for metabolomics research.
+**APPIN** is a powerful Shiny application designed for loading, visualizing, processing, and exporting 2D NMR spectra from Bruker instruments. It provides a complete interactive interface optimized for metabolomics research.
 
 ### ✨ Key Features
 
@@ -33,10 +33,11 @@
 | 🎯 **Smart Peak Detection** | Local maxima with DBSCAN clustering + CNN neural network |
 | 🧠 **CNN Detection** | Deep learning-based peak detection for complex spectra |
 | ✏️ **Interactive Editing** | Manual creation, modification, and fusion of peaks/boxes |
+| 🖱️ **Box Select Tool** | Add or delete peaks/boxes directly via rectangular selection |
 | 📊 **Advanced Integration** | Sum, Gaussian, and Voigt fitting methods |
 | 📈 **Quality Metrics** | R² analysis and residuals visualization |
 | 💾 **Flexible I/O** | Import/export peaks, boxes, and full sessions |
-| ⚡ **Batch Processing** | Analyze multiple spectra simultaneously |
+| ⚡ **Batch Processing** | Analyze multiple spectra with dynamic shift recentering |
 
 ---
 
@@ -44,7 +45,7 @@
 
 ### Prerequisites
 
-Before installing 2DNMR-Analyst, ensure you have:
+Before installing APPIN, ensure you have:
 
 - **R** (version ≥ 4.0) — [Download from CRAN](https://cran.r-project.org/)
 - **RStudio** (recommended) — [Download RStudio Desktop](https://posit.co/download/rstudio-desktop/)
@@ -53,7 +54,7 @@ Before installing 2DNMR-Analyst, ensure you have:
 
 #### Option A: Direct Download
 
-1. Visit the [GitHub repository](https://github.com/JulienGuibertTlse3/2DNMR-Analyst)
+1. Visit the [GitHub repository](https://github.com/JulienGuibertTlse3/APPIN)
 2. Click the green **"Code"** button
 3. Select **"Download ZIP"**
 4. Extract the archive to your preferred location
@@ -61,8 +62,8 @@ Before installing 2DNMR-Analyst, ensure you have:
 #### Option B: Git Clone
 
 ```bash
-git clone https://github.com/JulienGuibertTlse3/2DNMR-Analyst.git
-cd 2DNMR-Analyst
+git clone https://github.com/JulienGuibertTlse3/APPIN.git
+cd APPIN
 ```
 
 ### Launching the Application
@@ -78,7 +79,7 @@ cd 2DNMR-Analyst
 ## 🗂️ Project Structure
 
 ```
-2DNMR-Analyst/
+APPIN/
 │
 ├── run_app.R                 # 🚀 Entry point - run this file
 ├── Shine.R                   # Main application
@@ -291,12 +292,34 @@ When running CNN detection, a progress bar displays the current step:
 | **Add box (2 clicks)** | Click two corners to create a bounding box |
 | **Delete box on click** | Click inside a box to mark for deletion |
 
+#### 🔲 Box Select Tool (New!)
+
+The **Box Select Tool** allows you to add or delete peaks and boxes by drawing a rectangular selection directly on the spectrum.
+
+| Action | How to Use |
+|--------|------------|
+| **Add peaks/boxes** | Select "Add" mode, then draw a rectangle on the spectrum to create a new integration zone |
+| **Delete peaks/boxes** | Select "Delete" mode, then draw a rectangle to remove all peaks/boxes within the selection area |
+
+> 💡 **Tip:** The Box Select Tool is particularly useful for quickly cleaning up regions with many false positives or for adding multiple integration zones in a specific area.
+
 #### 🔗 Fusing Peaks
 
 1. Go to the **Data** tab
 2. Select multiple peaks/boxes using `Ctrl+Click`
 3. Return to **Manual Editing**
 4. Click **"Fuse Selected"**
+
+#### 🗑️ Delete Selected (New!)
+
+Similar to "Fuse Selected", you can now delete multiple selected items at once:
+
+1. Go to the **Data** tab
+2. Select multiple peaks/boxes using `Ctrl+Click`
+3. Return to **Manual Editing**
+4. Click **"Delete Selected"**
+
+> 💡 **Tip:** This is a mirror function of "Fuse Selected" — useful for bulk cleanup operations.
 
 #### 📦 Edit Selected Box
 
@@ -398,6 +421,30 @@ When using Gaussian or Voigt fitting, the **Fit Quality** tab provides:
 | **Boxes** | Export bounding boxes to CSV |
 | **Batch Export** | Project boxes onto all spectra and export intensities |
 
+#### 🔄 Dynamic Shift Recentering (New!)
+
+When using **Batch Export**, APPIN now supports **dynamic chemical shift recentering** to compensate for slight variations in peak positions across spectra.
+
+| Parameter | Description |
+|-----------|-------------|
+| **Shift Tolerance (ppm)** | Maximum allowed deviation from the reference position |
+
+##### How It Works
+
+1. For each integration box, APPIN searches for the local maximum within the tolerance window
+2. The box is recentered on this maximum for each spectrum
+3. This ensures optimal integration even when peaks shift slightly between samples
+
+##### When to Use
+
+| Scenario | Recommendation |
+|----------|----------------|
+| **Stable peak positions** | Disable or use small tolerance (0.01 ppm) |
+| **Variable pH/temperature** | Enable with moderate tolerance (0.02-0.05 ppm) |
+| **Complex matrices** | Enable with larger tolerance (0.05-0.1 ppm) |
+
+> 💡 **Tip:** Start with a small tolerance and increase if needed. Too large a tolerance may cause boxes to jump to neighboring peaks.
+
 #### CSV File Formats
 
 **Peaks:**
@@ -430,6 +477,10 @@ peak1;1.200;1.268;3.400;3.512
 
 4. **Validate with Fit Quality** — When using Gaussian/Voigt, check R² values
 
+5. **Use Box Select for bulk operations** — Faster than individual clicks for adding/removing multiple items
+
+6. **Enable shift recentering for batch** — Compensates for inter-sample variability
+
 ### Parameter Tuning
 
 | Goal | Action |
@@ -457,12 +508,14 @@ peak1;1.200;1.268;3.400;3.512
 | **CNN finds no peaks** | Lower prediction threshold (e.g., 0.2) |
 | **CNN too many false positives** | Increase prediction threshold and trace filter |
 | **CNN t1 noise artifacts** | Increase trace filter to 60-80% |
+| **Box Select not working** | Ensure correct mode (Add/Delete) is selected |
+| **Shift recentering jumps to wrong peak** | Reduce tolerance value |
 
 ---
 
 ## 📚 Additional Resources
 
-- **GitHub Repository:** [JulienGuibertTlse3/2DNMR-Analyst](https://github.com/JulienGuibertTlse3/2DNMR-Analyst)
+- **GitHub Repository:** [JulienGuibertTlse3/APPIN](https://github.com/JulienGuibertTlse3/APPIN)
 - **Issue Tracker:** Report bugs and request features on GitHub
 
 ---
@@ -473,14 +526,14 @@ peak1;1.200;1.268;3.400;3.512
 
 **Author:** Julien Guibert  
 **Email:** julien.guibert@inrae.fr  
-**Project Maintainer:**  Marie TREMBLAY-FRANCO
-**Email:**  marie.tremblay-franco@inrae.fr
+**Project Maintainer:** Marie TREMBLAY-FRANCO  
+**Email:** marie.tremblay-franco@inrae.fr  
 **Institution:** INRAe Toxalim / MetaboHUB
 
 ---
 
-*2DNMR-Analyst v2.0 — Developed for metabolomics research*
+*APPIN v2.1 — Developed for metabolomics research*
 
-*Last updated: February 2026*
+*Last updated: April 2026*
 
 </div>

@@ -1,345 +1,141 @@
 ---
-title: "2DNMR-Analyst"
-subtitle: "Interactive 2D NMR Spectroscopy Analysis Tool"
-author: "Julien Guibert — INRAe Toxalim / MetaboHUB"
-date: "User Guide v2.0 — February 2026"
+title: "APPIN - User Guide"
+subtitle: "Automated Peak Picking and INtegration for 2D NMR"
+author: "Julien Guibert"
+date: "April 2026"
+version: "2.1"
 output:
   html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
     theme: flatly
     highlight: tango
+    css: styles.css
+  pdf_document:
     toc: true
-    toc_float:
-      collapsed: true
-      smooth_scroll: true
     toc_depth: 3
-    number_sections: false
-    df_print: kable
+    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
-<style>
-/* ═══════════════════════════════════════════════════════════════════════════
-   CUSTOM STYLES FOR 2DNMR-ANALYST USER GUIDE
-   ═══════════════════════════════════════════════════════════════════════════ */
+# Overview {#overview}
 
-:root {
-  --primary: #2c3e50;
-  --primary-light: #3498db;
-  --accent: #18bc9c;
-  --warning: #f39c12;
-  --text: #2c3e50;
-  --text-light: #7b8a8b;
-  --bg-light: #f8f9fa;
-  --border: #ecf0f1;
-}
+**APPIN** (Automated Peak Picking and INtegration) is a powerful Shiny application designed for loading, visualizing, processing, and exporting 2D NMR spectra from Bruker instruments. It provides a complete interactive interface optimized for metabolomics research.
 
-body {
-  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  color: var(--text);
-  line-height: 1.7;
-}
-
-/* === HEADINGS === */
-h1, h2, h3, h4 { color: var(--primary); }
-h1 { border-bottom: 3px solid var(--accent); padding-bottom: 15px; }
-h2 { border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-top: 50px; }
-
-/* === TABLES === */
-table {
-  width: 100%;
-  margin: 20px 0;
-  border-collapse: collapse;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
-
-thead {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-  color: white;
-}
-
-th {
-  padding: 14px 18px;
-  text-align: left;
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.8rem;
-  letter-spacing: 0.5px;
-}
-
-td {
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--border);
-}
-
-tbody tr:nth-child(even) { background: var(--bg-light); }
-tbody tr:hover { background: #e8f4f8; }
-
-/* === CODE BLOCKS === */
-pre {
-  background: #2d3436 !important;
-  border-radius: 8px;
-  padding: 20px !important;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-}
-
-pre code { color: #dfe6e9 !important; }
-
-code {
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-  font-size: 0.9rem;
-}
-
-p code, li code {
-  background: #ecf0f1;
-  color: var(--primary);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-}
-
-/* === BLOCKQUOTES AS CALLOUTS === */
-blockquote {
-  border-left: 4px solid var(--accent);
-  background: linear-gradient(135deg, #d5f5e3 0%, #e8f8f5 100%);
-  padding: 15px 20px;
-  margin: 20px 0;
-  border-radius: 0 8px 8px 0;
-}
-
-blockquote p { margin: 0; }
-
-/* === TOC SIDEBAR === */
-.tocify {
-  border: none;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-}
-
-.tocify-header { font-weight: 600; }
-.tocify ul, .tocify li { line-height: 1.8; }
-.tocify .active { background: var(--primary-light) !important; border-radius: 4px; }
-
-/* === RESPONSIVE === */
-@media (max-width: 768px) {
-  table { font-size: 0.85rem; }
-  th, td { padding: 8px 12px; }
-}
-</style>
-
-# 🧪 2DNMR-Analyst {.tabset}
-
-<center>
-**Interactive 2D NMR Spectroscopy Analysis Tool**
-
-*A comprehensive solution for metabolomics 2D NMR data analysis*
-
-`R ≥ 4.0` | `Shiny App` 
-</center>
-
----
----
-
-# 📖 Overview
-
-**2DNMR-Analyst** is a powerful Shiny application designed for loading, visualizing, processing, and exporting 2D NMR spectra from Bruker instruments. It provides a complete interactive interface optimized for metabolomics research.
-
-## ✨ Key Features
+## Key Features {#key-features}
 
 | Feature | Description |
-|:--------|:------------|
+|---------|-------------|
 | 🔬 **Multi-format Support** | TOCSY, COSY, HSQC, and UFCOSY experiments |
 | 🎯 **Smart Peak Detection** | Local maxima with DBSCAN clustering + CNN neural network |
 | 🧠 **CNN Detection** | Deep learning-based peak detection for complex spectra |
 | ✏️ **Interactive Editing** | Manual creation, modification, and fusion of peaks/boxes |
+| 🖱️ **Box Select Tool** | Add or delete peaks/boxes directly via rectangular selection |
 | 📊 **Advanced Integration** | Sum, Gaussian, and Voigt fitting methods |
 | 📈 **Quality Metrics** | R² analysis and residuals visualization |
 | 💾 **Flexible I/O** | Import/export peaks, boxes, and full sessions |
-| ⚡ **Batch Processing** | Analyze multiple spectra simultaneously |
+| ⚡ **Batch Processing** | Analyze multiple spectra with dynamic shift recentering |
 
 ---
 
-# 🚀 Getting Started
+# Getting Started {#getting-started}
 
-## Prerequisites
+## Prerequisites {#prerequisites}
 
-Before installing 2DNMR-Analyst, ensure you have:
+Before installing APPIN, ensure you have:
+- **R** (version ≥ 4.0) — [Download from CRAN](https://cran.r-project.org/)
+- **RStudio** (recommended) — [Download RStudio Desktop](https://posit.co/download/rstudio-desktop/)
 
-| Requirement | Link |
-|:------------|:-----|
-| **R** (version ≥ 4.0) | [Download from CRAN](https://cran.r-project.org/) |
-| **RStudio** (recommended) | [Download RStudio Desktop](https://posit.co/download/rstudio-desktop/) |
+## Installation {#installation}
 
-## Installation {.tabset .tabset-fade .tabset-pills}
+### Option A: Direct Download
 
-### Direct Download
-
-1. Visit the [GitHub repository](https://github.com/JulienGuibertTlse3/2DNMR-Analyst)
+1. Visit the [GitHub repository](https://github.com/JulienGuibertTlse3/APPIN)
 2. Click the green **"Code"** button
 3. Select **"Download ZIP"**
 4. Extract the archive to your preferred location
 
-### Git Clone
+### Option B: Git Clone
 
 ```bash
-git clone https://github.com/JulienGuibertTlse3/2DNMR-Analyst.git
-cd 2DNMR-Analyst
+git clone https://github.com/JulienGuibertTlse3/APPIN.git
+cd APPIN
 ```
 
-## Launching the Application
+## Launching the Application {#launching}
 
 1. Open **RStudio**
 2. Open the `run_app.R` file
 3. Click **"Source"** or press `Ctrl+Shift+Enter`
 
-> 💡 **Tip:** The script automatically installs all required packages on first run.
+> **Note:** The script automatically installs all required packages on first run.
 
 ---
 
-# 🗂️ Project Structure
+# Project Structure {#project-structure}
 
 ```
-2DNMR-Analyst/
+APPIN/
 │
-├── Shine.R                    # Main application (~2063 lines)
-│                              # Contains UI + main Server
-│                              # Initializes and connects modules
+├── run_app.R                 # Entry point - run this file
+├── Shine.R                   # Main application
 │
-├── run_app.R                  # Entry point
-│                              # Auto-installation of missing packages
-│                              # Launches shinyApp()
+├── R/                        # Shiny modules
+│   ├── utils.R
+│   ├── mod_load_data.R
+│   ├── mod_peak_picking.R    # Local Max + CNN detection
+│   ├── mod_manual_editing.R
+│   ├── mod_integration.R
+│   └── mod_save_export.R
 │
-├── README.md                  # User documentation
+├── Function/                 # Core functions
+│   ├── Read_2DNMR_spectrum.R # Bruker data reading
+│   ├── Vizualisation.R       # Visualization & clustering
+│   ├── Peak_picking.R        # Peak detection algorithms
+│   ├── Peak_fitting.R        # Gaussian/Voigt fitting
+│   │
+│   ├── CNN_shiny.R           # CNN entry point
+│   ├── CNN_model.R           # CNN architecture & weights
+│   ├── CNN_detection.R       # Peak detection
+│   ├── CNN_filtering.R       # Peak filtering
+│   ├── CNN_clustering.R      # DBSCAN clustering
+│   └── CNN_main.R            # Main CNN pipeline
 │
-├── R/                         # ═══ SHINY MODULES ═══
-│   ├── utils.R                # Shared utility functions
-│   │                          # - parse_keep_peak_ranges()
-│   │                          # - %||% operator (null coalescing)
-│   │
-│   ├── mod_load_data.R        # Module: Data loading (~200 lines)
-│   │                          # - Bruker directory selection
-│   │                          # - Spectra listing and selection
-│   │                          # - Read cache
-│   │
-│   ├── mod_peak_picking.R     # Module: Peak detection (~274 lines)
-│   │                          # - Local Max + DBSCAN
-│   │                          # - Clustering options
-│   │                          # - Exclusion zones
-│   │
-│   ├── mod_manual_editing.R   # Wrapper module: Manual editing (~122 lines)
-│   │   ├── mod_click_mode.R   # - Submodule: Click modes (~201 lines)
-│   │   ├── mod_box_editor.R   # - Submodule: Box editing (~348 lines)
-│   │   ├── mod_manual_add.R   # - Submodule: Manual addition (~163 lines)
-│   │   ├── mod_fusion.R       # - Submodule: Peak fusion (~166 lines)
-│   │   └── mod_pending_changes.R # - Submodule: Apply/Discard (~431 lines)
-│   │
-│   ├── mod_integration.R      # Module: Integration (~345 lines)
-│   │                          # - Sum method (AUC)
-│   │                          # - Gaussian/Voigt fitting
-│   │                          # - R² threshold and fallback
-│   │
-│   ├── mod_save_export.R      # Wrapper module: Save/Export (~110 lines)
-│   │   ├── mod_session.R      # - Submodule: Save/Load session (~238 lines)
-│   │   ├── mod_import.R       # - Submodule: CSV import (~178 lines)
-│   │   ├── mod_export.R       # - Submodule: CSV/batch export (~177 lines)
-│   │   └── mod_reset.R        # - Submodule: Reset all (~121 lines)
+├── saved_model/              # CNN pre-trained weights
+│   └── weights/
 │
-├── Function/                  # ═══ BUSINESS FUNCTIONS ═══
-│   ├── Read_2DNMR_spectrum.R  # Bruker file reading (165 lines)
-│   │                          # - read_bruker()
-│   │                          # - Parsing procs, proc2s, acqu
-│   │
-│   ├── Vizualisation.R        # Graphics + DBSCAN (224 lines)
-│   │                          # - find_nmr_peak_centroids_optimized()
-│   │                          # - process_nmr_centroids()
-│   │                          # - make_bbox_outline()
-│   │
-│   ├── Peak_picking.R         # Local maxima detection (819 lines)
-│   │                          # - peak_pick_2d_nt2()
-│   │                          # - filter_noise_peaks()
-│   │                          # - Filters by spectrum type
-│   │
-│   ├── Peak_fitting.R         # 2D fitting (570 lines)
-│   │                          # - fit_2d_peak()
-│   │                          # - detect_local_maxima()
-│   │                          # - pseudo_voigt_2d()
-│   │                          # - calculate_fitted_volumes()
-│   │
-│   ├── CNN_shiny.R            # 🧠 CNN entry point (~60 lines)
-│   │                          # - Sources all CNN modules
-│   │
-│   ├── CNN_model.R            # CNN architecture (~110 lines)
-│   │                          # - build_peak_predictor()
-│   │                          # - Focal loss function
-│   │
-│   ├── CNN_detection.R        # Peak detection (~320 lines)
-│   │                          # - predict_peaks_1D_batch()
-│   │                          # - Sliding window approach
-│   │
-│   ├── CNN_filtering.R        # Peak filtering (~265 lines)
-│   │                          # - filter_tocsy_traces()
-│   │                          # - filter_peaks_by_proportion()
-│   │
-│   ├── CNN_clustering.R       # Clustering (~210 lines)
-│   │                          # - merge_overlapping_boxes()
-│   │                          # - process_peaks_with_dbscan()
-│   │
-│   └── CNN_main.R             # Main pipeline (~305 lines)
-│                              # - run_cnn_peak_picking()
-│
-├── saved_model/               # 🧠 CNN PRE-TRAINED WEIGHTS
-│   └── weights/               # TensorFlow model weights
-│
-├── www/                       # ═══ WEB ASSETS ═══
-│   ├── styles.css             # Externalized CSS styles (~200 lines)
-│   │                          # - Accordion classes
-│   │                          # - Info-box styles
-│   │                          # - Responsive design
-│   │
-│   └── plotly_ticks.js        # Custom JavaScript (~150 lines)
-│                              # - generateNiceTicks()
-│                              # - updateTicksOnZoom()
-│                              # - Shiny <-> JS communication
-│
-└── tests/                     # ═══ UNIT TESTS ═══
-    ├── testthat/              # Tests with testthat (76 tests)
-    │   ├── test-read_bruker.R # - Bruker reading tests
-    │   ├── test-threshold.R   # - Noise thresholding tests
-    │   ├── test-peak_fitting.R # - Voigt/Gaussian fitting tests
-    │   ├── test-peak_picking.R # - Peak detection tests
-    │   ├── test-visualization.R # - Visualization tests
-    │   └── test-utils.R       # - Utility function tests
-    ├── run_tests.R            # Main execution script
-    └── README_TESTS.md        # Test documentation
+└── www/                      # Web assets
+    ├── styles.css
+    └── plotly_ticks.js
 ```
 
 ---
 
-# 🧭 Application Layout
+# Application Layout {#application-layout}
 
 The application consists of two main tabs:
 
 | Tab | Purpose |
-|:----|:--------|
-| 📖 **Guide** | Introduction, documentation, and contextual help |
-| 📊 **Analysis** | Main workspace for spectrum visualization and analysis |
+|-----|---------|
+| **Guide** | Introduction, documentation, and contextual help |
+| **Analysis** | Main workspace for spectrum visualization and analysis |
 
 The **Analysis** tab is organized with:
-
 - **Left Panel** — Control sections (collapsible accordions)
 - **Right Panel** — Visualization tabs (Spectrum, Data, Pending, Fit Quality, Batch)
 
 ---
 
-# 📋 Workflow
+# Workflow {#workflow}
 
-## Step 1: Load Data {.tabset .tabset-fade}
+## Step 1: Load Data {#load-data}
 
-### Bruker Requirements
+### Bruker File Requirements
 
 Your Bruker data must follow this structure:
 
@@ -360,16 +156,16 @@ Your Bruker data must follow this structure:
 5. Check the spectra you want to analyze
 6. Click **"Load Selected"**
 
-> 💡 **Tip:** Use "Load All" for quick selection of all available spectra.
+> **Tip:** Use "Load All" for quick selection of all available spectra.
 
 ---
 
-## Step 2: Plot Settings {.tabset .tabset-fade}
+## Step 2: Configure Plot {#configure-plot}
 
 ### Spectrum Types
 
 | Type | Description |
-|:-----|:------------|
+|------|-------------|
 | **TOCSY** | Homonuclear correlations through multiple bonds |
 | **COSY** | Direct homonuclear correlations (2-3 bonds) |
 | **HSQC** | Heteronuclear ¹H-¹³C single-bond correlations |
@@ -378,7 +174,7 @@ Your Bruker data must follow this structure:
 ### Parameters
 
 | Parameter | Description |
-|:----------|:------------|
+|-----------|-------------|
 | **Threshold** | Minimum intensity for contour display |
 | **Auto** | Automatically calculates optimal threshold |
 | **Advanced** | Fine-tune noise threshold and contour settings |
@@ -387,80 +183,92 @@ Click **"Generate Plot"** to display the spectrum.
 
 ---
 
-## Step 3: Peak Picking {.tabset .tabset-fade}
+## Step 3: Peak Detection {#peak-detection}
 
-### Detection Methods
+### Detection Methods Overview
 
 | Method | Description | Best For |
-|:-------|:------------|:---------|
+|--------|-------------|----------|
 | **Local Max** | Detects local maxima with optional DBSCAN clustering | Fast detection, well-resolved spectra |
 | **CNN** | Convolutional neural network for intelligent peak detection | Complex spectra, overlapping peaks |
 
-### 🔬 Local Max Method
+### Local Max Method {#local-max}
 
-Uses traditional local maximum detection with optional DBSCAN clustering.
+Uses traditional local maximum detection with optional DBSCAN clustering to group nearby peaks.
 
 | Option | Effect |
-|:-------|:-------|
+|--------|--------|
 | **No clustering** | Each local maximum becomes a separate peak |
 | **Epsilon (eps)** | Maximum distance between points in a cluster |
 | **Delete ranges** | Remove peaks from specified ppm regions |
 
-> 📝 **Recommended epsilon:** TOCSY/HSQC/COSY: `0.0068` — UFCOSY: `0.014`
+**Recommended epsilon values:**
 
-### 🧠 CNN Method
+- TOCSY/HSQC/COSY: `0.0068`
+- UFCOSY: `0.014`
 
-The CNN (Convolutional Neural Network) method uses deep learning for intelligent peak detection.
+### CNN Method (Neural Network) {#cnn-method}
 
-**Best for:**
+The CNN method uses a trained deep learning model to detect peaks more intelligently. It's particularly effective for:
 
 - Spectra with overlapping peaks
 - Low signal-to-noise conditions
 - Complex multiplet patterns
 - TOCSY spectra with t1 noise artifacts
 
-**CNN Parameters:**
+#### CNN Parameters
 
 | Parameter | Description | Default |
-|:----------|:------------|:--------|
-| **Prediction threshold** | Minimum CNN confidence (0-1) | 0.3 |
-| **Trace filter** | Removes t1 noise artifacts (% of line max) | 50% |
+|-----------|-------------|---------|
+| **Prediction threshold** | Minimum CNN confidence to detect a peak (0-1) | 0.3 |
+| **Trace filter** | Removes t1 noise artifacts along F2 lines (% of line max) | 50% |
 
-**How it works:**
+#### How CNN Detection Works
 
-1. Spectrum normalization (99.9th percentile)
-2. Sliding window scan with CNN inference
-3. Peak classification (background/edge/center)
-4. DBSCAN clustering
-5. Bounding box generation with merging
+1. **Spectrum Normalization** — The spectrum is normalized using the 99.9th percentile
+2. **Sliding Window Scan** — The CNN scans rows and columns using a sliding window approach
+3. **Peak Classification** — Each point is classified as: background, peak edge, or peak center
+4. **DBSCAN Clustering** — Detected points are grouped into peak clusters
+5. **Bounding Box Generation** — Each cluster gets a bounding box with padding
 
-**Tuning tips:**
+#### CNN Tips
 
 | Goal | Action |
-|:-----|:-------|
-| Detect more peaks | ↓ Lower prediction threshold (0.2) |
-| Reduce false positives | ↑ Higher prediction threshold (0.5) |
-| Remove t1 noise | ↑ Higher trace filter (70%) |
-| Keep weak correlations | ↓ Lower trace filter (30%) |
+|------|--------|
+| Detect more peaks | ↓ Lower prediction threshold (e.g., 0.2) |
+| Reduce false positives | ↑ Higher prediction threshold (e.g., 0.5) |
+| Remove t1 noise traces | ↑ Higher trace filter (e.g., 70%) |
+| Keep weak correlations | ↓ Lower trace filter (e.g., 30%) |
 
-### Epsilon Guidelines
+### Epsilon Guidelines (Both Methods)
 
 | Epsilon | Result |
-|:--------|:-------|
+|---------|--------|
 | ↑ Higher | More peaks grouped together |
 | ↓ Lower | More individual peaks detected |
 
 ---
 
-## Step 4: Manual Editing {.tabset .tabset-fade}
+## Step 4: Manual Editing {#manual-editing}
 
 ### Click Modes
 
 | Mode | Action |
-|:-----|:-------|
+|------|--------|
 | **Off** | Clicks have no effect |
 | **Add box (2 clicks)** | Click two corners to create a bounding box |
 | **Delete box on click** | Click inside a box to mark for deletion |
+
+### Box Select Tool {#box-select-tool .new-feature}
+
+The **Box Select Tool** allows you to add or delete peaks and boxes by drawing a rectangular selection directly on the spectrum.
+
+| Action | How to Use |
+|--------|------------|
+| **Add peaks/boxes** | Select "Add" mode, then draw a rectangle on the spectrum to create a new integration zone |
+| **Delete peaks/boxes** | Select "Delete" mode, then draw a rectangle to remove all peaks/boxes within the selection area |
+
+> **Tip:** The Box Select Tool is particularly useful for quickly cleaning up regions with many false positives or for adding multiple integration zones in a specific area.
 
 ### Fusing Peaks
 
@@ -469,33 +277,49 @@ The CNN (Convolutional Neural Network) method uses deep learning for intelligent
 3. Return to **Manual Editing**
 4. Click **"Fuse Selected"**
 
-### Box Controls
+### Delete Selected {#delete-selected .new-feature}
+
+Similar to "Fuse Selected", you can now delete multiple selected items at once:
+
+1. Go to the **Data** tab
+2. Select multiple peaks/boxes using `Ctrl+Click`
+3. Return to **Manual Editing**
+4. Click **"Delete Selected"**
+
+> **Tip:** This is a mirror function of "Fuse Selected" — useful for bulk cleanup operations.
+
+### Edit Selected Box
 
 | Control | Function |
-|:--------|:---------|
+|---------|----------|
 | **Coordinates** | Manually enter xmin, xmax, ymin, ymax |
 | **Arrow buttons** | Move box (↑ ↓ ← →) |
 | **+/- buttons** | Expand or shrink box size |
 | **Step** | Movement increment in ppm |
 
-> ⚠️ **Important:** Click **"Apply"** to confirm changes or **"Discard"** to cancel.
+### Add Manually
+
+- **Peak:** Enter F2 (ppm) and F1 (ppm) coordinates
+- **Box:** Enter all four boundary coordinates
+
+> **Important:** Click **"Apply"** to confirm changes or **"Discard"** to cancel.
 
 ---
 
-## Step 5: Integration {.tabset .tabset-fade}
+## Step 5: Integration {#integration}
 
-### Methods
+### Integration Methods
 
 | Method | Description | Best For |
-|:-------|:------------|:---------|
+|--------|-------------|----------|
 | **Sum (AUC)** | Direct summation of intensities | Fast analysis, robust |
 | **Gaussian** | 2D Gaussian peak fitting | Symmetric peaks |
 | **Voigt** | Gaussian + Lorentzian profile | Asymmetric peaks |
 
-### Options
+### Fitting Options
 
 | Option | Description |
-|:-------|:------------|
+|--------|-------------|
 | **Include R² in export** | Add quality metrics to output |
 | **Min R² threshold** | Fallback to Sum if fit quality is below threshold |
 
@@ -503,70 +327,114 @@ Click **"Run Integration"** to process all boxes.
 
 ---
 
-## Step 6: Fit Quality {.tabset .tabset-fade}
+## Step 6: Quality Analysis {#quality-analysis}
 
-### Available Sections
+When using Gaussian or Voigt fitting, the **Fit Quality** tab provides:
 
 | Section | Content |
-|:--------|:--------|
+|---------|---------|
 | **Fit Summary** | Statistics grouped by fitting method |
 | **Fitted Boxes** | Sortable table with R² for each box |
 | **R² Distribution** | Histogram of fit quality |
 | **2D Fit View** | Visual representation of selected fit |
 | **Residuals** | Distribution of fitting residuals |
 
-### R² Interpretation
+### R² Interpretation Guide
 
 | R² Value | Quality | Recommendation |
-|:---------|:--------|:---------------|
+|----------|---------|----------------|
 | **> 0.9** | ✅ Excellent | Peak is well-defined |
 | **0.7 - 0.9** | ⚠️ Good | Acceptable for quantification |
 | **< 0.7** | ❌ Poor | Use Sum method or adjust box |
 
 ---
 
-## Step 7: Save & Export {.tabset .tabset-fade}
+## Step 7: Save & Export {#save-export}
 
-### Session
+### Session Management
 
 | Action | Description |
-|:-------|:------------|
+|--------|-------------|
 | **Save** | Save complete session as `.rds` file |
 | **Load** | Restore a previously saved session |
 
-### CSV Formats
+### Import Options
+
+| Format | Content |
+|--------|---------|
+| **Peaks CSV** | Peak coordinates (stain_id, F2_ppm, F1_ppm) |
+| **Boxes CSV** | Box boundaries (stain_id, xmin, xmax, ymin, ymax) |
+
+### Export Options
+
+| Export | Description |
+|--------|-------------|
+| **Peaks** | Export centroids to CSV |
+| **Boxes** | Export bounding boxes to CSV |
+| **Batch Export** | Project boxes onto all spectra and export intensities |
+
+### Dynamic Shift Recentering {#shift-recentering .new-feature}
+
+When using **Batch Export**, APPIN now supports **dynamic chemical shift recentering** to compensate for slight variations in peak positions across spectra.
+
+| Parameter | Description |
+|-----------|-------------|
+| **Shift Tolerance (ppm)** | Maximum allowed deviation from the reference position |
+
+#### How It Works
+
+1. For each integration box, APPIN searches for the local maximum within the tolerance window
+2. The box is recentered on this maximum for each spectrum
+3. This ensures optimal integration even when peaks shift slightly between samples
+
+#### When to Use
+
+| Scenario | Recommendation |
+|----------|----------------|
+| **Stable peak positions** | Disable or use small tolerance (0.01 ppm) |
+| **Variable pH/temperature** | Enable with moderate tolerance (0.02-0.05 ppm) |
+| **Complex matrices** | Enable with larger tolerance (0.05-0.1 ppm) |
+
+> **Tip:** Start with a small tolerance and increase if needed. Too large a tolerance may cause boxes to jump to neighboring peaks.
+
+### CSV File Formats
 
 **Peaks:**
-
 ```csv
 stain_id;F2_ppm;F1_ppm;Volume
 peak1;1.234;3.456;123456
 ```
 
 **Boxes:**
-
 ```csv
 stain_id;xmin;xmax;ymin;ymax
 peak1;1.200;1.268;3.400;3.512
 ```
 
-> 📝 **Batch Processing Limits:** For optimal performance, limit to 25 spectra for TOCSY, or 50 for COSY/HSQC.
+> **Batch Processing Limits:** For optimal performance, limit to 25 spectra for TOCSY, or 50 for COSY/HSQC.
 
 ---
 
-# 💡 Tips & Best Practices
+# Tips & Best Practices {#tips}
 
 ## Workflow Optimization
 
 1. **Start with QC samples** — Optimize parameters on your most intense spectrum before batch analysis
+
 2. **Use Auto threshold** — Let the algorithm find optimal contour levels
+
 3. **Check Pending tab** — Always review modifications before clicking Apply
+
 4. **Validate with Fit Quality** — When using Gaussian/Voigt, check R² values
+
+5. **Use Box Select for bulk operations** — Faster than individual clicks for adding/removing multiple items
+
+6. **Enable shift recentering for batch** — Compensates for inter-sample variability
 
 ## Parameter Tuning
 
 | Goal | Action |
-|:-----|:-------|
+|------|--------|
 | Group more peaks | ↑ Increase epsilon |
 | Separate overlapping peaks | ↓ Decrease epsilon |
 | Reduce noise | ↑ Increase threshold |
@@ -574,10 +442,10 @@ peak1;1.200;1.268;3.400;3.512
 
 ---
 
-# 🔧 Troubleshooting
+# Troubleshooting {#troubleshooting}
 
 | Problem | Solution |
-|:--------|:---------|
+|---------|----------|
 | **No spectrum detected** | Verify Bruker folder structure (`pdata/1/`) |
 | **Empty or error plot** | Adjust threshold or use Auto |
 | **Too many/few peaks** | Adjust epsilon and intensity threshold |
@@ -590,34 +458,30 @@ peak1;1.200;1.268;3.400;3.512
 | **CNN finds no peaks** | Lower prediction threshold (e.g., 0.2) |
 | **CNN too many false positives** | Increase prediction threshold and trace filter |
 | **CNN t1 noise artifacts** | Increase trace filter to 60-80% |
+| **Box Select not working** | Ensure correct mode (Add/Delete) is selected |
+| **Shift recentering jumps to wrong peak** | Reduce tolerance value |
 
 ---
 
-# 📚 Additional Resources
+# Additional Resources {#resources}
 
-- **GitHub Repository:** [JulienGuibertTlse3/2DNMR-Analyst](https://github.com/JulienGuibertTlse3/2DNMR-Analyst)
+- **GitHub Repository:** [JulienGuibertTlse3/APPIN](https://github.com/JulienGuibertTlse3/APPIN)
 - **Issue Tracker:** Report bugs and request features on GitHub
 
 ---
 
-# 📬 Contact
-
-<center>
+# Contact {#contact}
 
 **Author:** Julien Guibert
 **Email:** julien.guibert@inrae.fr
 
----
-
 **Project Maintainer:** Marie TREMBLAY-FRANCO
 **Email:** marie.tremblay-franco@inrae.fr
 
----
-
 **Institution:** INRAe Toxalim / MetaboHUB
 
-*2DNMR-Analyst v2.0 — Developed for metabolomics research*
+---
 
-*Last updated: February 2026*
+*APPIN v2.1 — Developed for metabolomics research*
 
-</center>
+*Last updated: April 2026*
