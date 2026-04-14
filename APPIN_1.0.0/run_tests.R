@@ -372,7 +372,7 @@ run_fast_tests <- function() {
 cat("\n")
 cat("╔═══════════════════════════════════════════════════════════════════════╗\n")
 cat("║                                                                       ║\n")
-cat("║           🧪  2DNMR-Analyst v3.0 - FRAMEWORK DE TESTS  🧪             ║\n")
+cat("║           🧪  APPIN v1.0 - FRAMEWORK DE TESTS  🧪             ║\n")
 cat("║                                                                       ║\n")
 cat("╠═══════════════════════════════════════════════════════════════════════╣\n")
 cat("║                                                                       ║\n")
