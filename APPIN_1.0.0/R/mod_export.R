@@ -22,6 +22,22 @@ mod_export_ui <- function(id) {
           column(6, downloadButton(ns("export_boxes"), "Boxes", class = "btn-sm btn-block"))
         ),
         br(),
+        # Shift tolerance slider for batch export
+        div(
+          style = "background: #fff3e0; border-radius: 8px; padding: 10px; margin-bottom: 10px; border-left: 4px solid #ff9800;",
+          tags$b("⚙️ Batch Export Options", style = "color: #e65100;"),
+          sliderInput(
+            ns("shift_tolerance_ppm"),
+            "Shift tolerance (ppm):",
+            min = 0, max = 0.1, value = 0, step = 0.005
+          ),
+          tags$small(
+            "Compensates for chemical shift variations between spectra. ",
+            "Each box is recentered on the local maximum within ±tolerance. ",
+            "Typical: 0.01-0.03 ppm. Set to 0 to disable.",
+            style = "color: #666;"
+          )
+        ),
         downloadButton(ns("export_batch_box_intensities"), "📤 Batch Export (all spectra)", 
                        class = "btn-primary btn-sm btn-block")
       )
@@ -152,6 +168,9 @@ mod_export_server <- function(id, status_msg, rv, load_data, data_reactives) {
           # Store used method
           rv$last_fit_method(method)
           
+          # Get shift tolerance from UI
+          shift_tol <- input$shift_tolerance_ppm %||% 0
+          
           # Call batch calculation
           batch_intensities <- calculate_batch_box_intensities(
             reference_boxes = ref_boxes,
@@ -161,7 +180,8 @@ mod_export_server <- function(id, status_msg, rv, load_data, data_reactives) {
             model = model,
             progress = function(value, detail) {
               progress$set(value = value, detail = detail)
-            }
+            },
+            shift_tolerance_ppm = shift_tol
           )
           
           # Replace negative values with 0

@@ -1,4 +1,3 @@
-
 # 2D NMR Analyst - Utility Functions ----
 
 # Author: Julien Guibert
@@ -158,7 +157,15 @@ clean_centroids_df <- function(df) {
 #' @param apply_shift Logical. If TRUE, attempts to align spectra (default: FALSE)
 #' @param method Character. Integration method: "sum" (default) or "fit"
 #' @param model Character. Fitting model: "gaussian" (default) or "voigt"
-#' @param progress Shiny progress object (optional)
+#' @param progress Function. Progress callback with signature (value, detail)
+#' @param shift_tolerance_ppm Numeric. Tolerance for dynamic box recentering (default: 0).
+#'   When > 0, each box is temporarily expanded by this amount in all directions,
+#'   the local maximum is found within the expanded region, and the box is 
+#'   recentered on that maximum ONLY IF the new position captures more intensity
+#'   than the original position. This compensates for small chemical shift 
+#'   variations between spectra (e.g., due to pH, temperature) while avoiding
+#'   false recentering on noise or artifacts.
+#'   Typical values: 0.01-0.05 ppm. Set to 0 to disable.
 #' @return Data frame with columns:
 #'   - stain_id: Box identifier
 #'   - F2_ppm, F1_ppm: Box center coordinates
@@ -170,7 +177,8 @@ calculate_batch_box_intensities <- function(reference_boxes,
                                             apply_shift = FALSE, 
                                             method = "sum",
                                             model = "gaussian",
-                                            progress = NULL) {
+                                            progress = NULL,
+                                            shift_tolerance_ppm = 0) {
   
   # ========== VALIDATIONS ==========
   if (is.null(reference_boxes) || nrow(reference_boxes) == 0) {
@@ -304,13 +312,75 @@ calculate_batch_box_intensities <- function(reference_boxes,
       intensities <- numeric(n_boxes)
       
       for (i in seq_len(n_boxes)) {
-        xmin_shifted <- ref_boxes$xmin[i] + shift_f2
-        xmax_shifted <- ref_boxes$xmax[i] + shift_f2
-        ymin_shifted <- ref_boxes$ymin[i] + shift_f1
-        ymax_shifted <- ref_boxes$ymax[i] + shift_f1
+        # Base box coordinates (with global shift if apply_shift is TRUE)
+        xmin_base <- ref_boxes$xmin[i] + shift_f2
+        xmax_base <- ref_boxes$xmax[i] + shift_f2
+        ymin_base <- ref_boxes$ymin[i] + shift_f1
+        ymax_base <- ref_boxes$ymax[i] + shift_f1
         
-        x_idx <- which(ppm_x >= xmin_shifted & ppm_x <= xmax_shifted)
-        y_idx <- which(ppm_y >= ymin_shifted & ppm_y <= ymax_shifted)
+        # Dynamic recentering: find local maximum in expanded window
+        if (shift_tolerance_ppm > 0) {
+          # Expand search window by tolerance
+          xmin_search <- xmin_base - shift_tolerance_ppm
+          xmax_search <- xmax_base + shift_tolerance_ppm
+          ymin_search <- ymin_base - shift_tolerance_ppm
+          ymax_search <- ymax_base + shift_tolerance_ppm
+          
+          x_idx_search <- which(ppm_x >= xmin_search & ppm_x <= xmax_search)
+          y_idx_search <- which(ppm_y >= ymin_search & ppm_y <= ymax_search)
+          
+          if (length(x_idx_search) > 0 && length(y_idx_search) > 0) {
+            # Extract submatrix and find local maximum
+            submat <- mat[y_idx_search, x_idx_search, drop = FALSE]
+            max_val <- max(submat, na.rm = TRUE)
+            
+            if (is.finite(max_val) && max_val > 0) {
+              max_pos <- which(submat == max_val, arr.ind = TRUE)[1, , drop = FALSE]
+              
+              # Get ppm coordinates of maximum
+              max_f2_local <- ppm_x[x_idx_search[max_pos[1, 2]]]
+              max_f1_local <- ppm_y[y_idx_search[max_pos[1, 1]]]
+              
+              # Calculate local shift (difference between found max and box center)
+              box_center_f2 <- (xmin_base + xmax_base) / 2
+              box_center_f1 <- (ymin_base + ymax_base) / 2
+              local_shift_f2 <- max_f2_local - box_center_f2
+              local_shift_f1 <- max_f1_local - box_center_f1
+              
+              # Calculate candidate shifted box coordinates
+              xmin_shifted <- xmin_base + local_shift_f2
+              xmax_shifted <- xmax_base + local_shift_f2
+              ymin_shifted <- ymin_base + local_shift_f1
+              ymax_shifted <- ymax_base + local_shift_f1
+              
+              # Compare intensities: only apply shift if new position is better
+              x_idx_orig <- which(ppm_x >= xmin_base & ppm_x <= xmax_base)
+              y_idx_orig <- which(ppm_y >= ymin_base & ppm_y <= ymax_base)
+              x_idx_new <- which(ppm_x >= xmin_shifted & ppm_x <= xmax_shifted)
+              y_idx_new <- which(ppm_y >= ymin_shifted & ppm_y <= ymax_shifted)
+              
+              intensity_orig <- if (length(x_idx_orig) > 0 && length(y_idx_orig) > 0) {
+                sum(mat[y_idx_orig, x_idx_orig, drop = FALSE], na.rm = TRUE)
+              } else { 0 }
+              
+              intensity_new <- if (length(x_idx_new) > 0 && length(y_idx_new) > 0) {
+                sum(mat[y_idx_new, x_idx_new, drop = FALSE], na.rm = TRUE)
+              } else { 0 }
+              
+              # Only recenter if shifted position captures more intensity
+              if (intensity_new > intensity_orig) {
+                xmin_base <- xmin_shifted
+                xmax_base <- xmax_shifted
+                ymin_base <- ymin_shifted
+                ymax_base <- ymax_shifted
+              }
+            }
+          }
+        }
+        
+        # Final integration with (possibly recentered) box
+        x_idx <- which(ppm_x >= xmin_base & ppm_x <= xmax_base)
+        y_idx <- which(ppm_y >= ymin_base & ppm_y <= ymax_base)
         
         if (length(x_idx) == 0 || length(y_idx) == 0) {
           intensities[i] <- NA_real_
@@ -320,12 +390,99 @@ calculate_batch_box_intensities <- function(reference_boxes,
       }
       
     } else {
-      # Fitting method
-      fit_results <- calculate_fitted_volumes(
-        mat, ppm_x, ppm_y, 
-        ref_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")],
-        model = model
-      )
+      # Fitting method - also apply dynamic recentering if tolerance > 0
+      if (shift_tolerance_ppm > 0) {
+        # Create shifted boxes for this spectrum
+        shifted_boxes <- ref_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
+        
+        for (i in seq_len(nrow(shifted_boxes))) {
+          xmin_base <- shifted_boxes$xmin[i] + shift_f2
+          xmax_base <- shifted_boxes$xmax[i] + shift_f2
+          ymin_base <- shifted_boxes$ymin[i] + shift_f1
+          ymax_base <- shifted_boxes$ymax[i] + shift_f1
+          
+          # Expand search window
+          xmin_search <- xmin_base - shift_tolerance_ppm
+          xmax_search <- xmax_base + shift_tolerance_ppm
+          ymin_search <- ymin_base - shift_tolerance_ppm
+          ymax_search <- ymax_base + shift_tolerance_ppm
+          
+          x_idx_search <- which(ppm_x >= xmin_search & ppm_x <= xmax_search)
+          y_idx_search <- which(ppm_y >= ymin_search & ppm_y <= ymax_search)
+          
+          if (length(x_idx_search) > 0 && length(y_idx_search) > 0) {
+            submat <- mat[y_idx_search, x_idx_search, drop = FALSE]
+            max_val <- max(submat, na.rm = TRUE)
+            
+            if (is.finite(max_val) && max_val > 0) {
+              max_pos <- which(submat == max_val, arr.ind = TRUE)[1, , drop = FALSE]
+              max_f2_local <- ppm_x[x_idx_search[max_pos[1, 2]]]
+              max_f1_local <- ppm_y[y_idx_search[max_pos[1, 1]]]
+              
+              box_center_f2 <- (xmin_base + xmax_base) / 2
+              box_center_f1 <- (ymin_base + ymax_base) / 2
+              local_shift_f2 <- max_f2_local - box_center_f2
+              local_shift_f1 <- max_f1_local - box_center_f1
+              
+              # Calculate candidate shifted box coordinates
+              xmin_shifted <- xmin_base + local_shift_f2
+              xmax_shifted <- xmax_base + local_shift_f2
+              ymin_shifted <- ymin_base + local_shift_f1
+              ymax_shifted <- ymax_base + local_shift_f1
+              
+              # Compare intensities: only apply shift if new position is better
+              x_idx_orig <- which(ppm_x >= xmin_base & ppm_x <= xmax_base)
+              y_idx_orig <- which(ppm_y >= ymin_base & ppm_y <= ymax_base)
+              x_idx_new <- which(ppm_x >= xmin_shifted & ppm_x <= xmax_shifted)
+              y_idx_new <- which(ppm_y >= ymin_shifted & ppm_y <= ymax_shifted)
+              
+              intensity_orig <- if (length(x_idx_orig) > 0 && length(y_idx_orig) > 0) {
+                sum(mat[y_idx_orig, x_idx_orig, drop = FALSE], na.rm = TRUE)
+              } else { 0 }
+              
+              intensity_new <- if (length(x_idx_new) > 0 && length(y_idx_new) > 0) {
+                sum(mat[y_idx_new, x_idx_new, drop = FALSE], na.rm = TRUE)
+              } else { 0 }
+              
+              # Only recenter if shifted position captures more intensity
+              if (intensity_new > intensity_orig) {
+                shifted_boxes$xmin[i] <- xmin_shifted
+                shifted_boxes$xmax[i] <- xmax_shifted
+                shifted_boxes$ymin[i] <- ymin_shifted
+                shifted_boxes$ymax[i] <- ymax_shifted
+              } else {
+                shifted_boxes$xmin[i] <- xmin_base
+                shifted_boxes$xmax[i] <- xmax_base
+                shifted_boxes$ymin[i] <- ymin_base
+                shifted_boxes$ymax[i] <- ymax_base
+              }
+            } else {
+              shifted_boxes$xmin[i] <- xmin_base
+              shifted_boxes$xmax[i] <- xmax_base
+              shifted_boxes$ymin[i] <- ymin_base
+              shifted_boxes$ymax[i] <- ymax_base
+            }
+          } else {
+            shifted_boxes$xmin[i] <- xmin_base
+            shifted_boxes$xmax[i] <- xmax_base
+            shifted_boxes$ymin[i] <- ymin_base
+            shifted_boxes$ymax[i] <- ymax_base
+          }
+        }
+        
+        fit_results <- calculate_fitted_volumes(
+          mat, ppm_x, ppm_y, 
+          shifted_boxes,
+          model = model
+        )
+      } else {
+        # No tolerance - use original boxes with global shift
+        fit_results <- calculate_fitted_volumes(
+          mat, ppm_x, ppm_y, 
+          ref_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")],
+          model = model
+        )
+      }
       intensities <- fit_results$volume_fitted
     }
     
