@@ -7,7 +7,7 @@
 # Author:      Julien Guibert
 # Institution: INRAe Toxalim / MetaboHub
 # GitHub:      https://github.com/JulienGuibertTlse3/2DNMR-Analyst
-# Date : 09/02/2026
+# Date : 14/04/2026
 # 
 # Description:
 #   Interactive Shiny application for analyzing 2D NMR spectra from Bruker 
@@ -460,13 +460,13 @@ ui <- fluidPage(
                        ),
                        hr(),
                        
-                         # Deletions - fourth row
-                         div(style = "margin-bottom: 20px;",
-                             h4("🗑️ Pending Deletions"),
-                             DTOutput("pending_deletions_table"),
-                             actionButton("discard_selected_deletion", "Remove Selected",
-                                          class = "btn-sm btn-danger", style = "margin-top: 5px;")
-                         )
+                       # Deletions - fourth row
+                       div(style = "margin-bottom: 20px;",
+                           h4("🗑️ Pending Deletions"),
+                           DTOutput("pending_deletions_table"),
+                           actionButton("discard_selected_deletion", "Remove Selected",
+                                        class = "btn-sm btn-danger", style = "margin-top: 5px;")
+                       )
                        
                      ),
                      
@@ -634,12 +634,12 @@ server <- function(input, output, session) {
     F1_ppm = numeric(), Volume = numeric(),
     stringsAsFactors = FALSE
   ))
-    pending_deletions <- reactiveVal(data.frame(
-      stain_id = character(), F2_ppm = numeric(),
-      F1_ppm = numeric(), Volume = numeric(),
-      stringsAsFactors = FALSE
-    ))
-
+  pending_deletions <- reactiveVal(data.frame(
+    stain_id = character(), F2_ppm = numeric(),
+    F1_ppm = numeric(), Volume = numeric(),
+    stringsAsFactors = FALSE
+  ))
+  
   # --- Click handling ---
   last_click_coords <- reactiveVal(NULL)
   first_click_for_box <- reactiveVal(NULL)
@@ -1785,11 +1785,11 @@ server <- function(input, output, session) {
     datatable(pending_fusions(), selection = "multiple", options = list(scrollX = TRUE, pageLength = 10)) 
   })
   
-    output$pending_deletions_table <- renderDT({
-      req(pending_deletions())
-      datatable(pending_deletions(), selection = "multiple",
-                options = list(scrollX = TRUE, pageLength = 10))
-    })
+  output$pending_deletions_table <- renderDT({
+    req(pending_deletions())
+    datatable(pending_deletions(), selection = "multiple",
+              options = list(scrollX = TRUE, pageLength = 10))
+  })
   
   #### 2.8.6 Spectrum type update ----
   
@@ -1900,29 +1900,29 @@ server <- function(input, output, session) {
   
   #### 2.8.9 Pending changes indicators ----
   
-    output$has_pending_changes <- reactive({
-      n_centroids <- nrow(pending_centroids() %||% data.frame())
-      n_boxes <- nrow(pending_boxes() %||% data.frame())
-      n_fusions <- nrow(pending_fusions() %||% data.frame())
-      n_deletions <- nrow(pending_deletions() %||% data.frame())    # <-- AJOUTER
-      (n_centroids + n_boxes + n_fusions + n_deletions) > 0         # <-- MODIFIER
-    })
+  output$has_pending_changes <- reactive({
+    n_centroids <- nrow(pending_centroids() %||% data.frame())
+    n_boxes <- nrow(pending_boxes() %||% data.frame())
+    n_fusions <- nrow(pending_fusions() %||% data.frame())
+    n_deletions <- nrow(pending_deletions() %||% data.frame())    # <-- AJOUTER
+    (n_centroids + n_boxes + n_fusions + n_deletions) > 0         # <-- MODIFIER
+  })
   
   outputOptions(output, "has_pending_changes", suspendWhenHidden = FALSE)
   
-    output$pending_summary <- renderText({
-      n_centroids <- nrow(pending_centroids() %||% data.frame())
-      n_boxes <- nrow(pending_boxes() %||% data.frame())
-      n_fusions <- nrow(pending_fusions() %||% data.frame())
-      n_deletions <- nrow(pending_deletions() %||% data.frame())    # <-- AJOUTER
-      parts <- c()
-      if (n_centroids > 0) parts <- c(parts, paste(n_centroids, "peaks"))
-      if (n_boxes > 0) parts <- c(parts, paste(n_boxes, "boxes"))
-      if (n_fusions > 0) parts <- c(parts, paste(n_fusions, "fusions"))
-      if (n_deletions > 0) parts <- c(parts, paste(n_deletions, "deletions"))  # <-- AJOUTER
-      if (length(parts) == 0) return("")
-      paste(parts, collapse = ", ")
-    })
+  output$pending_summary <- renderText({
+    n_centroids <- nrow(pending_centroids() %||% data.frame())
+    n_boxes <- nrow(pending_boxes() %||% data.frame())
+    n_fusions <- nrow(pending_fusions() %||% data.frame())
+    n_deletions <- nrow(pending_deletions() %||% data.frame())    # <-- AJOUTER
+    parts <- c()
+    if (n_centroids > 0) parts <- c(parts, paste(n_centroids, "peaks"))
+    if (n_boxes > 0) parts <- c(parts, paste(n_boxes, "boxes"))
+    if (n_fusions > 0) parts <- c(parts, paste(n_fusions, "fusions"))
+    if (n_deletions > 0) parts <- c(parts, paste(n_deletions, "deletions"))  # <-- AJOUTER
+    if (length(parts) == 0) return("")
+    paste(parts, collapse = ", ")
+  })
   
   observeEvent(load_data$spectra_list(), { centroids(NULL) })
   
@@ -2041,80 +2041,345 @@ server <- function(input, output, session) {
     boxes %>% filter(stain_id == selected_stain_id)
   })
   
-  # 2D fit example for a selected box
+  # 2D fit example for a selected box - CONTOUR OVERLAY (TopSpin-style)
   
   output$example_fit_2d <- renderPlot({
     req(load_data$bruker_data())
     box <- selected_fit_box()
     if (is.null(box) || nrow(box) == 0) {
+      par(bg = "white", mar = c(1, 1, 1, 1))
       plot.new()
-      text(0.5, 0.5, "Select a box in the\n'Fitted Boxes Details' table\nto visualize its fit", cex = 1.3, col = "gray50")
+      text(0.5, 0.5, "Select a box in the\n'Fitted Boxes Details' table\nto visualize its fit", cex = 1.4, col = "gray40", font = 2)
       return()
     }
-    box <- box[1, ]  # Take the first row if multiple
+    box <- box[1, ]
     
     # Check that fit exists
-    if (!"fit_method" %in% names(box) || is.na(box$fit_method) || box$fit_method == "sum_fallback") {
+    if (!"fit_method" %in% names(box) || is.na(box$fit_method) || grepl("sum", box$fit_method)) {
+      par(bg = "white", mar = c(1, 1, 1, 1))
       plot.new()
-      text(0.5, 0.5, paste0("Box '", box$stain_id, "'\nwas not fitted successfully\n(used sum method or fit failed)"), 
-           cex = 1.2, col = "orange")
+      text(0.5, 0.5, paste0("'", box$stain_id, "'\n\nNo fit available\n(sum method used)"), 
+           cex = 1.2, col = "#e65100", font = 2)
       return()
     }
     
-    # Extract region
+    # Get spectral data
     mat <- load_data$bruker_data()$spectrumData
     ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
     ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
+    
+    # Extract exact box region (no padding - tighter zoom)
     x_idx <- which(ppm_x >= box$xmin & ppm_x <= box$xmax)
     y_idx <- which(ppm_y >= box$ymin & ppm_y <= box$ymax)
+    
     if (length(x_idx) == 0 || length(y_idx) == 0) {
       plot.new()
       text(0.5, 0.5, "Region out of bounds", cex = 1.5, col = "red")
       return()
     }
+    
     region <- mat[y_idx, x_idx, drop = FALSE]
     x_sub <- ppm_x[x_idx]
     y_sub <- ppm_y[y_idx]
     
-    # FIX: Ensure x and y are in ascending order for image()
+    # Determine which model to use based on fit_method
+    use_voigt <- grepl("voigt", box$fit_method, ignore.case = TRUE)
+    model_name <- if (use_voigt) "Voigt" else "Gaussian"
+    
+    # ========== FIT FOR VISUALIZATION (MULTIPLET SUPPORT, GAUSSIAN OR VOIGT) ==========
+    # Detect peaks and fit each one separately, then combine for display
+    
+    fit_result <- tryCatch({
+      
+      # Detect local maxima (same as in fit_2d_peak)
+      local_max <- detect_local_maxima(region, threshold = 0.5, min_distance = 3)
+      n_peaks <- nrow(local_max)
+      
+      # Fallback if no peaks detected
+      if (n_peaks == 0) {
+        max_val <- max(region, na.rm = TRUE)
+        max_pos <- which(region == max_val, arr.ind = TRUE)
+        if (nrow(max_pos) > 0) {
+          local_max <- data.frame(row = max_pos[1,1], col = max_pos[1,2], value = max_val)
+          n_peaks <- 1
+        } else {
+          stop("No peaks found")
+        }
+      }
+      
+      # Initialize combined fitted matrix (sum of all peaks)
+      combined_fitted <- matrix(0, nrow = length(y_sub), ncol = length(x_sub))
+      
+      # Store individual peak fits for potential separate display
+      peak_fits <- list()
+      
+      # Global baseline estimate
+      baseline_global <- quantile(as.vector(region), 0.1, na.rm = TRUE)
+      
+      # Fit each peak separately
+      for (p in seq_len(n_peaks)) {
+        peak_row <- local_max$row[p]
+        peak_col <- local_max$col[p]
+        peak_x <- x_sub[peak_col]
+        peak_y <- y_sub[peak_row]
+        peak_amplitude <- local_max$value[p]
+        
+        # Define sub-region around this peak
+        if (n_peaks > 1) {
+          distances <- sqrt((local_max$col - peak_col)^2 + (local_max$row - peak_row)^2)
+          distances[p] <- Inf
+          min_dist <- min(distances)
+          half_width <- max(2, floor(min_dist / 2))
+        } else {
+          half_width <- max(2, floor(min(nrow(region), ncol(region)) / 2))
+        }
+        
+        col_start <- max(1, peak_col - half_width)
+        col_end <- min(ncol(region), peak_col + half_width)
+        row_start <- max(1, peak_row - half_width)
+        row_end <- min(nrow(region), peak_row + half_width)
+        
+        sub_region <- region[row_start:row_end, col_start:col_end, drop = FALSE]
+        sub_x <- x_sub[col_start:col_end]
+        sub_y <- y_sub[row_start:row_end]
+        
+        # Create grid for this sub-region
+        sub_grid <- expand.grid(x = sub_x, y = sub_y)
+        sub_grid$z <- as.vector(t(sub_region))
+        sub_grid <- sub_grid[!is.na(sub_grid$z), ]
+        
+        if (nrow(sub_grid) < 6) next
+        
+        # Normalize
+        z_scale <- max(abs(sub_grid$z), na.rm = TRUE)
+        if (z_scale < 1e-10) z_scale <- 1
+        sub_grid$z_norm <- sub_grid$z / z_scale
+        
+        # Initial parameters for this peak
+        sigma_x_init <- diff(range(sub_x)) / 3
+        sigma_y_init <- diff(range(sub_y)) / 3
+        baseline_init <- quantile(sub_grid$z, 0.1, na.rm = TRUE)
+        
+        # Fit this peak (Gaussian or Voigt depending on method)
+        peak_fit <- tryCatch({
+          if (use_voigt) {
+            # Pseudo-Voigt fit
+            fit <- minpack.lm::nlsLM(
+              z_norm ~ A * (eta / (1 + ((x - x0) / gx)^2 + ((y - y0) / gy)^2) + 
+                              (1 - eta) * exp(-((x - x0)^2 / (2 * sx^2) + (y - y0)^2 / (2 * sy^2)))) + b,
+              data = sub_grid,
+              start = list(A = peak_amplitude / z_scale, x0 = peak_x, y0 = peak_y,
+                           sx = sigma_x_init, sy = sigma_y_init,
+                           gx = sigma_x_init, gy = sigma_y_init,
+                           eta = 0.5, b = baseline_init / z_scale),
+              lower = c(A = 0, x0 = min(sub_x), y0 = min(sub_y),
+                        sx = sigma_x_init / 10, sy = sigma_y_init / 10,
+                        gx = sigma_x_init / 10, gy = sigma_y_init / 10,
+                        eta = 0, b = -Inf),
+              upper = c(A = Inf, x0 = max(sub_x), y0 = max(sub_y),
+                        sx = sigma_x_init * 5, sy = sigma_y_init * 5,
+                        gx = sigma_x_init * 5, gy = sigma_y_init * 5,
+                        eta = 1, b = Inf),
+              control = list(maxiter = 100, gtol = 0)
+            )
+            params <- coef(fit)
+            list(params = params, model = "voigt")
+          } else {
+            # Gaussian fit
+            fit <- minpack.lm::nlsLM(
+              z_norm ~ A * exp(-((x - x0)^2 / (2 * sx^2) + (y - y0)^2 / (2 * sy^2))) + b,
+              data = sub_grid,
+              start = list(A = peak_amplitude / z_scale, x0 = peak_x, y0 = peak_y,
+                           sx = sigma_x_init, sy = sigma_y_init, b = baseline_init / z_scale),
+              lower = c(A = 0, x0 = min(sub_x), y0 = min(sub_y),
+                        sx = sigma_x_init / 10, sy = sigma_y_init / 10, b = -Inf),
+              upper = c(A = Inf, x0 = max(sub_x), y0 = max(sub_y),
+                        sx = sigma_x_init * 5, sy = sigma_y_init * 5, b = Inf),
+              control = list(maxiter = 100, gtol = 0)
+            )
+            params <- coef(fit)
+            list(params = params, model = "gaussian")
+          }
+        }, error = function(e) {
+          # Fallback: use rough Gaussian estimates
+          list(
+            params = c(A = peak_amplitude / z_scale, x0 = peak_x, y0 = peak_y,
+                       sx = sigma_x_init, sy = sigma_y_init, b = baseline_init / z_scale),
+            model = "gaussian_fallback"
+          )
+        })
+        
+        # Store this peak's parameters
+        peak_fits[[p]] <- list(
+          params = peak_fit$params,
+          model = peak_fit$model,
+          z_scale = z_scale,
+          center = c(peak_x, peak_y)
+        )
+        
+        # Generate fitted surface for this peak over the ENTIRE region
+        params <- peak_fit$params
+        for (i in seq_along(y_sub)) {
+          for (j in seq_along(x_sub)) {
+            x_val <- x_sub[j]
+            y_val <- y_sub[i]
+            
+            if (peak_fit$model == "voigt") {
+              # Pseudo-Voigt: eta * Lorentzian + (1-eta) * Gaussian
+              eta <- params["eta"]
+              lorentz <- 1 / (1 + ((x_val - params["x0"]) / params["gx"])^2 + 
+                                ((y_val - params["y0"]) / params["gy"])^2)
+              gauss <- exp(-((x_val - params["x0"])^2 / (2 * params["sx"]^2) + 
+                               (y_val - params["y0"])^2 / (2 * params["sy"]^2)))
+              peak_val <- params["A"] * z_scale * (eta * lorentz + (1 - eta) * gauss)
+            } else {
+              # Gaussian
+              peak_val <- params["A"] * z_scale * exp(
+                -((x_val - params["x0"])^2 / (2 * params["sx"]^2) + 
+                    (y_val - params["y0"])^2 / (2 * params["sy"]^2))
+              )
+            }
+            
+            combined_fitted[i, j] <- combined_fitted[i, j] + peak_val
+          }
+        }
+      }
+      
+      # Add baseline (only once, not per peak)
+      combined_fitted <- combined_fitted + baseline_global
+      
+      list(success = TRUE, 
+           fitted_matrix = combined_fitted, 
+           n_peaks = n_peaks,
+           peak_fits = peak_fits,
+           model_used = model_name,
+           peak_centers = data.frame(
+             x = x_sub[local_max$col], 
+             y = y_sub[local_max$row]
+           ))
+      
+    }, error = function(e) {
+      list(success = FALSE, error = e$message)
+    })
+    # ========== END FIT ==========
+    
+    # Ensure ascending order for contour()
+    x_reorder <- NULL
+    y_reorder <- NULL
+    
     if (is.unsorted(x_sub)) {
-      x_order <- order(x_sub)
-      x_sub <- x_sub[x_order]
-      region <- region[, x_order, drop = FALSE]
+      x_reorder <- order(x_sub)
+      x_sub <- x_sub[x_reorder]
+      region <- region[, x_reorder, drop = FALSE]
     }
     if (is.unsorted(y_sub)) {
-      y_order <- order(y_sub)
-      y_sub <- y_sub[y_order]
-      region <- region[y_order, , drop = FALSE]
+      y_reorder <- order(y_sub)
+      y_sub <- y_sub[y_reorder]
+      region <- region[y_reorder, , drop = FALSE]
     }
     
-    # Create plot with image() to visualize 2D
-    par(mfrow = c(1, 1), mar = c(4, 4, 3, 2))
-    image(x_sub, y_sub, t(region), 
-          col = viridis::viridis(100),
-          xlab = "F2 (ppm)", ylab = "F1 (ppm)",
-          main = paste0("Fitted Region: ", box$stain_id, 
-                        "\nMethod: ", box$fit_method,
-                        " | R² = ", round(box$r_squared, 3)))
+    # ========== TOPSPIN-STYLE VISUALIZATION ==========
     
-    # Add fitted center if available
-    if (!is.na(box$center_x) && !is.na(box$center_y)) {
-      points(box$center_x, box$center_y, pch = 3, col = "red", cex = 2, lwd = 2)
+    # Calculate smart contour levels (positive values only, 8 levels)
+    z_max <- max(region, na.rm = TRUE)
+    z_min <- min(region, na.rm = TRUE)
+    z_range <- z_max - z_min
+    
+    # Contour levels at 15%, 25%, 35%, 45%, 55%, 65%, 75%, 85% of range
+    contour_pcts <- c(0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85)
+    contour_levels <- z_min + contour_pcts * z_range
+    
+    # Setup plot - clean white background
+    par(bg = "white", mar = c(4, 4, 3, 1), pty = "s", family = "sans")
+    
+    # Create plot with reversed axes (NMR convention)
+    plot(NULL, 
+         xlim = rev(range(x_sub)),
+         ylim = rev(range(y_sub)),
+         xlab = "F2 (ppm)", 
+         ylab = "F1 (ppm)",
+         main = "",
+         axes = TRUE,
+         asp = 1,
+         cex.lab = 1.1,
+         cex.axis = 0.9)
+    
+    # Add title with peak count and model info
+    n_peaks_text <- if (fit_result$success && fit_result$n_peaks > 1) {
+      paste0(box$stain_id, " - ", fit_result$model_used, " (", fit_result$n_peaks, " peaks)")
+    } else if (fit_result$success) {
+      paste0(box$stain_id, " - ", fit_result$model_used)
+    } else {
+      box$stain_id
+    }
+    title(main = n_peaks_text, cex.main = 1.3, font.main = 2, col.main = "gray20")
+    
+    # Draw EXPERIMENTAL contours in BLACK (thicker)
+    contour(x_sub, y_sub, t(region), 
+            levels = contour_levels,
+            add = TRUE, 
+            col = "black", 
+            lwd = 2, 
+            drawlabels = FALSE)
+    
+    # Draw MODEL contours in RED (combined fit of all peaks)
+    if (fit_result$success && !is.null(fit_result$fitted_matrix)) {
+      fitted_matrix <- fit_result$fitted_matrix
       
-      # Also add box center (for comparison)
-      box_center_x <- (box$xmin + box$xmax) / 2
-      box_center_y <- (box$ymin + box$ymax) / 2
-      points(box_center_x, box_center_y, pch = 1, col = "cyan", cex = 2, lwd = 2)
-      legend("topright", 
-             legend = c("Fitted center", "Box center"), 
-             pch = c(3, 1), 
-             col = c("red", "cyan"), 
-             bg = "white")
+      # Apply same reordering as experimental data
+      if (!is.null(x_reorder)) fitted_matrix <- fitted_matrix[, x_reorder, drop = FALSE]
+      if (!is.null(y_reorder)) fitted_matrix <- fitted_matrix[y_reorder, , drop = FALSE]
+      
+      # Draw combined model contours
+      contour(x_sub, y_sub, t(fitted_matrix), 
+              levels = contour_levels,
+              add = TRUE, 
+              col = "#E31A1C",  # Bright red
+              lwd = 1.5, 
+              lty = 1, 
+              drawlabels = FALSE)
+      
+      # Mark each peak center with a cross
+      if (!is.null(fit_result$peak_centers) && nrow(fit_result$peak_centers) > 0) {
+        points(fit_result$peak_centers$x, fit_result$peak_centers$y, 
+               pch = 3, col = "#2e7d32", cex = 1.8, lwd = 2)
+      }
     }
     
-    # Add contours
-    contour(x_sub, y_sub, t(region), add = TRUE, col = "white", lwd = 0.5, nlevels = 10)
-  })
+    # Add info box in corner
+    r2_text <- ifelse(is.na(box$r_squared), "N/A", sprintf("%.3f", box$r_squared))
+    method_text <- box$fit_method
+    
+    # Quality color coding
+    r2_col <- if (is.na(box$r_squared)) "gray50" else 
+      if (box$r_squared >= 0.90) "#2e7d32" else 
+        if (box$r_squared >= 0.80) "#1565c0" else 
+          if (box$r_squared >= 0.70) "#f57c00" else "#c62828"
+    
+    # Legend with info
+    legend("topright", 
+           legend = c("Experimental", "Model", 
+                      paste0("Method: ", method_text),
+                      paste0("R² = ", r2_text)), 
+           col = c("black", "#E31A1C", NA, NA), 
+           lwd = c(2, 1.5, NA, NA),
+           text.col = c("black", "#E31A1C", "gray30", r2_col),
+           text.font = c(1, 1, 1, 2),
+           bg = "white",
+           box.col = "gray70",
+           cex = 0.85,
+           inset = 0.02)
+    
+    # Add fitted center marker
+    if (!is.na(box$center_x) && !is.na(box$center_y)) {
+      points(box$center_x, box$center_y, pch = 3, col = "#2e7d32", cex = 2, lwd = 2.5)
+    }
+    
+    # Add subtle grid
+    grid(col = "gray90", lty = 1, lwd = 0.5)
+    
+    # ========== END TOPSPIN-STYLE ==========
+  }, bg = "white")
   
   # Residuals plot
   
