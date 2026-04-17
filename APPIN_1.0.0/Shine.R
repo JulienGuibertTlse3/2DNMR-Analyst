@@ -513,18 +513,19 @@ ui <- fluidPage(
                        
                        # Detailed visualization of a selected box
                        fluidRow(
-                         column(6,
+                         column(12,
                                 h4("🔍 Selected Box - 2D Fit"),
-                                div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;",
-                                    plotOutput("example_fit_2d", height = "400px")
-                                    
+                                div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 15px; background: #fafafa;",
+                                    plotOutput("example_fit_2d", height = "550px")
                                 )
-                                
-                         ),
-                         column(6,
+                         )
+                       ),
+                       br(),
+                       fluidRow(
+                         column(12,
                                 h4("📉 Residuals Distribution"),
                                 div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;",
-                                    plotOutput("residuals_plot", height = "400px")
+                                    plotOutput("residuals_plot", height = "350px")
                                     
                                 )
                                 
@@ -2068,9 +2069,18 @@ server <- function(input, output, session) {
     ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
     ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
     
-    # Extract exact box region (no padding - tighter zoom)
-    x_idx <- which(ppm_x >= box$xmin & ppm_x <= box$xmax)
-    y_idx <- which(ppm_y >= box$ymin & ppm_y <= box$ymax)
+    # Add 20% padding around the box to see the full peak
+    box_width <- box$xmax - box$xmin
+    box_height <- box$ymax - box$ymin
+    padding_x <- box_width * 0.2
+    padding_y <- box_height * 0.2
+    
+    x_idx <- which(ppm_x >= (box$xmin - padding_x) & ppm_x <= (box$xmax + padding_x))
+    y_idx <- which(ppm_y >= (box$ymin - padding_y) & ppm_y <= (box$ymax + padding_y))
+    
+    # Fallback to exact box if padding gives empty result
+    if (length(x_idx) == 0) x_idx <- which(ppm_x >= box$xmin & ppm_x <= box$xmax)
+    if (length(y_idx) == 0) y_idx <- which(ppm_y >= box$ymin & ppm_y <= box$ymax)
     
     if (length(x_idx) == 0 || length(y_idx) == 0) {
       plot.new()
