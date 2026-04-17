@@ -470,6 +470,8 @@ ui <- fluidPage(
                        
                      ),
                      
+                     ##### Tab 4: Fitting quality ----
+                     
                      # Dans tabBox, ajouter un nouvel onglet
                      tabPanel(
                        title = tagList(icon("chart-line"), "Fit Quality"),
@@ -539,8 +541,7 @@ ui <- fluidPage(
                            h5("💡 Interpretation Tips"),
                            tags$ul(
                              tags$li(tags$b("R² > 0.9:"), " Excellent fit - peak is well-defined"),
-                             tags$li(tags$b("R² 0.7-0.9:"), " Good fit - acceptable quantification"),
-                             tags$li(tags$b("R² < 0.7:"), " Poor fit - consider manual inspection or sum method"),
+                             tags$li(tags$b("R² < 0.9:"), " Poor fit - consider manual inspection or sum method"),
                              tags$li(tags$b("Residuals:"), " Should be randomly distributed around zero")
                              
                            )
