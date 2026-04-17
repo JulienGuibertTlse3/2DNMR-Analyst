@@ -13,7 +13,20 @@ detect_local_maxima <- function(mat, threshold = 0.3, min_distance = 2) {
   nr <- nrow(mat)
   nc <- ncol(mat)
   
-  if (nr < 3 || nc < 3) return(data.frame(row = integer(), col = integer(), value = numeric()))
+  # ========== FIX: Handle small regions ==========
+  # For very small regions, just return the global maximum
+  if (nr < 3 || nc < 3) {
+    max_val <- max(mat, na.rm = TRUE)
+    if (is.na(max_val) || is.infinite(max_val)) {
+      return(data.frame(row = integer(), col = integer(), value = numeric()))
+    }
+    max_pos <- which(mat == max_val, arr.ind = TRUE)
+    if (nrow(max_pos) > 0) {
+      return(data.frame(row = max_pos[1, 1], col = max_pos[1, 2], value = max_val))
+    }
+    return(data.frame(row = integer(), col = integer(), value = numeric()))
+  }
+  # ========== END FIX ==========
   
   max_val <- max(mat, na.rm = TRUE)
   min_val <- min(mat, na.rm = TRUE)
@@ -21,18 +34,23 @@ detect_local_maxima <- function(mat, threshold = 0.3, min_distance = 2) {
   
   maxima <- data.frame(row = integer(), col = integer(), value = numeric())
   
-  for (i in 2:(nr-1)) {
-    for (j in 2:(nc-1)) {
+  # ========== FIX: Include border pixels (was 2:(nr-1), now 1:nr) ==========
+  for (i in 1:nr) {
+    for (j in 1:nc) {
       val <- mat[i, j]
       if (is.na(val) || val < thresh_abs) next
       
-      # Check if local maximum (8-connectivity)
-      neighborhood <- mat[max(1,i-1):min(nr,i+1), max(1,j-1):min(nc,j+1)]
+      # Check if local maximum (8-connectivity) with boundary handling
+      row_range <- max(1, i-1):min(nr, i+1)
+      col_range <- max(1, j-1):min(nc, j+1)
+      neighborhood <- mat[row_range, col_range, drop = FALSE]
+      
       if (val >= max(neighborhood, na.rm = TRUE)) {
         maxima <- rbind(maxima, data.frame(row = i, col = j, value = val))
       }
     }
   }
+  # ========== END FIX ==========
   
   if (nrow(maxima) == 0) return(maxima)
   
@@ -135,8 +153,44 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
   
   #  MULTIPLET DETECTION 
   # Detect if there are multiple peaks in the region
-  local_max <- detect_local_maxima(region, threshold = 0.3, min_distance = 2)
+  # NOTE: threshold=0.5 (50% of max) and min_distance=3 to avoid detecting noise as peaks
+  local_max <- detect_local_maxima(region, threshold = 0.5, min_distance = 3)
   n_peaks <- nrow(local_max)
+  
+  # ========== FIX: Handle case where no local maximum is detected ==========
+  # This can happen when:
+  
+  # 1. Region is too small (< 3x3 pixels)
+  # 2. Maximum is on the border (excluded by detect_local_maxima)
+  # 3. All values are below the 30% threshold
+  
+  if (n_peaks == 0) {
+    # Fallback: use the global maximum of the region as the peak center
+    max_val <- max(region, na.rm = TRUE)
+    max_pos <- which(region == max_val, arr.ind = TRUE)
+    if (nrow(max_pos) > 0) {
+      # Create a synthetic local_max entry
+      local_max <- data.frame(
+        row = max_pos[1, 1],
+        col = max_pos[1, 2],
+        value = max_val
+      )
+      n_peaks <- 1
+    } else {
+      # Truly empty region - fallback to sum
+      return(list(
+        volume = sum(region, na.rm = TRUE),
+        fit_quality = NA,
+        params = NULL,
+        method = "sum_fallback",
+        n_peaks = 0,
+        is_multiplet = FALSE,
+        error = "No peak detected in region"
+      ))
+    }
+  }
+  # ========== END FIX ==========
+  
   is_multiplet <- n_peaks > 1
   
   # If multiplet detected, fit each peak separately
@@ -285,11 +339,14 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       center_y <- mean(peak_centers_y, na.rm = TRUE)
     }
     
+    # For multiplets, we don't reconstruct fitted_values here
+    # The visualization will handle it by fitting a single model to the whole region
+    
     return(list(
       volume = total_volume,
       fit_quality = mean_r_squared,
       params = c(x0 = center_x, y0 = center_y),
-      fitted_values = NULL,  # Trop complexe à recombiner
+      fitted_values = NULL,  # Will be computed in visualization if needed
       residuals = NULL,
       method = "multiplet_fit",
       n_peaks = n_peaks,
@@ -463,31 +520,25 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     ss_res <- sum(residuals^2)
     ss_tot <- sum((grid$z - mean(grid$z))^2)
     r_squared <- max(0, 1 - (ss_res / ss_tot)) # Force between 0 and 1
-
+    
     
     #  VOLUME CALCULATION 
-    # Option 1: Sum of fitted values ​​(intensity integrated into the box)
-    
-    # This is the most reliable method and comparable to the "sum" method
-    
     volume_fitted_sum <- sum(fitted_vals, na.rm = TRUE)
     
-    # Option 2: Analytical volume (for reference, but less useful in practice)
+    # Analytical volume (for reference)
     if (model == "gaussian") {
-      # Analytical volume of a 2D Gaussian (integral over all space)
       volume_analytical <- 2 * pi * params["A"] * abs(params["sx"]) * abs(params["sy"])
-    } else if (model == "lorentzian") {
-      # Analytical volume of a 2D Lorentzian
-      volume_analytical <- pi^2 * params["A"] * abs(params["gx"]) * abs(params["gy"])
+    } else if (model == "voigt") {
+      eta_val <- if ("eta" %in% names(params)) params["eta"] else 0.5
+      vol_gauss <- 2 * pi * params["A"] * abs(params["sx"]) * abs(params["sy"])
+      vol_lorentz <- pi^2 * params["A"] * abs(params["gx"]) * abs(params["gy"])
+      volume_analytical <- (1 - eta_val) * vol_gauss + eta_val * vol_lorentz
+    } else {
+      volume_analytical <- NA
     }
     
-    # Use the sum of the fitted values ​​as the principal volume
-    # (more consistent with the sum method and gives comparable values)
-    
-    volume <- volume_fitted_sum
-    
     list(
-      volume = volume,
+      volume = volume_fitted_sum,
       volume_analytical = volume_analytical,
       fit_quality = r_squared,
       params = params,
@@ -499,11 +550,9 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
     
   }, error = function(e) {
     
-    # In case of failure, fallback on the sum
-    volume_sum <- sum(region, na.rm = TRUE)
-    
+    # Always fallback to SUM on any error
     list(
-      volume = volume_sum,
+      volume = sum(region, na.rm = TRUE),
       fit_quality = NA,
       params = NULL,
       fitted_values = NULL,
@@ -522,6 +571,205 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
   
   return(fit_result)
 }
+
+# FIT DIAGNOSTIC VISUALIZATION ----
+
+#' Generate fit diagnostic plot for a single peak (TopSpin-style)
+#' 
+#' Creates a 1D slice visualization showing experimental data vs fitted curve,
+#' allowing visual assessment of fit quality (similar to TopSpin display).
+#' 
+#' @param fit_result Output from fit_2d_peak containing fitted_values and fit_quality
+#' @param mat Original spectral matrix
+#' @param ppm_x F2 chemical shifts vector
+#' @param ppm_y F1 chemical shifts vector
+#' @param box Data frame with xmin, xmax, ymin, ymax
+#' @param slice_direction Character: "F2" (horizontal) or "F1" (vertical) slice
+#' @return A list with plot data for rendering (experimental, fitted, residuals)
+#' @export
+generate_fit_diagnostic_data <- function(fit_result, mat, ppm_x, ppm_y, box, 
+                                         slice_direction = "F2") {
+  
+  # Check if fit data is available
+  if (is.null(fit_result$fitted_values) || is.null(fit_result$fit_quality)) {
+    return(list(
+      success = FALSE,
+      error = "No fitted values available (fit may have failed)"
+    ))
+  }
+  
+  # Extract region
+  x_idx <- which(ppm_x >= box$xmin & ppm_x <= box$xmax)
+  y_idx <- which(ppm_y >= box$ymin & ppm_y <= box$ymax)
+  
+  if (length(x_idx) == 0 || length(y_idx) == 0) {
+    return(list(success = FALSE, error = "Invalid box coordinates"))
+  }
+  
+  region <- mat[y_idx, x_idx, drop = FALSE]
+  x_sub <- ppm_x[x_idx]
+  y_sub <- ppm_y[y_idx]
+  
+  # Reshape fitted values to matrix form
+  n_y <- length(y_idx)
+  n_x <- length(x_idx)
+  fitted_matrix <- matrix(fit_result$fitted_values, nrow = n_y, ncol = n_x, byrow = TRUE)
+  
+  # Find maximum position for slice
+  max_pos <- which(region == max(region, na.rm = TRUE), arr.ind = TRUE)
+  if (nrow(max_pos) > 1) max_pos <- max_pos[1, , drop = FALSE]
+  
+  if (slice_direction == "F2") {
+    # Horizontal slice (along F2) at the row of maximum
+    slice_row <- max_pos[1, 1]
+    exp_slice <- region[slice_row, ]
+    fit_slice <- fitted_matrix[slice_row, ]
+    ppm_axis <- x_sub
+    axis_label <- "F2 (ppm)"
+    slice_pos <- y_sub[slice_row]
+    slice_info <- paste0("F1 = ", round(slice_pos, 3), " ppm")
+  } else {
+    # Vertical slice (along F1) at the column of maximum
+    slice_col <- max_pos[1, 2]
+    exp_slice <- region[, slice_col]
+    fit_slice <- fitted_matrix[, slice_col]
+    ppm_axis <- y_sub
+    axis_label <- "F1 (ppm)"
+    slice_pos <- x_sub[slice_col]
+    slice_info <- paste0("F2 = ", round(slice_pos, 3), " ppm")
+  }
+  
+  # Calculate residuals
+  residuals <- exp_slice - fit_slice
+  
+  # Calculate slice-specific R²
+  ss_res <- sum(residuals^2, na.rm = TRUE)
+  ss_tot <- sum((exp_slice - mean(exp_slice, na.rm = TRUE))^2, na.rm = TRUE)
+  slice_r2 <- if (ss_tot > 0) max(0, 1 - ss_res / ss_tot) else NA
+  
+  return(list(
+    success = TRUE,
+    ppm = ppm_axis,
+    experimental = as.numeric(exp_slice),
+    fitted = as.numeric(fit_slice),
+    residuals = as.numeric(residuals),
+    axis_label = axis_label,
+    slice_info = slice_info,
+    r_squared_global = fit_result$fit_quality,
+    r_squared_slice = slice_r2,
+    fit_method = fit_result$method
+  ))
+}
+
+
+#' Create a plotly diagnostic plot from fit data
+#' 
+#' @param diag_data Output from generate_fit_diagnostic_data
+#' @param show_residuals Logical: whether to show residuals panel
+#' @return A plotly object
+#' @export
+create_fit_diagnostic_plot <- function(diag_data, show_residuals = TRUE) {
+  
+  if (!diag_data$success) {
+    # Return empty plot with error message
+    return(
+      plotly::plot_ly() %>%
+        plotly::layout(
+          title = list(text = paste("⚠️", diag_data$error)),
+          xaxis = list(visible = FALSE),
+          yaxis = list(visible = FALSE)
+        )
+    )
+  }
+  
+  # Color scheme
+  col_exp <- "#1f77b4"      # Blue for experimental
+  
+  col_fit <- "#d62728"      # Red for fitted
+  col_res <- "#2ca02c"      # Green for residuals
+  
+  # Quality indicator
+  r2 <- diag_data$r_squared_global
+  quality_text <- if (is.na(r2)) {
+    "R² = NA"
+  } else if (r2 >= 0.95) {
+    paste0("✓ Excellent fit (R² = ", round(r2, 3), ")")
+  } else if (r2 >= 0.85) {
+    paste0("● Good fit (R² = ", round(r2, 3), ")")
+  } else if (r2 >= 0.70) {
+    paste0("◐ Acceptable fit (R² = ", round(r2, 3), ")")
+  } else {
+    paste0("✗ Poor fit (R² = ", round(r2, 3), ")")
+  }
+  
+  title_text <- paste0(
+    "<b>Fit Diagnostic</b> - ", diag_data$fit_method, "<br>",
+    "<span style='font-size:12px'>", quality_text, " | Slice: ", diag_data$slice_info, "</span>"
+  )
+  
+  if (show_residuals) {
+    # Two-panel plot: main + residuals
+    p <- plotly::subplot(
+      # Main panel: experimental vs fitted
+      plotly::plot_ly() %>%
+        plotly::add_lines(
+          x = diag_data$ppm, y = diag_data$experimental,
+          name = "Experimental", line = list(color = col_exp, width = 1.5)
+        ) %>%
+        plotly::add_lines(
+          x = diag_data$ppm, y = diag_data$fitted,
+          name = "Fitted", line = list(color = col_fit, width = 2, dash = "dash")
+        ) %>%
+        plotly::layout(
+          xaxis = list(autorange = "reversed"),
+          yaxis = list(title = "Intensity")
+        ),
+      # Residuals panel
+      plotly::plot_ly() %>%
+        plotly::add_lines(
+          x = diag_data$ppm, y = diag_data$residuals,
+          name = "Residuals", line = list(color = col_res, width = 1),
+          showlegend = FALSE
+        ) %>%
+        plotly::add_lines(
+          x = range(diag_data$ppm), y = c(0, 0),
+          line = list(color = "gray", width = 0.5, dash = "dot"),
+          showlegend = FALSE
+        ) %>%
+        plotly::layout(
+          xaxis = list(title = diag_data$axis_label, autorange = "reversed"),
+          yaxis = list(title = "Residuals")
+        ),
+      nrows = 2, shareX = TRUE, heights = c(0.7, 0.3)
+    ) %>%
+      plotly::layout(
+        title = list(text = title_text, x = 0.05),
+        showlegend = TRUE,
+        legend = list(orientation = "h", y = 1.12)
+      )
+  } else {
+    # Single panel
+    p <- plotly::plot_ly() %>%
+      plotly::add_lines(
+        x = diag_data$ppm, y = diag_data$experimental,
+        name = "Experimental", line = list(color = col_exp, width = 1.5)
+      ) %>%
+      plotly::add_lines(
+        x = diag_data$ppm, y = diag_data$fitted,
+        name = "Fitted", line = list(color = col_fit, width = 2, dash = "dash")
+      ) %>%
+      plotly::layout(
+        title = list(text = title_text, x = 0.05),
+        xaxis = list(title = diag_data$axis_label, autorange = "reversed"),
+        yaxis = list(title = "Intensity"),
+        showlegend = TRUE,
+        legend = list(orientation = "h", y = 1.1)
+      )
+  }
+  
+  return(p)
+}
+
 
 # BATCH Peak Fitting ----
 

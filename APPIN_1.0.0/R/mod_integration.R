@@ -1,4 +1,3 @@
-
 # 2D NMR Analyst - Module: Integration ----
 
 # Author: Julien Guibert
@@ -71,7 +70,7 @@ mod_integration_ui <- function(id) {
         sliderInput(
           ns("min_r_squared"), 
           "Min R² threshold:",
-          min = 0, max = 1, value = 0.7, step = 0.05
+          min = 0, max = 1, value = 0.85, step = 0.05
         ),
         tags$small("Peaks with R² below threshold will use sum fallback", style = "color: #666;")
       )
@@ -92,7 +91,21 @@ mod_integration_ui <- function(id) {
         h5(tags$b("✅ Integration Results"), style = "color: #2e7d32;"),
         verbatimTextOutput(ns("integration_summary")),
         br(),
-        downloadButton(ns("export_integration_results"), "📥 Download Results", class = "btn-primary btn-block")
+        downloadButton(ns("export_integration_results"), "📥 Download Results", class = "btn-primary btn-block"),
+        br(), br(),
+        # Reminder to check Fit Quality tab
+        conditionalPanel(
+          condition = sprintf(
+            "input['%s'] === 'gaussian' || input['%s'] === 'voigt'",
+            ns("integration_method_fit"),
+            ns("integration_method_fit")
+          ),
+          div(
+            style = "font-size: 11px; color: #666; padding: 8px; background: #fff3e0; border-radius: 4px; border-left: 3px solid #ff9800;",
+            icon("info-circle", style = "color: #ff9800;"),
+            " Check the ", tags$b("Fit Quality"), " tab to visualize fit results and R² distribution."
+          )
+        )
       )
     )
   )
@@ -131,9 +144,9 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-
+    
     # LOCAL REACTIVE VALUES ----
-
+    
     
     integration_results <- reactiveVal(NULL)
     integration_done <- reactiveVal(FALSE)
@@ -156,9 +169,9 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
       return("sum")
     })
     
-
+    
     # METHOD SELECTION OBSERVERS ----
-
+    
     
     #' When AUC is selected, deselect Peak Fitting
     observeEvent(input$integration_method, {
@@ -174,18 +187,18 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
       }
     }, ignoreInit = TRUE)
     
-
+    
     # INTEGRATION DONE OUTPUT (for conditionalPanel) ----
-
+    
     
     output$integration_done <- reactive({
       !is.null(integration_results())
     })
     outputOptions(output, "integration_done", suspendWhenHidden = FALSE)
     
-
+    
     # RUN INTEGRATION ----
-
+    
     
     #' Handle "Run Integration" button click
     observeEvent(input$run_integration, {
@@ -256,6 +269,39 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
             stringsAsFactors = FALSE
           )
           
+          # ========== FIX: Apply R² threshold with fallback to sum ==========
+          min_r2_threshold <- input$min_r_squared
+          
+          # Identify peaks with R² below threshold (that were successfully fitted)
+          below_threshold_idx <- which(
+            !is.na(results$r_squared) & 
+              results$r_squared < min_r2_threshold &
+              results$method %in% c("gaussian", "voigt", "multiplet_fit")
+          )
+          
+          if (length(below_threshold_idx) > 0) {
+            # Recalculate using sum method for these peaks
+            for (i in below_threshold_idx) {
+              box <- boxes[i, ]
+              x_idx <- which(ppm_x >= box$xmin & ppm_x <= box$xmax)
+              y_idx <- which(ppm_y >= box$ymin & ppm_y <= box$ymax)
+              
+              if (length(x_idx) > 0 && length(y_idx) > 0) {
+                results$intensity[i] <- sum(mat[y_idx, x_idx], na.rm = TRUE)
+                results$method[i] <- paste0("sum_fallback_r2<", min_r2_threshold)
+              }
+            }
+            
+            # Notify user about fallbacks
+            showNotification(
+              paste0("ℹ️ ", length(below_threshold_idx), " peak(s) with R² < ", 
+                     min_r2_threshold, " switched to sum integration"),
+              type = "warning",
+              duration = 5
+            )
+          }
+          # ========== END FIX ==========
+          
           # Also store for the Fit Quality tab
           rv$fit_results_data(
             fit_results %>% 
@@ -276,9 +322,9 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
       })
     })
     
-
+    
     # INTEGRATION SUMMARY OUTPUT ----
-
+    
     
     output$integration_summary <- renderText({
       results <- integration_results()
@@ -295,23 +341,28 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
         )
       } else {
         n_fitted <- sum(results$method %in% c("gaussian", "voigt", "multiplet_fit"), na.rm = TRUE)
-        n_fallback <- sum(results$method == "sum_fallback", na.rm = TRUE)
+        n_fallback_error <- sum(results$method == "sum_fallback", na.rm = TRUE)
+        n_fallback_r2 <- sum(grepl("sum_fallback_r2", results$method), na.rm = TRUE)
         n_multiplets <- sum(results$n_peaks > 1, na.rm = TRUE)
-        mean_r2 <- mean(results$r_squared, na.rm = TRUE)
+        
+        # Calculate mean R² only on successfully fitted peaks
+        fitted_r2 <- results$r_squared[results$method %in% c("gaussian", "voigt", "multiplet_fit")]
+        mean_r2 <- if (length(fitted_r2) > 0) mean(fitted_r2, na.rm = TRUE) else NA
         
         paste0(
           "Method: ", method, " (Peak Fitting)\n",
           "Boxes processed: ", n_total, "\n",
           "  - Successfully fitted: ", n_fitted, "\n",
           "  - Multiplets: ", n_multiplets, "\n",
-          "  - Fallback to sum: ", n_fallback, "\n",
-          "Mean R²: ", round(mean_r2, 3), "\n",
+          "  - Fallback (fit error): ", n_fallback_error, "\n",
+          "  - Fallback (R² < threshold): ", n_fallback_r2, "\n",
+          "Mean R² (fitted): ", ifelse(is.na(mean_r2), "N/A", round(mean_r2, 3)), "\n",
           "Total intensity: ", format(sum(results$intensity, na.rm = TRUE), big.mark = ",", scientific = FALSE)
         )
       }
     })
     
-
+    
     # EXPORT INTEGRATION RESULTS ----
     
     output$export_integration_results <- downloadHandler(
@@ -328,7 +379,7 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
       }
     )
     
-
+    
     # RETURN VALUES ----
     
     return(list(
