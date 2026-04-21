@@ -470,8 +470,6 @@ ui <- fluidPage(
                        
                      ),
                      
-                     ##### Tab 4: Fitting quality ----
-                     
                      # Dans tabBox, ajouter un nouvel onglet
                      tabPanel(
                        title = tagList(icon("chart-line"), "Fit Quality"),
@@ -541,7 +539,8 @@ ui <- fluidPage(
                            h5("💡 Interpretation Tips"),
                            tags$ul(
                              tags$li(tags$b("R² > 0.9:"), " Excellent fit - peak is well-defined"),
-                             tags$li(tags$b("R² < 0.9:"), " Poor fit - consider manual inspection or sum method"),
+                             tags$li(tags$b("R² 0.7-0.9:"), " Good fit - acceptable quantification"),
+                             tags$li(tags$b("R² < 0.7:"), " Poor fit - consider manual inspection or sum method"),
                              tags$li(tags$b("Residuals:"), " Should be randomly distributed around zero")
                              
                            )
@@ -1999,7 +1998,7 @@ server <- function(input, output, session) {
       geom_vline(aes(xintercept = median(r_squared, na.rm = TRUE)), 
                  color = "red", linetype = "dashed", size = 1) +
       scale_fill_manual(
-        values = c("gaussian" = "#667eea", "voigt" = "#f5576c", "multiplet_fit" = "#38ef7d", "sum_fallback" = "#ffd93d"),
+        values = c("gaussian" = "#667eea", "voigt" = "#f5576c", "multiplet_fit" = "#38ef7d", "multiplet_sum" = "#ff9800", "sum_fit_failed" = "#ffd93d", "sum_r2_below" = "#ffcc00"),
         name = "Fit Method"
         
       ) +
@@ -2403,7 +2402,7 @@ server <- function(input, output, session) {
       return()
     }
     box <- box[1, ]  # Take the first row if multiple
-    if (!"fit_method" %in% names(box) || is.na(box$fit_method) || box$fit_method == "sum_fallback") {
+    if (!"fit_method" %in% names(box) || is.na(box$fit_method) || box$fit_method %in% c("sum_fit_failed", "multiplet_sum") || grepl("sum_r2_below", box$fit_method)) {
       plot.new()
       text(0.5, 0.5, "No fit residuals available\n(sum method used or fit failed)", cex = 1.2, col = "orange")
       return()
