@@ -131,7 +131,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       volume = volume_sum,
       fit_quality = NA,
       params = NULL,
-      method = "sum_fallback",
+      method = "sum_fit_failed",
       error = "Too few points for fitting"
     ))
   }
@@ -146,7 +146,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       volume = sum(region, na.rm = TRUE),
       fit_quality = NA,
       params = NULL,
-      method = "sum_fallback",
+      method = "sum_fit_failed",
       error = "Region is constant or empty"
     ))
   }
@@ -182,7 +182,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
         volume = sum(region, na.rm = TRUE),
         fit_quality = NA,
         params = NULL,
-        method = "sum_fallback",
+        method = "sum_fit_failed",
         n_peaks = 0,
         is_multiplet = FALSE,
         error = "No peak detected in region"
@@ -369,7 +369,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       volume = sum(region, na.rm = TRUE),
       fit_quality = NA,
       params = NULL,
-      method = "sum_fallback",
+      method = "sum_fit_failed",
       error = "Too many NA values"
     ))
   }
@@ -557,7 +557,7 @@ fit_2d_peak <- function(mat, ppm_x, ppm_y, box, model = "gaussian", min_points =
       params = NULL,
       fitted_values = NULL,
       residuals = NULL,
-      method = "sum_fallback",
+      method = "sum_fit_failed",
       error = e$message
     )
   })
@@ -813,7 +813,7 @@ calculate_fitted_volumes <- function(mat, ppm_x, ppm_y, boxes,
     } else if (fit_result$method == "multiplet_fit") {
       n_success <- n_success + 1
       n_multiplets <- n_multiplets + 1
-    } else if (fit_result$method %in% c("sum_fallback", "multiplet_sum")) {
+    } else if (fit_result$method %in% c("sum_fit_failed", "multiplet_sum")) {
       n_fallback <- n_fallback + 1
     } else {
       n_failed <- n_failed + 1
