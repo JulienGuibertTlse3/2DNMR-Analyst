@@ -288,7 +288,7 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
               
               if (length(x_idx) > 0 && length(y_idx) > 0) {
                 results$intensity[i] <- sum(mat[y_idx, x_idx], na.rm = TRUE)
-                results$method[i] <- paste0("sum_fallback_r2<", min_r2_threshold)
+                results$method[i] <- paste0("sum_r2_below_", min_r2_threshold)
               }
             }
             
@@ -300,12 +300,32 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
               duration = 5
             )
           }
+          
+          # ========== FIX: Also mark multiplet_fit with NA R² as sum fallback ==========
+          multiplet_no_r2_idx <- which(
+            is.na(results$r_squared) & 
+              results$method == "multiplet_fit"
+          )
+          
+          if (length(multiplet_no_r2_idx) > 0) {
+            for (i in multiplet_no_r2_idx) {
+              results$method[i] <- "multiplet_sum"
+            }
+          }
           # ========== END FIX ==========
           
-          # Also store for the Fit Quality tab
+          # Store for the Fit Quality tab - USE UPDATED METHODS from results
           rv$fit_results_data(
-            fit_results %>% 
-              dplyr::select(stain_id, r_squared, center_x, center_y, fit_method, n_peaks, is_multiplet)
+            data.frame(
+              stain_id = results$stain_id,
+              r_squared = results$r_squared,
+              center_x = fit_results$center_x,
+              center_y = fit_results$center_y,
+              fit_method = results$method,  # Use updated method!
+              n_peaks = results$n_peaks,
+              is_multiplet = fit_results$is_multiplet,
+              stringsAsFactors = FALSE
+            )
           )
         }
         
@@ -341,8 +361,9 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
         )
       } else {
         n_fitted <- sum(results$method %in% c("gaussian", "voigt", "multiplet_fit"), na.rm = TRUE)
-        n_fallback_error <- sum(results$method == "sum_fallback", na.rm = TRUE)
-        n_fallback_r2 <- sum(grepl("sum_fallback_r2", results$method), na.rm = TRUE)
+        n_fallback_error <- sum(results$method == "sum_fit_failed", na.rm = TRUE)
+        n_fallback_r2 <- sum(grepl("sum_r2_below", results$method), na.rm = TRUE)
+        n_multiplet_sum <- sum(results$method == "multiplet_sum", na.rm = TRUE)
         n_multiplets <- sum(results$n_peaks > 1, na.rm = TRUE)
         
         # Calculate mean R² only on successfully fitted peaks
@@ -353,9 +374,10 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
           "Method: ", method, " (Peak Fitting)\n",
           "Boxes processed: ", n_total, "\n",
           "  - Successfully fitted: ", n_fitted, "\n",
-          "  - Multiplets: ", n_multiplets, "\n",
-          "  - Fallback (fit error): ", n_fallback_error, "\n",
-          "  - Fallback (R² < threshold): ", n_fallback_r2, "\n",
+          "  - Multiplets (with R²): ", n_multiplets - n_multiplet_sum, "\n",
+          "  - Multiplets (sum, no R²): ", n_multiplet_sum, "\n",
+          "  - Sum (fit failed): ", n_fallback_error, "\n",
+          "  - Sum (R² < threshold): ", n_fallback_r2, "\n",
           "Mean R² (fitted): ", ifelse(is.na(mean_r2), "N/A", round(mean_r2, 3)), "\n",
           "Total intensity: ", format(sum(results$intensity, na.rm = TRUE), big.mark = ",", scientific = FALSE)
         )
