@@ -2120,8 +2120,30 @@ server <- function(input, output, session) {
     
     # Linear interpolation: zoom 0% -> 1.0 padding, zoom 100% -> 0.0 padding
     padding_factor <- 1.0 - (zoom_pct / 100)
-    padding_x <- box_width * padding_factor
-    padding_y <- box_height * padding_factor
+    padding_x_box <- box_width * padding_factor
+    padding_y_box <- box_height * padding_factor
+    
+    # ========== FIX: Guarantee a MINIMUM absolute padding for small boxes ==========
+    # For very small boxes (e.g. narrow UFCOSY peaks), padding proportional to box size
+    # can be smaller than a single ppm step -> no extra context shown when zooming out.
+    # We compute a minimum padding based on the spectrum's actual ppm resolution and
+    # take the max with the proportional padding. The minimum scales with padding_factor
+    # so that zoom 100% (tight on box) is still respected.
+    
+    # Estimate ppm step (resolution) on each axis
+    # Use median of absolute diffs to be robust to non-uniform spacing
+    ppm_x_step <- if (length(ppm_x) > 1) median(abs(diff(ppm_x))) else 0.001
+    ppm_y_step <- if (length(ppm_y) > 1) median(abs(diff(ppm_y))) else 0.001
+    
+    # Minimum padding: ~20 points of resolution, capped between 0.02 and 0.15 ppm
+    # This guarantees enough visual context regardless of box size
+    min_pad_x <- max(min(20 * ppm_x_step, 0.15), 0.02)
+    min_pad_y <- max(min(20 * ppm_y_step, 0.15), 0.02)
+    
+    # Scale minimum by padding_factor so zoom=100% still gives 0 extra padding
+    padding_x <- max(padding_x_box, min_pad_x * padding_factor)
+    padding_y <- max(padding_y_box, min_pad_y * padding_factor)
+    # ========== END FIX ==========
     
     x_idx <- which(ppm_x >= (box$xmin - padding_x) & ppm_x <= (box$xmax + padding_x))
     y_idx <- which(ppm_y >= (box$ymin - padding_y) & ppm_y <= (box$ymax + padding_y))
@@ -2319,14 +2341,38 @@ server <- function(input, output, session) {
       # Add baseline (only once, not per peak)
       combined_fitted <- combined_fitted + baseline_global
       
+      # ========== FIX: Use FITTED centers (x0, y0) from each peak's nlsLM result ==========
+      # Previously used local_max (raw maxima detected BEFORE fitting), which made the
+      # displayed centers incoherent with the red model contours. Now we extract the
+      # actual fitted centers from peak_fits[[p]]$params["x0"/"y0"] so that the green
+      # crosses fall exactly on the centers of the red model lobes.
+      fitted_centers_x <- numeric(0)
+      fitted_centers_y <- numeric(0)
+      for (p in seq_along(peak_fits)) {
+        if (!is.null(peak_fits[[p]]) && !is.null(peak_fits[[p]]$params)) {
+          pp <- peak_fits[[p]]$params
+          if (!is.na(pp["x0"]) && !is.na(pp["y0"])) {
+            fitted_centers_x <- c(fitted_centers_x, unname(pp["x0"]))
+            fitted_centers_y <- c(fitted_centers_y, unname(pp["y0"]))
+          }
+        }
+      }
+      
+      # Fallback: if no fitted centers (all fits failed), use local maxima as proxy
+      if (length(fitted_centers_x) == 0) {
+        fitted_centers_x <- box_x_sub[local_max$col]
+        fitted_centers_y <- box_y_sub[local_max$row]
+      }
+      # ========== END FIX ==========
+      
       list(success = TRUE, 
            fitted_matrix = combined_fitted, 
            n_peaks = n_peaks,
            peak_fits = peak_fits,
            model_used = model_name,
            peak_centers = data.frame(
-             x = box_x_sub[local_max$col], 
-             y = box_y_sub[local_max$row]
+             x = fitted_centers_x,
+             y = fitted_centers_y
            ))
       
     }, error = function(e) {
@@ -2342,11 +2388,23 @@ server <- function(input, output, session) {
       x_reorder <- order(x_sub)
       x_sub <- x_sub[x_reorder]
       region <- region[, x_reorder, drop = FALSE]
+      # ========== FIX: Also reorder the fitted matrix so red contours stay aligned ==========
+      # Without this, combined_fitted was built using the ORIGINAL (unsorted) x_sub indices,
+      # then plotted against the sorted x_sub -> the model appeared mirrored on the F2 axis.
+      if (fit_result$success && !is.null(fit_result$fitted_matrix)) {
+        fit_result$fitted_matrix <- fit_result$fitted_matrix[, x_reorder, drop = FALSE]
+      }
+      # ========== END FIX ==========
     }
     if (is.unsorted(y_sub)) {
       y_reorder <- order(y_sub)
       y_sub <- y_sub[y_reorder]
       region <- region[y_reorder, , drop = FALSE]
+      # ========== FIX: Same fix on F1 axis ==========
+      if (fit_result$success && !is.null(fit_result$fitted_matrix)) {
+        fit_result$fitted_matrix <- fit_result$fitted_matrix[y_reorder, , drop = FALSE]
+      }
+      # ========== END FIX ==========
     }
     
     # ========== TOPSPIN-STYLE VISUALIZATION ==========
@@ -2449,19 +2507,18 @@ server <- function(input, output, session) {
       p <- p + geom_contour(data = fitted_df, aes(x = F2, y = F1, z = z),
                             color = "#E31A1C", linewidth = 0.6, breaks = fitted_contour_levels)
       
-      # Add peak centers
+      # ========== FIX: Display ONLY fitted centers (coherent with red contours) ==========
+      # peak_centers now contains the actual fitted x0/y0 from each peak's nlsLM result,
+      # so green crosses fall exactly on the centers of the red model lobes.
+      # We removed the blue cross (box$center_x/center_y) because it came from
+      # mod_integration's fit and could be a volume-weighted barycenter for multiplets,
+      # which made it appear off-center relative to the red contours.
       if (!is.null(fit_result$peak_centers) && nrow(fit_result$peak_centers) > 0) {
         p <- p + geom_point(data = fit_result$peak_centers, 
                             aes(x = x, y = y, z = NULL),
-                            shape = 3, color = "#2e7d32", size = 3, stroke = 1.5)
+                            shape = 3, color = "#2e7d32", size = 4, stroke = 1.8)
       }
-    }
-    
-    # Add stored fitted center
-    if (!is.na(box$center_x) && !is.na(box$center_y)) {
-      center_df <- data.frame(x = box$center_x, y = box$center_y)
-      p <- p + geom_point(data = center_df, aes(x = x, y = y, z = NULL),
-                          shape = 4, color = "#1565c0", size = 3, stroke = 1.5)
+      # ========== END FIX ==========
     }
     
     # Title with peak info
