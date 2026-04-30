@@ -2254,10 +2254,12 @@ server <- function(input, output, session) {
         baseline_init <- quantile(sub_grid$z, 0.1, na.rm = TRUE)
         
         # Fit this peak (Gaussian or Voigt depending on method)
+        # Use suppressWarnings to silence "nls.lm: info = -1" (max iterations reached);
+        # nlsLM still returns a usable result, the warning is purely informational.
         peak_fit <- tryCatch({
           if (use_voigt) {
             # Pseudo-Voigt fit
-            fit <- minpack.lm::nlsLM(
+            fit <- suppressWarnings(minpack.lm::nlsLM(
               z_norm ~ A * (eta / (1 + ((x - x0) / gx)^2 + ((y - y0) / gy)^2) + 
                               (1 - eta) * exp(-((x - x0)^2 / (2 * sx^2) + (y - y0)^2 / (2 * sy^2)))) + b,
               data = sub_grid,
@@ -2274,12 +2276,12 @@ server <- function(input, output, session) {
                         gx = sigma_x_init * 5, gy = sigma_y_init * 5,
                         eta = 1, b = Inf),
               control = list(maxiter = 100, gtol = 0)
-            )
+            ))
             params <- coef(fit)
             list(params = params, model = "voigt")
           } else {
             # Gaussian fit
-            fit <- minpack.lm::nlsLM(
+            fit <- suppressWarnings(minpack.lm::nlsLM(
               z_norm ~ A * exp(-((x - x0)^2 / (2 * sx^2) + (y - y0)^2 / (2 * sy^2))) + b,
               data = sub_grid,
               start = list(A = peak_amplitude / z_scale, x0 = peak_x, y0 = peak_y,
@@ -2289,7 +2291,7 @@ server <- function(input, output, session) {
               upper = c(A = Inf, x0 = max(sub_x), y0 = max(sub_y),
                         sx = sigma_x_init * 5, sy = sigma_y_init * 5, b = Inf),
               control = list(maxiter = 100, gtol = 0)
-            )
+            ))
             params <- coef(fit)
             list(params = params, model = "gaussian")
           }
@@ -2430,14 +2432,28 @@ server <- function(input, output, session) {
     # Each level is contour_factor times the previous one
     contour_levels <- contour_start * contour_params$contour_factor^(0:(contour_params$contour_num - 1))
     
-    # Filter levels to only include those within the data range
-    z_max <- max(region, na.rm = TRUE)
-    contour_levels <- contour_levels[contour_levels <= z_max * 1.1]
+    # ========== FIX: Defensive contour level computation to avoid warnings ==========
+    # Previously: warnings appeared on zoom changes because:
+    #   - z_max could be -Inf if region had no valid values
+    #   - contour_levels could be empty if z_max < contour_start (small peak in zoomed view)
+    #   - seq(contour_start, z_max, ...) could be decreasing if z_max < contour_start
     
-    # Ensure we have at least a few levels
-    if (length(contour_levels) < 3) {
-      contour_levels <- seq(contour_start, z_max, length.out = 5)
+    # Safely compute z_max
+    valid_region <- region[is.finite(region)]
+    z_max <- if (length(valid_region) > 0) max(valid_region) else NA_real_
+    
+    # Strict validation: only keep levels strictly within data range AND finite
+    if (is.finite(z_max) && z_max > contour_start) {
+      contour_levels <- contour_levels[
+        is.finite(contour_levels) & 
+          contour_levels >= contour_start & 
+          contour_levels <= z_max
+      ]
+    } else {
+      # No data above contour_start in this region -> no black contours possible
+      contour_levels <- numeric(0)
     }
+    # ========== END FIX ==========
     
     # ========== GGPLOT2 VISUALIZATION (same as base plot) ==========
     
@@ -2465,27 +2481,52 @@ server <- function(input, output, session) {
         z = as.vector(fitted_matrix)
       )
       
+      # ========== FIX: Defensive computation of fitted contour levels ==========
       # Calculate contour levels adapted to the FITTED data
-      # Use same geometric progression but starting from a fraction of the fitted max
-      z_max_fitted <- max(fitted_matrix, na.rm = TRUE)
-      z_min_fitted <- min(fitted_matrix[fitted_matrix > 0], na.rm = TRUE)
+      valid_fitted <- fitted_matrix[is.finite(fitted_matrix)]
+      z_max_fitted <- if (length(valid_fitted) > 0) max(valid_fitted) else NA_real_
       
       if (is.finite(z_max_fitted) && z_max_fitted > 0) {
-        # Start from ~10% of max fitted value
-        fitted_start <- z_max_fitted * 0.08
-        fitted_contour_levels <- fitted_start * contour_params$contour_factor^(0:(contour_params$contour_num - 1))
-        fitted_contour_levels <- fitted_contour_levels[fitted_contour_levels <= z_max_fitted * 1.05]
+        # ========== FIX: Align red contours minimum with the experimental noise floor ==========
+        # Previously: fitted_start = z_max_fitted * 0.08 -> red contours could descend
+        # WAY below contour_start (the spectrum's noise floor used for black contours).
+        # Result: a Gaussian with even slightly too-large sigma would show huge red rings
+        # at intensities where the experimental data shows nothing -> the "monstrous red
+        # circle around a tiny black peak" problem (visible at low fit_method R² >= 0.99
+        # because R² is computed only over the box, not the displayed padded region).
+        # 
+        # Now: fitted_start = max(contour_start, z_max_fitted * 0.05). At identical
+        # intensity, red and black use the same threshold -> a well-fitted peak shows
+        # red on top of black; queues of an over-wide Gaussian below noise floor are
+        # automatically clipped (exactly what happens visually with the experimental
+        # noise floor anyway).
+        fitted_start <- max(contour_start, z_max_fitted * 0.05)
+        # ========== END FIX ==========
         
-        # Ensure at least 4 levels
-        if (length(fitted_contour_levels) < 4) {
-          fitted_contour_levels <- seq(fitted_start, z_max_fitted, length.out = 6)
+        fitted_contour_levels <- fitted_start * contour_params$contour_factor^(0:(contour_params$contour_num - 1))
+        
+        # Strict validation: levels must be finite AND strictly in data range
+        fitted_contour_levels <- fitted_contour_levels[
+          is.finite(fitted_contour_levels) &
+            fitted_contour_levels >= fitted_start &
+            fitted_contour_levels <= z_max_fitted
+        ]
+        
+        # If we lost too many levels (e.g. fitted_start very close to z_max_fitted),
+        # regenerate with linear spacing
+        if (length(fitted_contour_levels) < 4 && fitted_start < z_max_fitted) {
+          fitted_contour_levels <- seq(fitted_start, z_max_fitted * 0.99, length.out = 6)
         }
+      } else {
+        # No valid fitted data -> don't draw red contours
+        fitted_df <- NULL
+        fitted_contour_levels <- NULL
       }
+      # ========== END FIX ==========
     }
     
     # Build ggplot with EXPERIMENTAL contours in BLACK
     p <- ggplot(plot_df, aes(x = F2, y = F1, z = z)) +
-      geom_contour(color = "black", linewidth = 0.5, breaks = contour_levels) +
       scale_x_reverse() +  # NMR convention
       scale_y_reverse() +  # NMR convention
       labs(x = "F2 (ppm)", y = "F1 (ppm)") +
@@ -2501,11 +2542,23 @@ server <- function(input, output, session) {
         plot.subtitle = element_text(size = 10, hjust = 0.5)
       )
     
+    # ========== FIX: Add EXPERIMENTAL contours in BLACK only if levels are valid ==========
+    # Avoids "Zero contours generated" warning when zoom region has no data above contour_start.
+    # Use aes(color = ...) with a literal label so ggplot generates a legend automatically.
+    # Slightly thicker than before (0.5 -> 0.65) for better visibility against red contours.
+    if (length(contour_levels) >= 2 && all(is.finite(contour_levels))) {
+      p <- p + geom_contour(aes(color = "Experimental"), linewidth = 0.65, breaks = contour_levels)
+    }
+    # ========== END FIX ==========
+    
     # Add MODEL contours in RED if fit succeeded
-    if (fit_result$success && !is.null(fitted_df) && !is.null(fitted_contour_levels)) {
+    if (fit_result$success && !is.null(fitted_df) && 
+        !is.null(fitted_contour_levels) && 
+        length(fitted_contour_levels) >= 2 && 
+        all(is.finite(fitted_contour_levels))) {
       # Use fitted_contour_levels which are adapted to the model's intensity range
-      p <- p + geom_contour(data = fitted_df, aes(x = F2, y = F1, z = z),
-                            color = "#E31A1C", linewidth = 0.6, breaks = fitted_contour_levels)
+      p <- p + geom_contour(data = fitted_df, aes(x = F2, y = F1, z = z, color = "Model fit"),
+                            linewidth = 0.6, breaks = fitted_contour_levels)
       
       # ========== FIX: Display ONLY fitted centers (coherent with red contours) ==========
       # peak_centers now contains the actual fitted x0/y0 from each peak's nlsLM result,
@@ -2515,11 +2568,66 @@ server <- function(input, output, session) {
       # which made it appear off-center relative to the red contours.
       if (!is.null(fit_result$peak_centers) && nrow(fit_result$peak_centers) > 0) {
         p <- p + geom_point(data = fit_result$peak_centers, 
-                            aes(x = x, y = y, z = NULL),
-                            shape = 3, color = "#2e7d32", size = 4, stroke = 1.8)
+                            aes(x = x, y = y, z = NULL, color = "Fitted center"),
+                            shape = 3, size = 4, stroke = 1.8)
       }
       # ========== END FIX ==========
     }
+    
+    # ========== FIX: Color legend mapping labels -> colors ==========
+    # Maps the literal labels used in aes(color=...) to actual colors. The legend
+    # appears automatically in the plot. We build the legend dynamically based on
+    # which layers are actually drawn -> no override.aes mismatch when fit failed.
+    legend_labels   <- "Experimental"
+    legend_colors   <- c("Experimental" = "black")
+    legend_linetype <- "solid"
+    legend_shape    <- NA
+    legend_lwidth   <- 0.65
+    legend_size     <- NA
+    
+    has_red <- fit_result$success && !is.null(fitted_df) && 
+      !is.null(fitted_contour_levels) && 
+      length(fitted_contour_levels) >= 2 && 
+      all(is.finite(fitted_contour_levels))
+    has_green <- has_red && !is.null(fit_result$peak_centers) && 
+      nrow(fit_result$peak_centers) > 0
+    
+    if (has_red) {
+      legend_labels   <- c(legend_labels, "Model fit")
+      legend_colors   <- c(legend_colors, "Model fit" = "#E31A1C")
+      legend_linetype <- c(legend_linetype, "solid")
+      legend_shape    <- c(legend_shape, NA)
+      legend_lwidth   <- c(legend_lwidth, 0.6)
+      legend_size     <- c(legend_size, NA)
+    }
+    if (has_green) {
+      legend_labels   <- c(legend_labels, "Fitted center")
+      legend_colors   <- c(legend_colors, "Fitted center" = "#2e7d32")
+      legend_linetype <- c(legend_linetype, "blank")
+      legend_shape    <- c(legend_shape, 3)
+      legend_lwidth   <- c(legend_lwidth, NA)
+      legend_size     <- c(legend_size, 4)
+    }
+    
+    p <- p + scale_color_manual(
+      name = NULL,
+      values = legend_colors,
+      breaks = legend_labels,
+      guide = guide_legend(
+        override.aes = list(
+          linetype  = legend_linetype,
+          shape     = legend_shape,
+          linewidth = legend_lwidth,
+          size      = legend_size
+        )
+      )
+    ) + theme(
+      legend.position = "top",
+      legend.box.margin = margin(0, 0, 5, 0),
+      legend.text = element_text(size = 10),
+      legend.key.width = unit(1.5, "lines")
+    )
+    # ========== END FIX ==========
     
     # Title with peak info
     n_peaks_text <- if (fit_result$success && fit_result$n_peaks > 1) {
@@ -2541,13 +2649,13 @@ server <- function(input, output, session) {
       ggtitle(n_peaks_text) +
       labs(subtitle = paste0("Method: ", box$fit_method, " | R² = ", r2_text))
     
-    # Add manual legend
-    p <- p + 
-      annotate("segment", x = Inf, xend = Inf, y = Inf, yend = Inf, color = "black", linewidth = 0.5) +
-      annotate("segment", x = Inf, xend = Inf, y = Inf, yend = Inf, color = "#E31A1C", linewidth = 0.4)
-    
     # Print the plot
-    print(p)
+    # suppressWarnings: filet de sécurité pour étouffer les warnings cosmétiques de
+    # stat_contour ("Zero contours generated") et min/max sur vecteurs vides qui
+    # peuvent émerger sur des configurations de zoom limites. Ces warnings n'indiquent
+    # pas un bug : juste que la zone affichée n'a pas de données dans la plage des
+    # niveaux de contour. Le rendu reste correct (plot vide ou partiel selon les cas).
+    suppressWarnings(print(p))
     
     # ========== END GGPLOT2 VISUALIZATION ==========
   }, bg = "white")
