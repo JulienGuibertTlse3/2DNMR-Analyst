@@ -329,6 +329,31 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
           )
         }
         
+        # Add Sign column to identify positive/negative peaks
+        results$sign <- ifelse(results$intensity >= 0, "positive", "negative")
+        
+        # Check for negative intensities and warn user
+        n_negative <- sum(results$intensity < 0, na.rm = TRUE)
+        if (n_negative > 0) {
+          warning_msg <- paste0(
+            "⚠️ Warning: ", n_negative, " box(es) have negative intensity.\n",
+            "This may indicate:\n",
+            "• Phase correction issues in the spectrum\n",
+            "• CH2 peaks in multiplicity-edited HSQC (expected behavior)\n",
+            "• Baseline correction needed"
+          )
+          status_msg(warning_msg)
+          showNotification(
+            HTML(paste0(
+              "<b>⚠️ Negative intensities detected</b><br>",
+              n_negative, " boxes have negative values.<br>",
+              "<small>This may indicate phase issues or CH2 in edited HSQC.</small>"
+            )), 
+            type = "warning", 
+            duration = 10
+          )
+        }
+        
         integration_results(results)
         integration_done(TRUE)
         rv$last_fit_method(method)
@@ -352,11 +377,14 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
       
       method <- rv$last_fit_method()
       n_total <- nrow(results)
+      n_negative <- sum(results$intensity < 0, na.rm = TRUE)
+      negative_info <- if (n_negative > 0) paste0("⚠️ Negative intensities: ", n_negative, "\n") else ""
       
       if (method == "sum") {
         paste0(
           "Method: Sum (AUC)\n",
           "Boxes processed: ", n_total, "\n",
+          negative_info,
           "Total intensity: ", format(sum(results$intensity, na.rm = TRUE), big.mark = ",", scientific = FALSE)
         )
       } else {
@@ -378,6 +406,7 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
           "  - Multiplets (sum, no R²): ", n_multiplet_sum, "\n",
           "  - Sum (fit failed): ", n_fallback_error, "\n",
           "  - Sum (R² < threshold): ", n_fallback_r2, "\n",
+          negative_info,
           "Mean R² (fitted): ", ifelse(is.na(mean_r2), "N/A", round(mean_r2, 3)), "\n",
           "Total intensity: ", format(sum(results$intensity, na.rm = TRUE), big.mark = ",", scientific = FALSE)
         )
