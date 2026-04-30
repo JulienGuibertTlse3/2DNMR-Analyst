@@ -515,6 +515,12 @@ ui <- fluidPage(
                        fluidRow(
                          column(12,
                                 h4("🔍 Selected Box - 2D Fit"),
+                                div(style = "margin-bottom: 10px;",
+                                    sliderInput("fit_zoom_level", "Zoom level:", 
+                                                min = 0, max = 100, value = 80, step = 5, post = "%",
+                                                width = "300px"),
+                                    tags$small("0% = max context (zoomed out) | 100% = tight on box (zoomed in)", style = "color: #666;")
+                                ),
                                 div(style = "border: 1px solid #ddd; border-radius: 8px; padding: 15px; background: #fafafa;",
                                     plotOutput("example_fit_2d", height = "550px")
                                 )
@@ -1028,7 +1034,9 @@ server <- function(input, output, session) {
     selected_box_index = selected_box_index,
     original_box_coords = original_box_coords,
     box_has_been_modified = box_has_been_modified,
-    preview_trace_added = preview_trace_added
+    preview_trace_added = preview_trace_added,
+    # Contour threshold for integration (noise filter)
+    contour_start = reactive({ input$contour_start })
   )
   
   
@@ -1754,6 +1762,7 @@ server <- function(input, output, session) {
     df_display <- df[, display_cols[display_cols %in% names(df)], drop = FALSE]
     datatable(df_display[, seq_len(min(4, ncol(df_display))), drop = FALSE], 
               selection = "multiple",
+              rownames = FALSE,
               options = list(pageLength = 10))
   })
   
@@ -1763,32 +1772,50 @@ server <- function(input, output, session) {
     # Exclude Volume column from peaks display
     display_cols <- setdiff(names(df), c("Volume", "stain_intensity", "intensity_plot"))
     df_display <- df[, display_cols[display_cols %in% names(df)], drop = FALSE]
-    datatable(df_display, selection = "multiple", options = list(pageLength = 10))
+    datatable(df_display, selection = "multiple", rownames = FALSE, options = list(pageLength = 10))
   })
   
   output$bbox_table <- renderDT({
     df <- bounding_boxes_data() %||% data.frame()
+    if (nrow(df) == 0) return(datatable(data.frame()))
+    
+    # Reorder columns to put stain_id first
+    if ("stain_id" %in% names(df)) {
+      other_cols <- setdiff(names(df), "stain_id")
+      df <- df[, c("stain_id", other_cols), drop = FALSE]
+    }
+    
     datatable(df, 
-              selection = "multiple",  # Multiple selection enabled
-              options = list(pageLength = 10))  # More entries per page
+              selection = "multiple",
+              rownames = FALSE,
+              options = list(pageLength = 10, scrollX = TRUE))
   })
   
   output$pending_centroids_table <- renderDT({ 
-    datatable(pending_centroids(), selection = "multiple", options = list(pageLength = 10)) 
+    datatable(pending_centroids(), selection = "multiple", rownames = FALSE, options = list(pageLength = 10)) 
   })
   
   output$pending_boxes_table <- renderDT({ 
-    datatable(pending_boxes(), selection = "multiple", options = list(pageLength = 10)) 
+    df <- pending_boxes()
+    if (nrow(df) == 0) return(datatable(data.frame()))
+    
+    # Reorder columns to put stain_id first if present
+    if ("stain_id" %in% names(df)) {
+      other_cols <- setdiff(names(df), "stain_id")
+      df <- df[, c("stain_id", other_cols), drop = FALSE]
+    }
+    
+    datatable(df, selection = "multiple", rownames = FALSE, options = list(pageLength = 10)) 
   })
   
   output$pending_fusions_table <- renderDT({ 
     req(pending_fusions())
-    datatable(pending_fusions(), selection = "multiple", options = list(scrollX = TRUE, pageLength = 10)) 
+    datatable(pending_fusions(), selection = "multiple", rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10)) 
   })
   
   output$pending_deletions_table <- renderDT({
     req(pending_deletions())
-    datatable(pending_deletions(), selection = "multiple",
+    datatable(pending_deletions(), selection = "multiple", rownames = FALSE,
               options = list(scrollX = TRUE, pageLength = 10))
   })
   
@@ -2069,11 +2096,32 @@ server <- function(input, output, session) {
     ppm_x <- suppressWarnings(as.numeric(colnames(mat)))
     ppm_y <- suppressWarnings(as.numeric(rownames(mat)))
     
-    # Add 20% padding around the box to see the full peak
+    # Get contour threshold - same as main plot
+    # NOTE: We do NOT filter the data here (no setting values to 0)
+    # The main plot in Vizualisation.R uses raw data with contour breaks starting at contour_start
+    # This gives the same visual result without modifying the underlying data
+    contour_threshold <- input$contour_start
+    if (is.null(contour_threshold) || contour_threshold <= 0) {
+      contour_threshold <- max(mat, na.rm = TRUE) * 0.1  # Fallback
+    }
+    
+    # Get zoom level from slider (default 80%)
+    # 0% = very zoomed out (lots of context around the box)
+    # 100% = tight on the box (no padding)
+    zoom_pct <- input$fit_zoom_level
+    if (is.null(zoom_pct)) zoom_pct <- 80
+    
+    # Calculate padding based on zoom level
+    # At 0%: padding = 100% of box size (see 2x the box area)
+    # At 50%: padding = 50% of box size
+    # At 100%: padding = 0% (exactly the box, no extra)
     box_width <- box$xmax - box$xmin
     box_height <- box$ymax - box$ymin
-    padding_x <- box_width * 0.2
-    padding_y <- box_height * 0.2
+    
+    # Linear interpolation: zoom 0% -> 1.0 padding, zoom 100% -> 0.0 padding
+    padding_factor <- 1.0 - (zoom_pct / 100)
+    padding_x <- box_width * padding_factor
+    padding_y <- box_height * padding_factor
     
     x_idx <- which(ppm_x >= (box$xmin - padding_x) & ppm_x <= (box$xmax + padding_x))
     y_idx <- which(ppm_y >= (box$ymin - padding_y) & ppm_y <= (box$ymax + padding_y))
@@ -2088,6 +2136,8 @@ server <- function(input, output, session) {
       return()
     }
     
+    # Use RAW data for display (same as Vizualisation.R)
+    # The contour levels starting at contour_start will filter out noise
     region <- mat[y_idx, x_idx, drop = FALSE]
     x_sub <- ppm_x[x_idx]
     y_sub <- ppm_y[y_idx]
@@ -2098,17 +2148,27 @@ server <- function(input, output, session) {
     
     # ========== FIT FOR VISUALIZATION (MULTIPLET SUPPORT, GAUSSIAN OR VOIGT) ==========
     # Detect peaks and fit each one separately, then combine for display
+    # IMPORTANT: We fit on the BOX region (not the padded view region)
+    # but we generate the model surface over the FULL displayed region
+    # This ensures the model is always visible regardless of zoom level
+    
+    # Extract the box region for fitting (without padding) - USE RAW DATA
+    box_x_idx <- which(ppm_x >= box$xmin & ppm_x <= box$xmax)
+    box_y_idx <- which(ppm_y >= box$ymin & ppm_y <= box$ymax)
+    box_region <- mat[box_y_idx, box_x_idx, drop = FALSE]
+    box_x_sub <- ppm_x[box_x_idx]
+    box_y_sub <- ppm_y[box_y_idx]
     
     fit_result <- tryCatch({
       
-      # Detect local maxima (same as in fit_2d_peak)
-      local_max <- detect_local_maxima(region, threshold = 0.5, min_distance = 3)
+      # Detect local maxima on the BOX region (not the padded view)
+      local_max <- detect_local_maxima(box_region, threshold = 0.5, min_distance = 3)
       n_peaks <- nrow(local_max)
       
       # Fallback if no peaks detected
       if (n_peaks == 0) {
-        max_val <- max(region, na.rm = TRUE)
-        max_pos <- which(region == max_val, arr.ind = TRUE)
+        max_val <- max(box_region, na.rm = TRUE)
+        max_pos <- which(box_region == max_val, arr.ind = TRUE)
         if (nrow(max_pos) > 0) {
           local_max <- data.frame(row = max_pos[1,1], col = max_pos[1,2], value = max_val)
           n_peaks <- 1
@@ -2117,41 +2177,42 @@ server <- function(input, output, session) {
         }
       }
       
-      # Initialize combined fitted matrix (sum of all peaks)
+      # Initialize combined fitted matrix for the DISPLAYED region (with padding)
       combined_fitted <- matrix(0, nrow = length(y_sub), ncol = length(x_sub))
       
       # Store individual peak fits for potential separate display
       peak_fits <- list()
       
-      # Global baseline estimate
-      baseline_global <- quantile(as.vector(region), 0.1, na.rm = TRUE)
+      # Global baseline estimate from box region
+      baseline_global <- quantile(as.vector(box_region), 0.1, na.rm = TRUE)
       
-      # Fit each peak separately
+      # Fit each peak separately (using box coordinates)
       for (p in seq_len(n_peaks)) {
         peak_row <- local_max$row[p]
         peak_col <- local_max$col[p]
-        peak_x <- x_sub[peak_col]
-        peak_y <- y_sub[peak_row]
+        # Convert box indices to ppm coordinates
+        peak_x <- box_x_sub[peak_col]
+        peak_y <- box_y_sub[peak_row]
         peak_amplitude <- local_max$value[p]
         
-        # Define sub-region around this peak
+        # Define sub-region around this peak (in box coordinates)
         if (n_peaks > 1) {
           distances <- sqrt((local_max$col - peak_col)^2 + (local_max$row - peak_row)^2)
           distances[p] <- Inf
           min_dist <- min(distances)
           half_width <- max(2, floor(min_dist / 2))
         } else {
-          half_width <- max(2, floor(min(nrow(region), ncol(region)) / 2))
+          half_width <- max(2, floor(min(nrow(box_region), ncol(box_region)) / 2))
         }
         
         col_start <- max(1, peak_col - half_width)
-        col_end <- min(ncol(region), peak_col + half_width)
+        col_end <- min(ncol(box_region), peak_col + half_width)
         row_start <- max(1, peak_row - half_width)
-        row_end <- min(nrow(region), peak_row + half_width)
+        row_end <- min(nrow(box_region), peak_row + half_width)
         
-        sub_region <- region[row_start:row_end, col_start:col_end, drop = FALSE]
-        sub_x <- x_sub[col_start:col_end]
-        sub_y <- y_sub[row_start:row_end]
+        sub_region <- box_region[row_start:row_end, col_start:col_end, drop = FALSE]
+        sub_x <- box_x_sub[col_start:col_end]
+        sub_y <- box_y_sub[row_start:row_end]
         
         # Create grid for this sub-region
         sub_grid <- expand.grid(x = sub_x, y = sub_y)
@@ -2264,8 +2325,8 @@ server <- function(input, output, session) {
            peak_fits = peak_fits,
            model_used = model_name,
            peak_centers = data.frame(
-             x = x_sub[local_max$col], 
-             y = y_sub[local_max$row]
+             x = box_x_sub[local_max$col], 
+             y = box_y_sub[local_max$row]
            ))
       
     }, error = function(e) {
@@ -2290,31 +2351,120 @@ server <- function(input, output, session) {
     
     # ========== TOPSPIN-STYLE VISUALIZATION ==========
     
-    # Calculate smart contour levels (positive values only, 8 levels)
+    # Get contour parameters from main plot settings (same as base plot)
+    contour_start <- input$contour_start
+    if (is.null(contour_start) || contour_start <= 0) {
+      # Fallback: use reasonable default based on spectrum type
+      contour_start <- max(region, na.rm = TRUE) * 0.1
+    }
+    
+    # Get contour_factor and contour_num based on spectrum type (same as Vizualisation.R)
+    spectrum_type <- input$spectrum_type
+    contour_params <- switch(spectrum_type,
+                             "HSQC" = list(contour_num = 8, contour_factor = 1.3),
+                             "TOCSY" = list(contour_num = 20, contour_factor = 1.3),
+                             "COSY" = list(contour_num = 30, contour_factor = 1.3),
+                             "UFCOSY" = list(contour_num = 20, contour_factor = 1.3),
+                             list(contour_num = 10, contour_factor = 1.3)  # default
+    )
+    
+    # Calculate contour levels as GEOMETRIC PROGRESSION (same as Vizualisation.R)
+    # Each level is contour_factor times the previous one
+    contour_levels <- contour_start * contour_params$contour_factor^(0:(contour_params$contour_num - 1))
+    
+    # Filter levels to only include those within the data range
     z_max <- max(region, na.rm = TRUE)
-    z_min <- min(region, na.rm = TRUE)
-    z_range <- z_max - z_min
+    contour_levels <- contour_levels[contour_levels <= z_max * 1.1]
     
-    # Contour levels at 15%, 25%, 35%, 45%, 55%, 65%, 75%, 85% of range
-    contour_pcts <- c(0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85)
-    contour_levels <- z_min + contour_pcts * z_range
+    # Ensure we have at least a few levels
+    if (length(contour_levels) < 3) {
+      contour_levels <- seq(contour_start, z_max, length.out = 5)
+    }
     
-    # Setup plot - clean white background
-    par(bg = "white", mar = c(4, 4, 3, 1), pty = "s", family = "sans")
+    # ========== GGPLOT2 VISUALIZATION (same as base plot) ==========
     
-    # Create plot with reversed axes (NMR convention)
-    plot(NULL, 
-         xlim = rev(range(x_sub)),
-         ylim = rev(range(y_sub)),
-         xlab = "F2 (ppm)", 
-         ylab = "F1 (ppm)",
-         main = "",
-         axes = TRUE,
-         asp = 1,
-         cex.lab = 1.1,
-         cex.axis = 0.9)
+    # Prepare data for ggplot - same approach as Vizualisation.R
+    # region has rows = F1 (y_sub), cols = F2 (x_sub)
+    # We need to create a long-format data.frame
     
-    # Add title with peak count and model info
+    # Create grid of coordinates
+    grid_coords <- expand.grid(F1_idx = seq_along(y_sub), F2_idx = seq_along(x_sub))
+    plot_df <- data.frame(
+      F2 = x_sub[grid_coords$F2_idx],
+      F1 = y_sub[grid_coords$F1_idx],
+      z = as.vector(region)  # region is [F1, F2], as.vector goes column by column (F2 varies slower)
+    )
+    
+    # Prepare fitted data if available
+    fitted_df <- NULL
+    fitted_contour_levels <- NULL
+    
+    if (fit_result$success && !is.null(fit_result$fitted_matrix)) {
+      fitted_matrix <- fit_result$fitted_matrix
+      fitted_df <- data.frame(
+        F2 = x_sub[grid_coords$F2_idx],
+        F1 = y_sub[grid_coords$F1_idx],
+        z = as.vector(fitted_matrix)
+      )
+      
+      # Calculate contour levels adapted to the FITTED data
+      # Use same geometric progression but starting from a fraction of the fitted max
+      z_max_fitted <- max(fitted_matrix, na.rm = TRUE)
+      z_min_fitted <- min(fitted_matrix[fitted_matrix > 0], na.rm = TRUE)
+      
+      if (is.finite(z_max_fitted) && z_max_fitted > 0) {
+        # Start from ~10% of max fitted value
+        fitted_start <- z_max_fitted * 0.08
+        fitted_contour_levels <- fitted_start * contour_params$contour_factor^(0:(contour_params$contour_num - 1))
+        fitted_contour_levels <- fitted_contour_levels[fitted_contour_levels <= z_max_fitted * 1.05]
+        
+        # Ensure at least 4 levels
+        if (length(fitted_contour_levels) < 4) {
+          fitted_contour_levels <- seq(fitted_start, z_max_fitted, length.out = 6)
+        }
+      }
+    }
+    
+    # Build ggplot with EXPERIMENTAL contours in BLACK
+    p <- ggplot(plot_df, aes(x = F2, y = F1, z = z)) +
+      geom_contour(color = "black", linewidth = 0.5, breaks = contour_levels) +
+      scale_x_reverse() +  # NMR convention
+      scale_y_reverse() +  # NMR convention
+      labs(x = "F2 (ppm)", y = "F1 (ppm)") +
+      theme_minimal() +
+      theme(
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background = element_rect(fill = "white", color = NA),
+        panel.grid.major = element_line(color = "gray90", linewidth = 0.3),
+        panel.grid.minor = element_blank(),
+        axis.title = element_text(size = 11),
+        axis.text = element_text(size = 9),
+        plot.title = element_text(size = 13, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 10, hjust = 0.5)
+      )
+    
+    # Add MODEL contours in RED if fit succeeded
+    if (fit_result$success && !is.null(fitted_df) && !is.null(fitted_contour_levels)) {
+      # Use fitted_contour_levels which are adapted to the model's intensity range
+      p <- p + geom_contour(data = fitted_df, aes(x = F2, y = F1, z = z),
+                            color = "#E31A1C", linewidth = 0.6, breaks = fitted_contour_levels)
+      
+      # Add peak centers
+      if (!is.null(fit_result$peak_centers) && nrow(fit_result$peak_centers) > 0) {
+        p <- p + geom_point(data = fit_result$peak_centers, 
+                            aes(x = x, y = y, z = NULL),
+                            shape = 3, color = "#2e7d32", size = 3, stroke = 1.5)
+      }
+    }
+    
+    # Add stored fitted center
+    if (!is.na(box$center_x) && !is.na(box$center_y)) {
+      center_df <- data.frame(x = box$center_x, y = box$center_y)
+      p <- p + geom_point(data = center_df, aes(x = x, y = y, z = NULL),
+                          shape = 4, color = "#1565c0", size = 3, stroke = 1.5)
+    }
+    
+    # Title with peak info
     n_peaks_text <- if (fit_result$success && fit_result$n_peaks > 1) {
       paste0(box$stain_id, " - ", fit_result$model_used, " (", fit_result$n_peaks, " peaks)")
     } else if (fit_result$success) {
@@ -2322,73 +2472,27 @@ server <- function(input, output, session) {
     } else {
       box$stain_id
     }
-    title(main = n_peaks_text, cex.main = 1.3, font.main = 2, col.main = "gray20")
     
-    # Draw EXPERIMENTAL contours in BLACK (thicker)
-    contour(x_sub, y_sub, t(region), 
-            levels = contour_levels,
-            add = TRUE, 
-            col = "black", 
-            lwd = 2, 
-            drawlabels = FALSE)
-    
-    # Draw MODEL contours in RED (combined fit of all peaks)
-    if (fit_result$success && !is.null(fit_result$fitted_matrix)) {
-      fitted_matrix <- fit_result$fitted_matrix
-      
-      # Apply same reordering as experimental data
-      if (!is.null(x_reorder)) fitted_matrix <- fitted_matrix[, x_reorder, drop = FALSE]
-      if (!is.null(y_reorder)) fitted_matrix <- fitted_matrix[y_reorder, , drop = FALSE]
-      
-      # Draw combined model contours
-      contour(x_sub, y_sub, t(fitted_matrix), 
-              levels = contour_levels,
-              add = TRUE, 
-              col = "#E31A1C",  # Bright red
-              lwd = 1.5, 
-              lty = 1, 
-              drawlabels = FALSE)
-      
-      # Mark each peak center with a cross
-      if (!is.null(fit_result$peak_centers) && nrow(fit_result$peak_centers) > 0) {
-        points(fit_result$peak_centers$x, fit_result$peak_centers$y, 
-               pch = 3, col = "#2e7d32", cex = 1.8, lwd = 2)
-      }
-    }
-    
-    # Add info box in corner
+    # R² info for subtitle
     r2_text <- ifelse(is.na(box$r_squared), "N/A", sprintf("%.3f", box$r_squared))
-    method_text <- box$fit_method
-    
-    # Quality color coding
     r2_col <- if (is.na(box$r_squared)) "gray50" else 
       if (box$r_squared >= 0.90) "#2e7d32" else 
         if (box$r_squared >= 0.80) "#1565c0" else 
           if (box$r_squared >= 0.70) "#f57c00" else "#c62828"
     
-    # Legend with info
-    legend("topright", 
-           legend = c("Experimental", "Model", 
-                      paste0("Method: ", method_text),
-                      paste0("R² = ", r2_text)), 
-           col = c("black", "#E31A1C", NA, NA), 
-           lwd = c(2, 1.5, NA, NA),
-           text.col = c("black", "#E31A1C", "gray30", r2_col),
-           text.font = c(1, 1, 1, 2),
-           bg = "white",
-           box.col = "gray70",
-           cex = 0.85,
-           inset = 0.02)
+    p <- p + 
+      ggtitle(n_peaks_text) +
+      labs(subtitle = paste0("Method: ", box$fit_method, " | R² = ", r2_text))
     
-    # Add fitted center marker
-    if (!is.na(box$center_x) && !is.na(box$center_y)) {
-      points(box$center_x, box$center_y, pch = 3, col = "#2e7d32", cex = 2, lwd = 2.5)
-    }
+    # Add manual legend
+    p <- p + 
+      annotate("segment", x = Inf, xend = Inf, y = Inf, yend = Inf, color = "black", linewidth = 0.5) +
+      annotate("segment", x = Inf, xend = Inf, y = Inf, yend = Inf, color = "#E31A1C", linewidth = 0.4)
     
-    # Add subtle grid
-    grid(col = "gray90", lty = 1, lwd = 0.5)
+    # Print the plot
+    print(p)
     
-    # ========== END TOPSPIN-STYLE ==========
+    # ========== END GGPLOT2 VISUALIZATION ==========
   }, bg = "white")
   
   # Residuals plot
