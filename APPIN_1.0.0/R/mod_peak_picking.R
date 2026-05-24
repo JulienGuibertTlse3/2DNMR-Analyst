@@ -44,6 +44,62 @@ parse_keep_peak_ranges <- function(text) {
   return(ranges_list)
 }
 
+
+## Helper: clip negative box intensities to 0 ----
+#' For each bounding box, sum the raw spectrum intensity inside the box. If
+#' the sum is < 0, set the matching peak's intensity column to 0 in `peaks_df`.
+#' Boxes and peaks are kept (coordinates preserved); only the intensity is
+#' forced to 0. This is consistent with the post-integration behaviour in
+#' `mod_integration.R` and the export behaviour in `mod_export.R`.
+#'
+#' @param peaks_df Data frame with `stain_id` and an intensity column
+#'   (`stain_intensity` for CNN output, `Volume` for local-max output).
+#' @param boxes_df Data frame with `stain_id`, `xmin`, `xmax`, `ymin`, `ymax`.
+#' @param spectrum_matrix Raw 2D NMR matrix (rownames = F1 ppm, colnames = F2 ppm).
+#' @return List with `peaks_df` (clipped) and `n_clipped` (count).
+clip_negative_box_intensities <- function(peaks_df, boxes_df, spectrum_matrix) {
+  if (is.null(peaks_df) || nrow(peaks_df) == 0 ||
+      is.null(boxes_df) || nrow(boxes_df) == 0 ||
+      is.null(spectrum_matrix)) {
+    return(list(peaks_df = peaks_df, n_clipped = 0L))
+  }
+  
+  # Pick the intensity column name based on what's available
+  intensity_col <- if ("stain_intensity" %in% names(peaks_df)) "stain_intensity"
+  else if ("Volume" %in% names(peaks_df)) "Volume"
+  else NA_character_
+  if (is.na(intensity_col)) {
+    return(list(peaks_df = peaks_df, n_clipped = 0L))
+  }
+  
+  ppm_x <- suppressWarnings(as.numeric(colnames(spectrum_matrix)))  # F2
+  ppm_y <- suppressWarnings(as.numeric(rownames(spectrum_matrix)))  # F1
+  if (any(is.na(ppm_x)) || any(is.na(ppm_y))) {
+    return(list(peaks_df = peaks_df, n_clipped = 0L))
+  }
+  
+  # Sum the raw spectrum inside each bounding box
+  box_sums <- vapply(seq_len(nrow(boxes_df)), function(i) {
+    b <- boxes_df[i, ]
+    x_idx <- which(ppm_x >= b$xmin & ppm_x <= b$xmax)
+    y_idx <- which(ppm_y >= b$ymin & ppm_y <= b$ymax)
+    if (length(x_idx) == 0 || length(y_idx) == 0) return(NA_real_)
+    sum(spectrum_matrix[y_idx, x_idx], na.rm = TRUE)
+  }, numeric(1))
+  
+  neg_ids <- boxes_df$stain_id[!is.na(box_sums) & box_sums < 0]
+  if (length(neg_ids) == 0) {
+    return(list(peaks_df = peaks_df, n_clipped = 0L))
+  }
+  
+  # Clip the intensity column to 0 on matching stain_ids
+  rows_to_clip <- which(peaks_df$stain_id %in% neg_ids)
+  peaks_df[[intensity_col]][rows_to_clip] <- 0
+  
+  list(peaks_df = peaks_df, n_clipped = length(neg_ids))
+}
+
+
 ## Module UI ----
 
 mod_peak_picking_ui <- function(id) {
@@ -241,6 +297,29 @@ mod_peak_picking_server <- function(id,
       }
       
       status_msg("🔄 [4/4] Updating plot...")
+      
+      # Clip negative-intensity boxes to 0 (raw spectrum sum < 0) ----
+      # Keep boxes and peaks on the plot; just force their intensity to 0.
+      if (nrow(box_coords_only) > 0) {
+        current_centroids <- rv$centroids_data()
+        clip_res <- clip_negative_box_intensities(
+          peaks_df = current_centroids,
+          boxes_df = box_coords_only,
+          spectrum_matrix = selected_spectrum
+        )
+        if (clip_res$n_clipped > 0) {
+          rv$centroids_data(clip_res$peaks_df)
+          status_msg(paste0(
+            "ℹ️ ", clip_res$n_clipped,
+            " box(es) had negative raw intensity — clipped to 0."
+          ))
+          showNotification(
+            paste0("ℹ️ ", clip_res$n_clipped,
+                   " box(es) with negative intensity clipped to 0 (kept on plot)."),
+            type = "warning", duration = 6
+          )
+        }
+      }
       
       rv$fixed_boxes(box_coords_only)
       rv$modifiable_boxes(rv$fixed_boxes())
@@ -659,6 +738,28 @@ mod_peak_picking_server <- function(id,
           stain_intensity = centroids_filtered$Volume,
           stringsAsFactors = FALSE
         )
+        
+        # Clip negative-intensity boxes to 0 (raw spectrum sum < 0) ----
+        # Boxes and peaks remain on the plot; only their intensity is forced to 0.
+        # Especially relevant for HSQC where some clusters can integrate negative
+        # (phase issues, CH2 in multiplicity-edited HSQC, baseline distortions).
+        clip_res <- clip_negative_box_intensities(
+          peaks_df = peaks_df,
+          boxes_df = box_coords_only,
+          spectrum_matrix = selected_spectrum
+        )
+        peaks_df <- clip_res$peaks_df
+        if (clip_res$n_clipped > 0) {
+          cat(sprintf(
+            "ℹ️ CNN: %d box(es) had negative raw intensity — clipped to 0\n",
+            clip_res$n_clipped
+          ))
+          showNotification(
+            paste0("ℹ️ ", clip_res$n_clipped,
+                   " box(es) with negative intensity clipped to 0 (kept on plot)."),
+            type = "warning", duration = 6
+          )
+        }
         
         rv$centroids_data(peaks_df)
         

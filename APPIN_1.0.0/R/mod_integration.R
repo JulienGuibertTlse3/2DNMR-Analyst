@@ -269,7 +269,7 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
             stringsAsFactors = FALSE
           )
           
-          # ========== FIX: Apply R² threshold with fallback to sum ==========
+          # FIX: Apply R² threshold with fallback to sum
           min_r2_threshold <- input$min_r_squared
           
           # Identify peaks with R² below threshold (that were successfully fitted)
@@ -301,7 +301,7 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
             )
           }
           
-          # ========== FIX: Also mark multiplet_fit with NA R² as sum fallback ==========
+          # FIX: Also mark multiplet_fit with NA R² as sum fallback
           multiplet_no_r2_idx <- which(
             is.na(results$r_squared) & 
               results$method == "multiplet_fit"
@@ -312,7 +312,6 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
               results$method[i] <- "multiplet_sum"
             }
           }
-          # ========== END FIX ==========
           
           # Store for the Fit Quality tab - USE UPDATED METHODS from results
           rv$fit_results_data(
@@ -329,27 +328,33 @@ mod_integration_server <- function(id, status_msg, load_data, rv) {
           )
         }
         
-        # Add Sign column to identify positive/negative peaks
+        # Tag positive/negative BEFORE clipping (kept for traceability/export)
         results$sign <- ifelse(results$intensity >= 0, "positive", "negative")
         
-        # Check for negative intensities and warn user
+        # Clip negative intensities to 0 ----
+        # Boxes and peaks are kept (their coordinates stay in rv$modifiable_boxes()
+        # and in the centroids), but their integrated intensity is forced to 0.
+        # This is consistent with how mod_export.R already handles negatives via
+        # pmax(..., 0, na.rm = TRUE) on Intensity_* columns.
         n_negative <- sum(results$intensity < 0, na.rm = TRUE)
         if (n_negative > 0) {
-          warning_msg <- paste0(
-            "⚠️ Warning: ", n_negative, " box(es) have negative intensity.\n",
-            "This may indicate:\n",
-            "• Phase correction issues in the spectrum\n",
-            "• CH2 peaks in multiplicity-edited HSQC (expected behavior)\n",
-            "• Baseline correction needed"
-          )
-          status_msg(warning_msg)
+          results$intensity <- pmax(results$intensity, 0, na.rm = TRUE)
+          
+          status_msg(paste0(
+            "ℹ️ ", n_negative, " box(es) had negative intensity — clipped to 0. ",
+            "Boxes kept on the plot."
+          ))
           showNotification(
             HTML(paste0(
-              "<b>⚠️ Negative intensities detected</b><br>",
-              n_negative, " boxes have negative values.<br>",
-              "<small>This may indicate phase issues or CH2 in edited HSQC.</small>"
-            )), 
-            type = "warning", 
+              "<b>ℹ️ Negative intensities clipped to 0</b><br>",
+              n_negative, " box(es) had a negative integrated intensity ",
+              "and were set to 0.<br>",
+              "<small>Boxes and peaks are kept on the plot. ",
+              "The <code>sign</code> column in the export still flags ",
+              "them as 'negative' for traceability. ",
+              "May indicate phase issues or CH2 in multiplicity-edited HSQC.</small>"
+            )),
+            type = "warning",
             duration = 10
           )
         }

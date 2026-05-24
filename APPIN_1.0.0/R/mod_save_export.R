@@ -86,7 +86,7 @@ mod_save_export_server <- function(id,
     )
     
     # 3. Export
-    mod_export_server(
+    export_handle <- mod_export_server(
       id = "export",
       status_msg = status_msg,
       rv = rv,
@@ -104,7 +104,9 @@ mod_save_export_server <- function(id,
     
     # Return values from sub-modules
     return(list(
-      reset_triggered = reset_result$reset_triggered
+      reset_triggered     = reset_result$reset_triggered,
+      shift_tolerance_ppm = export_handle$shift_tolerance_ppm,
+      conflict_ids        = export_handle$conflict_ids
     ))
   })
 }
