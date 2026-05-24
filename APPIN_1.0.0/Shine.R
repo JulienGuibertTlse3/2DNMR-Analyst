@@ -626,6 +626,15 @@ server <- function(input, output, session) {
   modifiable_boxes <- reactiveVal(data.frame())
   reference_boxes <- reactiveVal()
   
+  # Tolerance preview — populated by mod_export via save_export$conflict_ids().
+  # Boxes whose stain_id is in this vector are drawn in red on the NMR plot.
+  conflict_ids_rv <- reactiveVal(character(0))
+  
+  # Current shift tolerance (ppm) — populated from mod_export's slider. Used by
+  # refresh_nmr_plot to draw a dashed "search envelope" around each box that
+  # represents the ±tol zone within which it may be re-centered during batch.
+  shift_tol_rv <- reactiveVal(0)
+  
   # --- Pending changes ---
   pending_centroids <- reactiveVal(data.frame(
     F2_ppm = numeric(0), F1_ppm = numeric(0),
@@ -785,6 +794,10 @@ server <- function(input, output, session) {
     }
     
     boxes$Volume <- get_box_intensity(mat, ppm_x, ppm_y, boxes)
+    # Clip negative volumes to 0 (same logic as mod_integration / mod_export):
+    # keep the box on the plot, but don't display a negative Volume in the
+    # data table or propagate it downstream.
+    boxes$Volume <- pmax(boxes$Volume, 0, na.rm = TRUE)
     boxes$Volume[is.na(boxes$Volume)] <- 0
     
     # Update cache
@@ -807,7 +820,9 @@ server <- function(input, output, session) {
     }
     plot_base <- contour_plot_base()
     
-    # Add bounding boxes
+    # Add bounding boxes (always red — conflict highlighting and tolerance
+    # envelope are now drawn on top via plotlyProxy in an overlay observer
+    # below, so they appear/disappear without rebuilding the whole plot).
     boxes <- tryCatch(bounding_boxes_data(), error = function(e) NULL)
     if (!is.null(boxes) && nrow(boxes) > 0) {
       bbox_path_df <- tryCatch(make_bbox_outline(boxes), error = function(e) NULL)
@@ -1072,6 +1087,190 @@ server <- function(input, output, session) {
     parent_session = session,
     parent_input = input
   )
+  
+  # Internal state: how many overlay traces are currently on the plot, and
+  # whether we've injected annotations (arrows pointing at conflicting boxes).
+  # Stored in a local environment (NOT a reactiveVal) because reading +
+  # writing inside the same observe() would create a reactive loop.
+  overlay_state <- new.env(parent = emptyenv())
+  overlay_state$n_traces <- 0L
+  overlay_state$has_annotations <- FALSE
+  
+  # Coordinate sign for plotly overlay. Inside ggplot the box coords are
+  # stored as NEGATIVE values (NMR convention: -ppm for axis values, ticks
+  # are re-labelled with sprintf("%.0f", -x_tickvals)). But when ggplotly()
+  # converts to plotly, the displayed axis values match the (positive) ppm,
+  # so plotlyProxy traces must be sent in the POSITIVE-ppm system — hence
+  # we flip the sign of make_bbox_outline()'s output.
+  OVERLAY_SIGN <- -1
+  
+  # Helper: turn a make_bbox_outline() data.frame (x, y, group) into a single
+  # plotly trace where groups are separated by NA gaps. This way one trace
+  # covers many rectangles, which is dramatically faster than one-trace-per-box
+  # both for addTraces and for plotly's internal rendering.
+  outline_to_trace <- function(path_df, color, width, dash = "solid", name = "overlay") {
+    if (is.null(path_df) || nrow(path_df) == 0) return(NULL)
+    groups <- split(path_df, path_df$group)
+    xs <- unlist(lapply(groups, function(g) c(g$x * OVERLAY_SIGN, NA)), use.names = FALSE)
+    ys <- unlist(lapply(groups, function(g) c(g$y * OVERLAY_SIGN, NA)), use.names = FALSE)
+    list(
+      x = xs, y = ys,
+      type = "scatter", mode = "lines",
+      line = list(color = color, width = width, dash = dash),
+      name = name,
+      hoverinfo = "skip",
+      showlegend = FALSE,
+      connectgaps = FALSE
+    )
+  }
+  
+  # Bridge: keep conflict_ids_rv AND shift_tol_rv in sync with the export
+  # module's reactives, then update the tolerance/conflict overlay on the
+  # main plot via plotlyProxy — NO full rebuild, no flicker.
+  observe({
+    new_ids <- tryCatch(save_export$conflict_ids() %||% character(0),
+                        error = function(e) character(0))
+    new_tol <- tryCatch(save_export$shift_tolerance_ppm() %||% 0,
+                        error = function(e) 0)
+    conflict_ids_rv(new_ids)
+    shift_tol_rv(new_tol)
+    
+    proxy <- plotly::plotlyProxy("interactivePlot", session)
+    
+    # 1) Remove any previous overlay traces. Negative indices = "from the end"
+    #    so we don't need to know how many other traces exist on the plot.
+    n_prev <- overlay_state$n_traces
+    if (!is.null(proxy) && n_prev > 0) {
+      plotly::plotlyProxyInvoke(
+        proxy, "deleteTraces",
+        as.list(seq.int(-1, by = -1, length.out = n_prev))
+      )
+      overlay_state$n_traces <- 0L
+    }
+    # 1b) Also clear any previous arrow annotations (added below for conflicts).
+    if (!is.null(proxy) && isTRUE(overlay_state$has_annotations)) {
+      plotly::plotlyProxyInvoke(proxy, "relayout", list(annotations = list()))
+      overlay_state$has_annotations <- FALSE
+    }
+    
+    # 2) Early exit: nothing to overlay when tol=0 AND no conflicts. This is
+    #    the default state — the original ggplot-drawn red boxes are enough
+    #    and we don't want to paint anything on top. *** This is what makes
+    #    the overlay disappear when the user moves the slider back to 0. ***
+    if (new_tol <= 0 && length(new_ids) == 0) {
+      return()
+    }
+    
+    boxes <- tryCatch(modifiable_boxes(), error = function(e) NULL)
+    if (is.null(boxes) || nrow(boxes) == 0 ||
+        !all(c("xmin","xmax","ymin","ymax","stain_id") %in% names(boxes))) {
+      return()
+    }
+    
+    # Split boxes into OK and conflicting
+    is_conf  <- boxes$stain_id %in% new_ids
+    boxes_ok   <- boxes[!is_conf, , drop = FALSE]
+    boxes_conf <- boxes[ is_conf, , drop = FALSE]
+    
+    traces_to_add <- list()
+    
+    # 3) Solid box outlines — only when something needs highlighting:
+    #    - we have at least one conflict → repaint everything to show OK/conflict colors
+    #    Otherwise (tol>0 but no conflicts), we leave the original red boxes
+    #    untouched and just draw the dashed envelopes around them.
+    if (length(new_ids) > 0) {
+      if (nrow(boxes_ok) > 0) {
+        path_ok <- tryCatch(make_bbox_outline(boxes_ok), error = function(e) NULL)
+        tr <- outline_to_trace(path_ok, color = "#2e7d32", width = 1.5,
+                               name = "boxes_ok_overlay")
+        if (!is.null(tr)) traces_to_add[[length(traces_to_add) + 1]] <- tr
+      }
+      if (nrow(boxes_conf) > 0) {
+        path_conf <- tryCatch(make_bbox_outline(boxes_conf), error = function(e) NULL)
+        tr <- outline_to_trace(path_conf, color = "#c62828", width = 2.2,
+                               name = "boxes_conflict_overlay")
+        if (!is.null(tr)) traces_to_add[[length(traces_to_add) + 1]] <- tr
+      }
+    }
+    
+    # 4) Tolerance envelopes (dashed) — F2 expansion only.
+    if (new_tol > 0) {
+      expanded <- boxes
+      expanded$xmin <- boxes$xmin - new_tol
+      expanded$xmax <- boxes$xmax + new_tol
+      # ymin/ymax untouched: tolerance applies on F2 (1H) only
+      
+      exp_ok   <- expanded[!is_conf, , drop = FALSE]
+      exp_conf <- expanded[ is_conf, , drop = FALSE]
+      
+      if (nrow(exp_ok) > 0) {
+        path_eok <- tryCatch(make_bbox_outline(exp_ok), error = function(e) NULL)
+        env_color <- if (length(new_ids) > 0) "rgba(46,125,50,0.55)" else "rgba(230,81,0,0.6)"
+        tr <- outline_to_trace(path_eok, color = env_color, width = 1, dash = "dash",
+                               name = "env_ok_overlay")
+        if (!is.null(tr)) traces_to_add[[length(traces_to_add) + 1]] <- tr
+      }
+      if (nrow(exp_conf) > 0) {
+        path_econf <- tryCatch(make_bbox_outline(exp_conf), error = function(e) NULL)
+        tr <- outline_to_trace(path_econf, color = "rgba(198,40,40,0.75)",
+                               width = 1.2, dash = "dash",
+                               name = "env_conflict_overlay")
+        if (!is.null(tr)) traces_to_add[[length(traces_to_add) + 1]] <- tr
+      }
+    }
+    
+    # 5) Apply the new overlay
+    if (length(traces_to_add) > 0 && !is.null(proxy)) {
+      plotly::plotlyProxyInvoke(proxy, "addTraces", traces_to_add)
+      overlay_state$n_traces <- length(traces_to_add)
+    }
+    
+    # 6) Arrow annotations on conflicting boxes — one arrow per box, pointing
+    #    at its center from a short offset. Pure plotly layout annotations
+    #    (added via relayout), so they don't take up trace slots and can be
+    #    cleared with a single relayout({annotations: []}).
+    #
+    #    Coordinate system: same as the traces — coords are flipped via
+    #    OVERLAY_SIGN to match the ggplotly axis convention.
+    #
+    #    The arrow is placed up and to the left of the box (in display-ppm
+    #    terms: higher-ppm side). Since the axis is reversed, "up-left" of
+    #    the box maps to (xmax + small_offset, ymax + small_offset) BEFORE
+    #    the OVERLAY_SIGN flip — keeping the label away from typical peak
+    #    crowding which sits at lower ppm.
+    if (length(new_ids) > 0 && nrow(boxes_conf) > 0 && !is.null(proxy)) {
+      # Offsets in ppm — small enough not to leave the box's neighborhood
+      # but large enough that the arrow tip + label don't sit on the box.
+      off_x <- 0.05    # F2 offset (~0.05 ppm in 1H)
+      off_y <- 1.2     # F1 offset (~1.2 ppm in 13C, since F1 spans ~150 ppm)
+      
+      annots <- lapply(seq_len(nrow(boxes_conf)), function(i) {
+        r <- boxes_conf[i, ]
+        # Box center (in storage coords, then flipped to display coords)
+        cx <- ((r$xmin + r$xmax) / 2) * OVERLAY_SIGN
+        cy <- ((r$ymin + r$ymax) / 2) * OVERLAY_SIGN
+        # Label anchor — offset from center, on the high-ppm side
+        # (which in display coords means cx + off_x, cy + off_y)
+        list(
+          x = cx, y = cy,                # arrow tip at box center
+          ax = cx + off_x, ay = cy + off_y,  # label/tail position
+          xref = "x", yref = "y",
+          axref = "x", ayref = "y",
+          text = paste0("<b>", r$stain_id, "</b>"),
+          showarrow = TRUE,
+          arrowhead = 3, arrowsize = 1.2, arrowwidth = 1.5,
+          arrowcolor = "#c62828",
+          font = list(color = "#c62828", size = 11, family = "Arial"),
+          bgcolor = "rgba(255,255,255,0.85)",
+          bordercolor = "#c62828",
+          borderwidth = 1, borderpad = 2,
+          opacity = 0.95
+        )
+      })
+      plotly::plotlyProxyInvoke(proxy, "relayout", list(annotations = annots))
+      overlay_state$has_annotations <- TRUE
+    }
+  })
   
   
   #### 2.6.4 Module: PEAK PICKING ----
@@ -2123,7 +2322,7 @@ server <- function(input, output, session) {
     padding_x_box <- box_width * padding_factor
     padding_y_box <- box_height * padding_factor
     
-    # ========== FIX: Guarantee a MINIMUM absolute padding for small boxes ==========
+    # FIX: Guarantee a MINIMUM absolute padding for small boxes 
     # For very small boxes (e.g. narrow UFCOSY peaks), padding proportional to box size
     # can be smaller than a single ppm step -> no extra context shown when zooming out.
     # We compute a minimum padding based on the spectrum's actual ppm resolution and
@@ -2143,7 +2342,7 @@ server <- function(input, output, session) {
     # Scale minimum by padding_factor so zoom=100% still gives 0 extra padding
     padding_x <- max(padding_x_box, min_pad_x * padding_factor)
     padding_y <- max(padding_y_box, min_pad_y * padding_factor)
-    # ========== END FIX ==========
+    
     
     x_idx <- which(ppm_x >= (box$xmin - padding_x) & ppm_x <= (box$xmax + padding_x))
     y_idx <- which(ppm_y >= (box$ymin - padding_y) & ppm_y <= (box$ymax + padding_y))
@@ -2168,7 +2367,7 @@ server <- function(input, output, session) {
     use_voigt <- grepl("voigt", box$fit_method, ignore.case = TRUE)
     model_name <- if (use_voigt) "Voigt" else "Gaussian"
     
-    # ========== FIT FOR VISUALIZATION (MULTIPLET SUPPORT, GAUSSIAN OR VOIGT) ==========
+    # FIT FOR VISUALIZATION (MULTIPLET SUPPORT, GAUSSIAN OR VOIGT)
     # Detect peaks and fit each one separately, then combine for display
     # IMPORTANT: We fit on the BOX region (not the padded view region)
     # but we generate the model surface over the FULL displayed region
@@ -2343,7 +2542,7 @@ server <- function(input, output, session) {
       # Add baseline (only once, not per peak)
       combined_fitted <- combined_fitted + baseline_global
       
-      # ========== FIX: Use FITTED centers (x0, y0) from each peak's nlsLM result ==========
+      # FIX: Use FITTED centers (x0, y0) from each peak's nlsLM result
       # Previously used local_max (raw maxima detected BEFORE fitting), which made the
       # displayed centers incoherent with the red model contours. Now we extract the
       # actual fitted centers from peak_fits[[p]]$params["x0"/"y0"] so that the green
@@ -2365,7 +2564,6 @@ server <- function(input, output, session) {
         fitted_centers_x <- box_x_sub[local_max$col]
         fitted_centers_y <- box_y_sub[local_max$row]
       }
-      # ========== END FIX ==========
       
       list(success = TRUE, 
            fitted_matrix = combined_fitted, 
@@ -2380,7 +2578,6 @@ server <- function(input, output, session) {
     }, error = function(e) {
       list(success = FALSE, error = e$message)
     })
-    # ========== END FIT ==========
     
     # Ensure ascending order for contour()
     x_reorder <- NULL
@@ -2390,26 +2587,24 @@ server <- function(input, output, session) {
       x_reorder <- order(x_sub)
       x_sub <- x_sub[x_reorder]
       region <- region[, x_reorder, drop = FALSE]
-      # ========== FIX: Also reorder the fitted matrix so red contours stay aligned ==========
+      # FIX: Also reorder the fitted matrix so red contours stay aligned
       # Without this, combined_fitted was built using the ORIGINAL (unsorted) x_sub indices,
       # then plotted against the sorted x_sub -> the model appeared mirrored on the F2 axis.
       if (fit_result$success && !is.null(fit_result$fitted_matrix)) {
         fit_result$fitted_matrix <- fit_result$fitted_matrix[, x_reorder, drop = FALSE]
       }
-      # ========== END FIX ==========
     }
     if (is.unsorted(y_sub)) {
       y_reorder <- order(y_sub)
       y_sub <- y_sub[y_reorder]
       region <- region[y_reorder, , drop = FALSE]
-      # ========== FIX: Same fix on F1 axis ==========
+      # FIX: Same fix on F1 axis 
       if (fit_result$success && !is.null(fit_result$fitted_matrix)) {
         fit_result$fitted_matrix <- fit_result$fitted_matrix[y_reorder, , drop = FALSE]
       }
-      # ========== END FIX ==========
     }
     
-    # ========== TOPSPIN-STYLE VISUALIZATION ==========
+    # TOPSPIN-STYLE VISUALIZATION
     
     # Get contour parameters from main plot settings (same as base plot)
     contour_start <- input$contour_start
@@ -2432,7 +2627,7 @@ server <- function(input, output, session) {
     # Each level is contour_factor times the previous one
     contour_levels <- contour_start * contour_params$contour_factor^(0:(contour_params$contour_num - 1))
     
-    # ========== FIX: Defensive contour level computation to avoid warnings ==========
+    #FIX: Defensive contour level computation to avoid warnings 
     # Previously: warnings appeared on zoom changes because:
     #   - z_max could be -Inf if region had no valid values
     #   - contour_levels could be empty if z_max < contour_start (small peak in zoomed view)
@@ -2453,9 +2648,8 @@ server <- function(input, output, session) {
       # No data above contour_start in this region -> no black contours possible
       contour_levels <- numeric(0)
     }
-    # ========== END FIX ==========
     
-    # ========== GGPLOT2 VISUALIZATION (same as base plot) ==========
+    # GGPLOT2 VISUALIZATION (same as base plot)
     
     # Prepare data for ggplot - same approach as Vizualisation.R
     # region has rows = F1 (y_sub), cols = F2 (x_sub)
@@ -2481,13 +2675,14 @@ server <- function(input, output, session) {
         z = as.vector(fitted_matrix)
       )
       
-      # ========== FIX: Defensive computation of fitted contour levels ==========
+      # FIX: Defensive computation of fitted contour levels
       # Calculate contour levels adapted to the FITTED data
       valid_fitted <- fitted_matrix[is.finite(fitted_matrix)]
       z_max_fitted <- if (length(valid_fitted) > 0) max(valid_fitted) else NA_real_
       
       if (is.finite(z_max_fitted) && z_max_fitted > 0) {
-        # ========== FIX: Align red contours minimum with the experimental noise floor ==========
+        
+        # FIX: Align red contours minimum with the experimental noise floor
         # Previously: fitted_start = z_max_fitted * 0.08 -> red contours could descend
         # WAY below contour_start (the spectrum's noise floor used for black contours).
         # Result: a Gaussian with even slightly too-large sigma would show huge red rings
@@ -2501,7 +2696,6 @@ server <- function(input, output, session) {
         # automatically clipped (exactly what happens visually with the experimental
         # noise floor anyway).
         fitted_start <- max(contour_start, z_max_fitted * 0.05)
-        # ========== END FIX ==========
         
         fitted_contour_levels <- fitted_start * contour_params$contour_factor^(0:(contour_params$contour_num - 1))
         
@@ -2522,7 +2716,6 @@ server <- function(input, output, session) {
         fitted_df <- NULL
         fitted_contour_levels <- NULL
       }
-      # ========== END FIX ==========
     }
     
     # Build ggplot with EXPERIMENTAL contours in BLACK
@@ -2542,14 +2735,13 @@ server <- function(input, output, session) {
         plot.subtitle = element_text(size = 10, hjust = 0.5)
       )
     
-    # ========== FIX: Add EXPERIMENTAL contours in BLACK only if levels are valid ==========
+    # FIX: Add EXPERIMENTAL contours in BLACK only if levels are valid
     # Avoids "Zero contours generated" warning when zoom region has no data above contour_start.
     # Use aes(color = ...) with a literal label so ggplot generates a legend automatically.
     # Slightly thicker than before (0.5 -> 0.65) for better visibility against red contours.
     if (length(contour_levels) >= 2 && all(is.finite(contour_levels))) {
       p <- p + geom_contour(aes(color = "Experimental"), linewidth = 0.65, breaks = contour_levels)
     }
-    # ========== END FIX ==========
     
     # Add MODEL contours in RED if fit succeeded
     if (fit_result$success && !is.null(fitted_df) && 
@@ -2560,7 +2752,7 @@ server <- function(input, output, session) {
       p <- p + geom_contour(data = fitted_df, aes(x = F2, y = F1, z = z, color = "Model fit"),
                             linewidth = 0.6, breaks = fitted_contour_levels)
       
-      # ========== FIX: Display ONLY fitted centers (coherent with red contours) ==========
+      # FIX: Display ONLY fitted centers (coherent with red contours)
       # peak_centers now contains the actual fitted x0/y0 from each peak's nlsLM result,
       # so green crosses fall exactly on the centers of the red model lobes.
       # We removed the blue cross (box$center_x/center_y) because it came from
@@ -2571,10 +2763,9 @@ server <- function(input, output, session) {
                             aes(x = x, y = y, z = NULL, color = "Fitted center"),
                             shape = 3, size = 4, stroke = 1.8)
       }
-      # ========== END FIX ==========
     }
     
-    # ========== FIX: Color legend mapping labels -> colors ==========
+    # FIX: Color legend mapping labels -> colors
     # Maps the literal labels used in aes(color=...) to actual colors. The legend
     # appears automatically in the plot. We build the legend dynamically based on
     # which layers are actually drawn -> no override.aes mismatch when fit failed.
@@ -2627,7 +2818,6 @@ server <- function(input, output, session) {
       legend.text = element_text(size = 10),
       legend.key.width = unit(1.5, "lines")
     )
-    # ========== END FIX ==========
     
     # Title with peak info
     n_peaks_text <- if (fit_result$success && fit_result$n_peaks > 1) {
@@ -2657,7 +2847,6 @@ server <- function(input, output, session) {
     # niveaux de contour. Le rendu reste correct (plot vide ou partiel selon les cas).
     suppressWarnings(print(p))
     
-    # ========== END GGPLOT2 VISUALIZATION ==========
   }, bg = "white")
   
   # Residuals plot
