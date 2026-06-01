@@ -29,7 +29,7 @@ mod_export_ui <- function(id) {
           sliderInput(
             ns("shift_tolerance_ppm"),
             "Shift tolerance F2 (¹H, ppm):",
-            min = 0, max = 0.04, value = 0, step = 0.002
+            min = 0, max = 0.03, value = 0, step = 0.0005
           ),
           tags$small(
             "Each box is recentered on the local maximum within ±tolerance along F2 only.",

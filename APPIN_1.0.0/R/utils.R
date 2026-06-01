@@ -172,6 +172,113 @@ clean_centroids_df <- function(df) {
 #'   - xmin, xmax, ymin, ymax: Box boundaries
 #'   - Intensity_<spectrum_name>: One column per spectrum with intensities
 #' @note Requires get_box_intensity() and optionally calculate_fitted_volumes()
+
+#' Compute the F2-only recentering shift for a box (Option B: bounded shift)
+#'
+#' The search window IS widened by `tol` on F2 (so a peak that has drifted
+#' slightly out of the reference box can still be recovered). Within that
+#' widened window the INTENSITY-WEIGHTED F2 centroid is computed, matching the
+#' peak-picking convention (weighted.mean(F2_ppm, Volume)) used elsewhere in
+#' APPIN, rather than a raw pixel maximum (more stable, sub-pixel, less
+#' sensitive to single hot pixels). The resulting displacement of the box
+#' centre is then CLAMPED to +/- tol on F2. This keeps chemical-shift
+#' compensation while preventing a box from snapping onto a far-away dominant
+#' feature such as the diagonal / water ridge in homonuclear experiments
+#' (COSY / TOCSY / UF-COSY), since such a feature lies further than `tol` away.
+#' F1 (y) is never shifted, consistent with the F2-only UI.
+#'
+#' Both the search window and the final box centre are additionally confined to
+#' the exclusive F2 territory [terr_lo, terr_hi] (midpoints to F1-overlapping
+#' neighbours). This stops neighbouring boxes from competing for the same peak
+#' or overlapping after recentering, so `tol` can be larger without conflicts.
+#'
+#' @param terr_lo,terr_hi Exclusive F2 territory bounds (ppm). Default +/-Inf
+#'   (no neighbour constraint).
+#' @return Numeric F2 shift (ppm) to add to xmin/xmax. 0 if no valid signal.
+recenter_box_f2_shift <- function(mat, ppm_x, ppm_y,
+                                  xmin, xmax, ymin, ymax,
+                                  tol,
+                                  terr_lo = -Inf, terr_hi = Inf) {
+  if (tol <= 0) return(0)
+  
+  # Search window widened by tol on F2, but never beyond the box's territory
+  lo <- max(xmin - tol, terr_lo)
+  hi <- min(xmax + tol, terr_hi)
+  if (lo >= hi) return(0)
+  
+  x_idx <- which(ppm_x >= lo & ppm_x <= hi)
+  y_idx <- which(ppm_y >= ymin & ppm_y <= ymax)
+  if (length(x_idx) == 0 || length(y_idx) == 0) return(0)
+  
+  submat <- mat[y_idx, x_idx, drop = FALSE]
+  
+  # Keep only positive signal as weights (negative HSQC lobes -> 0)
+  w <- pmax(submat, 0)
+  w[!is.finite(w)] <- 0
+  
+  # Collapse F1 rows: total positive intensity per F2 column
+  col_weights <- colSums(w)
+  if (sum(col_weights) <= 0) return(0)
+  
+  # Intensity-weighted F2 centroid (same convention as the peak picking)
+  f2_centroid <- sum(ppm_x[x_idx] * col_weights) / sum(col_weights)
+  
+  box_center_f2 <- (xmin + xmax) / 2
+  shift_f2 <- f2_centroid - box_center_f2
+  
+  # CLAMP the displacement to +/- tol on F2
+  if (abs(shift_f2) > tol) shift_f2 <- sign(shift_f2) * tol
+  
+  # CONFINE the shifted box centre to its exclusive territory
+  new_center <- box_center_f2 + shift_f2
+  if (new_center < terr_lo) shift_f2 <- terr_lo - box_center_f2
+  if (new_center > terr_hi) shift_f2 <- terr_hi - box_center_f2
+  
+  shift_f2
+}
+
+#' Compute exclusive F2 territory bounds for each box
+#'
+#' Two boxes compete for the same peak only if they also overlap in F1 (same
+#' "row" of the spectrum). For each box, the F2 territory is bounded by the
+#' midpoint to the nearest F1-overlapping neighbour on each side. Recentering
+#' (both the search window and the final shift) is then confined to this
+#' territory, so neighbouring integration boxes can never drift onto the same
+#' peak or overlap after recentering — which lets `tol` be larger without
+#' creating conflicts. Especially important along the TOCSY/COSY diagonal where
+#' boxes are densely packed.
+#'
+#' @return data.frame with columns terr_lo, terr_hi (F2 ppm bounds) per row of boxes.
+compute_f2_territories <- function(boxes) {
+  n <- nrow(boxes)
+  terr_lo <- rep(-Inf, n)
+  terr_hi <- rep(Inf, n)
+  if (n < 2) return(data.frame(terr_lo = terr_lo, terr_hi = terr_hi))
+  
+  cx <- (boxes$xmin + boxes$xmax) / 2  # F2 centres
+  
+  for (i in seq_len(n)) {
+    # F1-overlapping neighbours (share a row); exclude self
+    f1_overlap <- boxes$ymin < boxes$ymax[i] & boxes$ymax > boxes$ymin[i]
+    f1_overlap[i] <- FALSE
+    if (!any(f1_overlap)) next
+    
+    # Nearest neighbour centre on the low-F2 side and high-F2 side
+    lo_side <- which(f1_overlap & cx < cx[i])
+    hi_side <- which(f1_overlap & cx > cx[i])
+    
+    if (length(lo_side) > 0) {
+      nearest <- lo_side[which.max(cx[lo_side])]
+      terr_lo[i] <- (cx[i] + cx[nearest]) / 2  # midpoint
+    }
+    if (length(hi_side) > 0) {
+      nearest <- hi_side[which.min(cx[hi_side])]
+      terr_hi[i] <- (cx[i] + cx[nearest]) / 2  # midpoint
+    }
+  }
+  data.frame(terr_lo = terr_lo, terr_hi = terr_hi)
+}
+
 calculate_batch_box_intensities <- function(reference_boxes, 
                                             spectra_list, 
                                             apply_shift = FALSE, 
@@ -267,6 +374,11 @@ calculate_batch_box_intensities <- function(reference_boxes,
     stringsAsFactors = FALSE
   )
   
+  # ========== EXCLUSIVE F2 TERRITORIES ==========
+  # Computed once on the reference boxes; confines recentering so neighbouring
+  # boxes (overlapping in F1) cannot compete for the same peak or overlap.
+  territories <- compute_f2_territories(ref_boxes)
+  
   # ========== CALCULATE INTENSITIES PER SPECTRUM ==========
   for (spectrum_name in names(spectra_list)) {
     spectrum_data <- spectra_list[[spectrum_name]]
@@ -318,172 +430,81 @@ calculate_batch_box_intensities <- function(reference_boxes,
         ymin_base <- ref_boxes$ymin[i] + shift_f1
         ymax_base <- ref_boxes$ymax[i] + shift_f1
         
-        # Dynamic recentering: find local maximum in expanded window
-        if (shift_tolerance_ppm > 0) {
-          # Expand search window by tolerance
-          xmin_search <- xmin_base - shift_tolerance_ppm
-          xmax_search <- xmax_base + shift_tolerance_ppm
-          ymin_search <- ymin_base - shift_tolerance_ppm
-          ymax_search <- ymax_base + shift_tolerance_ppm
-          
-          x_idx_search <- which(ppm_x >= xmin_search & ppm_x <= xmax_search)
-          y_idx_search <- which(ppm_y >= ymin_search & ppm_y <= ymax_search)
-          
-          if (length(x_idx_search) > 0 && length(y_idx_search) > 0) {
-            # Extract submatrix and find local maximum
-            submat <- mat[y_idx_search, x_idx_search, drop = FALSE]
-            max_val <- max(submat, na.rm = TRUE)
-            
-            if (is.finite(max_val) && max_val > 0) {
-              max_pos <- which(submat == max_val, arr.ind = TRUE)[1, , drop = FALSE]
-              
-              # Get ppm coordinates of maximum
-              max_f2_local <- ppm_x[x_idx_search[max_pos[1, 2]]]
-              max_f1_local <- ppm_y[y_idx_search[max_pos[1, 1]]]
-              
-              # Calculate local shift (difference between found max and box center)
-              box_center_f2 <- (xmin_base + xmax_base) / 2
-              box_center_f1 <- (ymin_base + ymax_base) / 2
-              local_shift_f2 <- max_f2_local - box_center_f2
-              local_shift_f1 <- max_f1_local - box_center_f1
-              
-              # Calculate candidate shifted box coordinates
-              xmin_shifted <- xmin_base + local_shift_f2
-              xmax_shifted <- xmax_base + local_shift_f2
-              ymin_shifted <- ymin_base + local_shift_f1
-              ymax_shifted <- ymax_base + local_shift_f1
-              
-              # Compare intensities: only apply shift if new position is better
-              x_idx_orig <- which(ppm_x >= xmin_base & ppm_x <= xmax_base)
-              y_idx_orig <- which(ppm_y >= ymin_base & ppm_y <= ymax_base)
-              x_idx_new <- which(ppm_x >= xmin_shifted & ppm_x <= xmax_shifted)
-              y_idx_new <- which(ppm_y >= ymin_shifted & ppm_y <= ymax_shifted)
-              
-              intensity_orig <- if (length(x_idx_orig) > 0 && length(y_idx_orig) > 0) {
-                sum(mat[y_idx_orig, x_idx_orig, drop = FALSE], na.rm = TRUE)
-              } else { 0 }
-              
-              intensity_new <- if (length(x_idx_new) > 0 && length(y_idx_new) > 0) {
-                sum(mat[y_idx_new, x_idx_new, drop = FALSE], na.rm = TRUE)
-              } else { 0 }
-              
-              # Only recenter if shifted position captures more intensity
-              if (intensity_new > intensity_orig) {
-                xmin_base <- xmin_shifted
-                xmax_base <- xmax_shifted
-                ymin_base <- ymin_shifted
-                ymax_base <- ymax_shifted
-              }
-            }
-          }
+        # Sum over a box (helper; NA if box falls outside the grid)
+        box_sum <- function(x0, x1) {
+          xi <- which(ppm_x >= x0 & ppm_x <= x1)
+          yi <- which(ppm_y >= ymin_base & ppm_y <= ymax_base)
+          if (length(xi) == 0 || length(yi) == 0) return(NA_real_)
+          sum(mat[yi, xi, drop = FALSE], na.rm = TRUE)
         }
         
-        # Final integration with (possibly recentered) box
-        x_idx <- which(ppm_x >= xmin_base & ppm_x <= xmax_base)
-        y_idx <- which(ppm_y >= ymin_base & ppm_y <= ymax_base)
+        intensities[i] <- box_sum(xmin_base, xmax_base)
         
-        if (length(x_idx) == 0 || length(y_idx) == 0) {
-          intensities[i] <- NA_real_
-        } else {
-          intensities[i] <- sum(mat[y_idx, x_idx, drop = FALSE], na.rm = TRUE)
+        # Dynamic recentering: F2-only shift (clamped to +/- tol, confined to
+        # the box territory). Strict guard: keep the recentering only if it does
+        # not reduce the integrated volume vs the original position.
+        if (shift_tolerance_ppm > 0) {
+          local_shift_f2 <- recenter_box_f2_shift(
+            mat, ppm_x, ppm_y,
+            xmin_base, xmax_base, ymin_base, ymax_base,
+            tol = shift_tolerance_ppm,
+            terr_lo = territories$terr_lo[i] + shift_f2,
+            terr_hi = territories$terr_hi[i] + shift_f2
+          )
+          if (local_shift_f2 != 0) {
+            v_shft <- box_sum(xmin_base + local_shift_f2, xmax_base + local_shift_f2)
+            v_orig <- intensities[i]
+            # Accept recentering only if it does not degrade the volume
+            if (is.finite(v_shft) && (!is.finite(v_orig) || v_shft >= v_orig)) {
+              intensities[i] <- v_shft
+            }
+          }
         }
       }
       
     } else {
       # Fitting method - also apply dynamic recentering if tolerance > 0
+      base_cols <- c("xmin", "xmax", "ymin", "ymax", "stain_id")
+      
+      # Original boxes (with global shift only)
+      orig_boxes <- ref_boxes[, base_cols]
+      orig_boxes$xmin <- orig_boxes$xmin + shift_f2
+      orig_boxes$xmax <- orig_boxes$xmax + shift_f2
+      orig_boxes$ymin <- orig_boxes$ymin + shift_f1
+      orig_boxes$ymax <- orig_boxes$ymax + shift_f1
+      
       if (shift_tolerance_ppm > 0) {
-        # Create shifted boxes for this spectrum
-        shifted_boxes <- ref_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")]
-        
+        # Candidate recentered boxes (F2-only, clamped + territory-confined)
+        shifted_boxes <- orig_boxes
         for (i in seq_len(nrow(shifted_boxes))) {
-          xmin_base <- shifted_boxes$xmin[i] + shift_f2
-          xmax_base <- shifted_boxes$xmax[i] + shift_f2
-          ymin_base <- shifted_boxes$ymin[i] + shift_f1
-          ymax_base <- shifted_boxes$ymax[i] + shift_f1
-          
-          # Expand search window
-          xmin_search <- xmin_base - shift_tolerance_ppm
-          xmax_search <- xmax_base + shift_tolerance_ppm
-          ymin_search <- ymin_base - shift_tolerance_ppm
-          ymax_search <- ymax_base + shift_tolerance_ppm
-          
-          x_idx_search <- which(ppm_x >= xmin_search & ppm_x <= xmax_search)
-          y_idx_search <- which(ppm_y >= ymin_search & ppm_y <= ymax_search)
-          
-          if (length(x_idx_search) > 0 && length(y_idx_search) > 0) {
-            submat <- mat[y_idx_search, x_idx_search, drop = FALSE]
-            max_val <- max(submat, na.rm = TRUE)
-            
-            if (is.finite(max_val) && max_val > 0) {
-              max_pos <- which(submat == max_val, arr.ind = TRUE)[1, , drop = FALSE]
-              max_f2_local <- ppm_x[x_idx_search[max_pos[1, 2]]]
-              max_f1_local <- ppm_y[y_idx_search[max_pos[1, 1]]]
-              
-              box_center_f2 <- (xmin_base + xmax_base) / 2
-              box_center_f1 <- (ymin_base + ymax_base) / 2
-              local_shift_f2 <- max_f2_local - box_center_f2
-              local_shift_f1 <- max_f1_local - box_center_f1
-              
-              # Calculate candidate shifted box coordinates
-              xmin_shifted <- xmin_base + local_shift_f2
-              xmax_shifted <- xmax_base + local_shift_f2
-              ymin_shifted <- ymin_base + local_shift_f1
-              ymax_shifted <- ymax_base + local_shift_f1
-              
-              # Compare intensities: only apply shift if new position is better
-              x_idx_orig <- which(ppm_x >= xmin_base & ppm_x <= xmax_base)
-              y_idx_orig <- which(ppm_y >= ymin_base & ppm_y <= ymax_base)
-              x_idx_new <- which(ppm_x >= xmin_shifted & ppm_x <= xmax_shifted)
-              y_idx_new <- which(ppm_y >= ymin_shifted & ppm_y <= ymax_shifted)
-              
-              intensity_orig <- if (length(x_idx_orig) > 0 && length(y_idx_orig) > 0) {
-                sum(mat[y_idx_orig, x_idx_orig, drop = FALSE], na.rm = TRUE)
-              } else { 0 }
-              
-              intensity_new <- if (length(x_idx_new) > 0 && length(y_idx_new) > 0) {
-                sum(mat[y_idx_new, x_idx_new, drop = FALSE], na.rm = TRUE)
-              } else { 0 }
-              
-              # Only recenter if shifted position captures more intensity
-              if (intensity_new > intensity_orig) {
-                shifted_boxes$xmin[i] <- xmin_shifted
-                shifted_boxes$xmax[i] <- xmax_shifted
-                shifted_boxes$ymin[i] <- ymin_shifted
-                shifted_boxes$ymax[i] <- ymax_shifted
-              } else {
-                shifted_boxes$xmin[i] <- xmin_base
-                shifted_boxes$xmax[i] <- xmax_base
-                shifted_boxes$ymin[i] <- ymin_base
-                shifted_boxes$ymax[i] <- ymax_base
-              }
-            } else {
-              shifted_boxes$xmin[i] <- xmin_base
-              shifted_boxes$xmax[i] <- xmax_base
-              shifted_boxes$ymin[i] <- ymin_base
-              shifted_boxes$ymax[i] <- ymax_base
-            }
-          } else {
-            shifted_boxes$xmin[i] <- xmin_base
-            shifted_boxes$xmax[i] <- xmax_base
-            shifted_boxes$ymin[i] <- ymin_base
-            shifted_boxes$ymax[i] <- ymax_base
-          }
+          local_shift_f2 <- recenter_box_f2_shift(
+            mat, ppm_x, ppm_y,
+            orig_boxes$xmin[i], orig_boxes$xmax[i],
+            orig_boxes$ymin[i], orig_boxes$ymax[i],
+            tol = shift_tolerance_ppm,
+            terr_lo = territories$terr_lo[i] + shift_f2,
+            terr_hi = territories$terr_hi[i] + shift_f2
+          )
+          shifted_boxes$xmin[i] <- orig_boxes$xmin[i] + local_shift_f2
+          shifted_boxes$xmax[i] <- orig_boxes$xmax[i] + local_shift_f2
         }
         
-        fit_results <- calculate_fitted_volumes(
-          mat, ppm_x, ppm_y, 
-          shifted_boxes,
-          model = model
-        )
+        # Fit BOTH positions with the same model, then keep the recentering
+        # per box ONLY if it does not reduce the fitted volume (strict guard).
+        # Bounded by tol + territory, so this can never re-snap onto the diagonal.
+        fit_orig    <- calculate_fitted_volumes(mat, ppm_x, ppm_y, orig_boxes,    model = model)
+        fit_shifted <- calculate_fitted_volumes(mat, ppm_x, ppm_y, shifted_boxes, model = model)
+        
+        v_orig <- fit_orig$volume_fitted
+        v_shft <- fit_shifted$volume_fitted
+        v_orig[!is.finite(v_orig)] <- -Inf  # NA orig -> always prefer shifted
+        v_shft[!is.finite(v_shft)] <- -Inf  # NA shifted -> keep orig
+        intensities <- ifelse(v_shft >= v_orig, fit_shifted$volume_fitted, fit_orig$volume_fitted)
       } else {
-        # No tolerance - use original boxes with global shift
-        fit_results <- calculate_fitted_volumes(
-          mat, ppm_x, ppm_y, 
-          ref_boxes[, c("xmin", "xmax", "ymin", "ymax", "stain_id")],
-          model = model
-        )
+        # No tolerance - original boxes only
+        fit_results <- calculate_fitted_volumes(mat, ppm_x, ppm_y, orig_boxes, model = model)
+        intensities <- fit_results$volume_fitted
       }
-      intensities <- fit_results$volume_fitted
     }
     
     col_name <- paste0("Intensity_", make.names(basename(spectrum_name)))
