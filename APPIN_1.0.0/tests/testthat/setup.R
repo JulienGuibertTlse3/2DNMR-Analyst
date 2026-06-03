@@ -74,6 +74,10 @@ skip_if_no_fixture <- function(relative_path) {
   "R/utils.R"
 )
 
+# Fichiers optionnels dont l'échec de chargement NE DOIT PAS casser la suite
+# (typiquement le CNN, qui tire keras/tensorflow absents en CI).
+.optional_files <- c("Function/CNN_shiny.R")
+
 for (f in .source_files) {
   full <- file.path(.appin_root, f)
   if (!file.exists(full)) {
@@ -84,12 +88,21 @@ for (f in .source_files) {
     sys.source(full, envir = globalenv())
     TRUE
   }, error = function(e) {
-    # On n'interrompt PAS la suite : un fichier optionnel (ex. CNN tirant
-    # keras au chargement) ne doit pas faire échouer toute la suite.
-    message("setup.R : échec du source de ", f, " -> ", conditionMessage(e))
-    FALSE
+    msg <- conditionMessage(e)
+    if (f %in% .optional_files) {
+      # Échec toléré : les tests qui en dépendent skippent d'eux-mêmes.
+      message("setup.R : [optionnel] échec du source de ", f, " -> ", msg)
+      FALSE
+    } else {
+      # Échec d'un fichier métier requis : on remonte une erreur explicite
+      # AU LIEU de laisser 40 'could not find function' masquer la cause.
+      stop(sprintf(
+        "setup.R : impossible de sourcer le fichier requis '%s' : %s\n  -> dépendance manquante ? Ajoute le package dans DESCRIPTION (Imports).",
+        f, msg
+      ), call. = FALSE)
+    }
   })
-  if (ok) message("setup.R : sourcé -> ", f)
+  if (isTRUE(ok)) message("setup.R : sourcé -> ", f)
 }
 
 message("setup.R : APPIN_ROOT = ", .appin_root)
