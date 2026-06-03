@@ -16,28 +16,29 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # Le projet R vit dans le sous-dossier APPIN_1.0.0/.
-    # Toutes les étapes "run" s'exécutent donc depuis ce dossier.
+    # Le projet R (et renv.lock) vit dans le sous-dossier APPIN_1.0.0/.
     defaults:
       run:
         working-directory: APPIN_1.0.0
 
     env:
       R_KEEP_PKG_SOURCE: yes
-      # Variable signalant l'environnement CI à tes tests / helpers
       CI: true
-      # Empêche reticulate de tenter d'initialiser Python/keras :
-      # les tests CNN doivent passer en "skipped", pas planter le job.
+      # Empêche reticulate d'initialiser Python/keras : les tests CNN
+      # doivent passer en "skipped", pas planter le job.
       RETICULATE_PYTHON: ""
+      # renv ne tente pas d'amorcer Python pour reticulate.
+      RENV_CONFIG_RETICULATE_ENABLED: "FALSE"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # R 4.2.2 = meme version que ton Dockerfile (rocker/geospatial:4.2.2)
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
         with:
-          r-version: 'release'
+          r-version: '4.2.2'
           use-public-rspm: true
 
       - name: Setup pandoc
@@ -47,32 +48,27 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libcurl4-openssl-dev libssl-dev libxml2-dev \
-            libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
-            libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev
+            make pandoc libx11-dev libcurl4-openssl-dev libssl-dev \
+            zlib1g-dev libglpk-dev libxml2-dev libfftw3-dev libicu-dev \
+            libjpeg-dev libpng-dev libtiff-dev \
+            libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev
 
-      - name: Install R dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
+      # Restaure l'environnement renv depuis renv.lock (memes versions que la prod).
+      - name: Restore renv
+        uses: r-lib/actions/setup-renv@v2
         with:
           working-directory: APPIN_1.0.0
-          # Dépendances déduites de tes fichiers de test.
-          # Les packages ML (keras/tensorflow) ne sont volontairement PAS
-          # installés : les tests correspondants utilisent skip_if_not_installed()
-          # et passeront donc en "skipped" en CI.
-          packages: |
-            any::testthat
-            any::shiny
-            any::shinyFiles
-            any::shinyjs
-            any::bslib
-            any::bsicons
-            any::htmltools
-            any::DT
-            any::plotly
-            any::data.table
-            any::dplyr
-            any::dbscan
-            any::digest
+
+      # Filet de securite : bsicons est utilise par les tests mais absent du
+      # renv.lock actuel. A terme, l'ajouter au lock (renv::record("bsicons")).
+      - name: Ensure test-only packages present
+        run: |
+          Rscript -e 'if (!requireNamespace("bsicons", quietly = TRUE)) install.packages("bsicons")'
+
+      # Retire les packages ML pour que les tests CNN skippent (skip_if_not_installed).
+      - name: Drop ML packages so CNN tests skip
+        run: |
+          Rscript -e 'for (p in c("keras","tensorflow","tfruns","tfautograph")) try(remove.packages(p), silent = TRUE)'
 
       - name: Run unit tests
         run: |
