@@ -13,8 +13,7 @@ concurrency:
 
 jobs:
   test:
-    # Ubuntu 22.04 (jammy) : correspond a la base Debian/Ubuntu de ton
-    # Dockerfile et evite le decalage noble vu dans le log.
+    # jammy : aligne avec le Posit Package Manager -> binaires precompiles
     runs-on: ubuntu-22.04
 
     defaults:
@@ -24,14 +23,9 @@ jobs:
     env:
       R_KEEP_PKG_SOURCE: yes
       CI: true
+      # Les tests CNN doivent skipper : on n'installe pas keras/tensorflow
+      # et on neutralise reticulate.
       RETICULATE_PYTHON: ""
-      RENV_CONFIG_RETICULATE_ENABLED: "FALSE"
-      # PPM aligne sur la distrib du runner (jammy) -> binaires precompiles,
-      # pas de compilation source qui faisait etouffer l'install.
-      RENV_CONFIG_REPOS_OVERRIDE: "https://packagemanager.posit.co/cran/__linux__/jammy/latest"
-      # Limite le parallelisme : evite que plusieurs compilations source
-      # simultanees ne saturent la RAM du runner et tuent le process.
-      MAKEFLAGS: "-j2"
 
     steps:
       - name: Checkout
@@ -40,7 +34,7 @@ jobs:
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
         with:
-          r-version: '4.2.2'
+          r-version: 'release'
           use-public-rspm: true
 
       - name: Setup pandoc
@@ -56,18 +50,44 @@ jobs:
             libjpeg-dev libpng-dev libtiff-dev \
             libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev
 
-      - name: Restore renv
-        uses: r-lib/actions/setup-renv@v2
+      # Installation directe des packages (pas de renv).
+      # Liste deduite de Shine.R + Function/*.R + tests.
+      # keras / tensorflow / reticulate NON installes -> tests CNN skippes.
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          working-directory: APPIN_1.0.0
-
-      - name: Ensure test-only packages present
-        run: |
-          Rscript -e 'if (!requireNamespace("bsicons", quietly = TRUE)) install.packages("bsicons")'
-
-      - name: Drop ML packages so CNN tests skip
-        run: |
-          Rscript -e 'for (p in c("keras","tensorflow","tfruns","tfautograph")) try(remove.packages(p), silent = TRUE)'
+          packages: |
+            any::testthat
+            any::shiny
+            any::shinyFiles
+            any::shinyjs
+            any::shinyBS
+            any::shinycssloaders
+            any::shinydashboard
+            any::shinydashboardPlus
+            any::bslib
+            any::bsicons
+            any::htmltools
+            any::DT
+            any::plotly
+            any::ggplot2
+            any::viridis
+            any::data.table
+            any::dplyr
+            any::purrr
+            any::magrittr
+            any::readr
+            any::reshape2
+            any::dbscan
+            any::zoo
+            any::abind
+            any::matrixStats
+            any::minpack.lm
+            any::imager
+            any::sp
+            any::digest
+            any::Rcpp
+            any::MASS
 
       - name: Run unit tests
         run: |
