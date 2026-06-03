@@ -24,6 +24,8 @@
   <a href="#-license">License</a>
 </p>
 
+![R Tests](https://github.com/JulienGuibertTlse3/2DNMR-Analyst/actions/workflows/R-tests.yml/badge.svg)
+
 ---
 
 ## 📋 Overview
