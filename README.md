@@ -34,6 +34,35 @@ Developed at **INRAe Toxalim / MetaboHUB**, this tool streamlines the workflow f
 
 ---
 
+---
+
+## 🛠️ Installation
+
+### Prerequisites
+- **R** (>= 4.0)
+- **RStudio** (recommended)
+
+### Option A: Download ZIP
+1. Click on the **Code** button on GitHub
+2. Select **Download ZIP**
+3. Extract the archive
+
+### Option B: Clone with Git
+```bash
+git clone https://github.com/JulienGuibertTlse3/2DNMR-Analyst.git
+cd 2DNMR-Analyst
+```
+
+### Launch the Application
+1. Open **RStudio**
+2. Open the `run_app.R` file
+3. Click **Source** or press `Ctrl+Shift+Enter`
+
+> 💡 The script will automatically install all required packages on first run.
+
+---
+
+
 ## 🚀 Quick Start
 
 ```
@@ -166,34 +195,6 @@ stain_id;xmin;xmax;ymin;ymax;stain_intensity
 box1;3.400;3.500;1.200;1.300;123456
 box2;4.500;4.600;2.300;2.400;234567
 ```
-
----
-
-## 🛠️ Installation
-
-### Prerequisites
-- **R** (>= 4.0)
-- **RStudio** (recommended)
-
-### Option A: Download ZIP
-1. Click on the **Code** button on GitHub
-2. Select **Download ZIP**
-3. Extract the archive
-
-### Option B: Clone with Git
-```bash
-git clone https://github.com/JulienGuibertTlse3/2DNMR-Analyst.git
-cd 2DNMR-Analyst
-```
-
-### Launch the Application
-1. Open **RStudio**
-2. Open the `run_app.R` file
-3. Click **Source** or press `Ctrl+Shift+Enter`
-
-> 💡 The script will automatically install all required packages on first run.
-
----
 
 ## 📁 Project Structure
 
