@@ -52,4 +52,44 @@ skip_if_no_fixture <- function(relative_path) {
   invisible(full)
 }
 
-message("setup.R : APPIN_ROOT = ", get("APPIN_ROOT", envir = globalenv()))
+# =============================================================================
+# CHARGEMENT DU CODE MÉTIER
+# =============================================================================
+# Certains fichiers test-*.R appellent directement des fonctions de
+# Function/*.R sans les sourcer eux-mêmes (ex. detect_local_maxima,
+# pseudo_voigt_2d, fit_2d_peak...). En local ça marche car les fonctions
+# sont déjà chargées dans la session ; en CI la session est vierge.
+# On source donc tout le code métier ici, une fois pour toutes, dans
+# l'environnement global pour qu'il soit visible de tous les tests.
+
+.appin_root <- get("APPIN_ROOT", envir = globalenv())
+
+# Ordre important : les fonctions de base d'abord, puis ce qui en dépend.
+.source_files <- c(
+  "Function/Read_2DNMR_spectrum.R",
+  "Function/Vizualisation.R",
+  "Function/Peak_picking.R",
+  "Function/Peak_fitting.R",
+  "Function/CNN_shiny.R",   # optionnel (CNN) ; ignoré s'il référence keras au chargement
+  "R/utils.R"
+)
+
+for (f in .source_files) {
+  full <- file.path(.appin_root, f)
+  if (!file.exists(full)) {
+    message("setup.R : fichier source absent, ignoré -> ", f)
+    next
+  }
+  ok <- tryCatch({
+    sys.source(full, envir = globalenv())
+    TRUE
+  }, error = function(e) {
+    # On n'interrompt PAS la suite : un fichier optionnel (ex. CNN tirant
+    # keras au chargement) ne doit pas faire échouer toute la suite.
+    message("setup.R : échec du source de ", f, " -> ", conditionMessage(e))
+    FALSE
+  })
+  if (ok) message("setup.R : sourcé -> ", f)
+}
+
+message("setup.R : APPIN_ROOT = ", .appin_root)
