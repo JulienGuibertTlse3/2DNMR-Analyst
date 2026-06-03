@@ -199,7 +199,7 @@ box2;4.500;4.600;2.300;2.400;234567
 ## 📁 Project Structure
 
 ```
-2DNMR-Analyst/
+APPIN/
 │
 ├── Shine.R                    # Main application (~2063 lines)
 │                              # Contains UI + main Server
