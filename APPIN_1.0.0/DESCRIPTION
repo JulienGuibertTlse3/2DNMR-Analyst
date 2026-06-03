@@ -1,0 +1,30 @@
+Package: APPIN
+Title: APPIN - Automated 2D NMR Peak Picking and Integration
+Version: 1.0.0
+Authors@R:
+    person("Julien", "Guibert", role = c("aut", "cre"),
+           email = "julien.guibert@inrae.fr")
+Description: Interactive R Shiny application for the analysis of 2D NMR
+    spectra: automated peak detection (local maxima + DBSCAN or CNN),
+    manual editing, and batch peak integration (Sum, Gaussian, pseudo-Voigt)
+    for metabolomics research. Developed at INRAe Toxalim / MetaboHUB.
+License: CeCILL-2.1
+Encoding: UTF-8
+Imports:
+    shiny,
+    shinyFiles,
+    shinyjs,
+    bslib,
+    bsicons,
+    htmltools,
+    DT,
+    plotly,
+    data.table,
+    dplyr,
+    dbscan,
+    digest
+Suggests:
+    testthat (>= 3.0.0),
+    keras,
+    tensorflow
+Config/testthat/edition: 3
