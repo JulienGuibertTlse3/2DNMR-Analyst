@@ -7,16 +7,16 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Annule les runs précédents encore en cours sur la même branche/PR
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Ubuntu 22.04 (jammy) : correspond a la base Debian/Ubuntu de ton
+    # Dockerfile et evite le decalage noble vu dans le log.
+    runs-on: ubuntu-22.04
 
-    # Le projet R (et renv.lock) vit dans le sous-dossier APPIN_1.0.0/.
     defaults:
       run:
         working-directory: APPIN_1.0.0
@@ -24,17 +24,19 @@ jobs:
     env:
       R_KEEP_PKG_SOURCE: yes
       CI: true
-      # Empêche reticulate d'initialiser Python/keras : les tests CNN
-      # doivent passer en "skipped", pas planter le job.
       RETICULATE_PYTHON: ""
-      # renv ne tente pas d'amorcer Python pour reticulate.
       RENV_CONFIG_RETICULATE_ENABLED: "FALSE"
+      # PPM aligne sur la distrib du runner (jammy) -> binaires precompiles,
+      # pas de compilation source qui faisait etouffer l'install.
+      RENV_CONFIG_REPOS_OVERRIDE: "https://packagemanager.posit.co/cran/__linux__/jammy/latest"
+      # Limite le parallelisme : evite que plusieurs compilations source
+      # simultanees ne saturent la RAM du runner et tuent le process.
+      MAKEFLAGS: "-j2"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # R 4.2.2 = meme version que ton Dockerfile (rocker/geospatial:4.2.2)
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
         with:
@@ -48,24 +50,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            make pandoc libx11-dev libcurl4-openssl-dev libssl-dev \
-            zlib1g-dev libglpk-dev libxml2-dev libfftw3-dev libicu-dev \
+            make pandoc git \
+            libx11-dev libcurl4-openssl-dev libssl-dev libxml2-dev \
+            zlib1g-dev libglpk-dev libgmp-dev libicu-dev libfftw3-dev \
             libjpeg-dev libpng-dev libtiff-dev \
             libfontconfig1-dev libharfbuzz-dev libfribidi-dev libfreetype6-dev
 
-      # Restaure l'environnement renv depuis renv.lock (memes versions que la prod).
       - name: Restore renv
         uses: r-lib/actions/setup-renv@v2
         with:
           working-directory: APPIN_1.0.0
 
-      # Filet de securite : bsicons est utilise par les tests mais absent du
-      # renv.lock actuel. A terme, l'ajouter au lock (renv::record("bsicons")).
       - name: Ensure test-only packages present
         run: |
           Rscript -e 'if (!requireNamespace("bsicons", quietly = TRUE)) install.packages("bsicons")'
 
-      # Retire les packages ML pour que les tests CNN skippent (skip_if_not_installed).
       - name: Drop ML packages so CNN tests skip
         run: |
           Rscript -e 'for (p in c("keras","tensorflow","tfruns","tfautograph")) try(remove.packages(p), silent = TRUE)'
