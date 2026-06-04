@@ -1,16 +1,20 @@
 # tests/testthat/setup.R
 # =============================================================================
-# Chargé automatiquement par testthat AVANT tous les fichiers test-*.R
-# (au même titre que les helper-*.R).
+# Charge automatiquement par testthat AVANT tous les test-*.R et helper-*.R.
 #
-# Rôle : exposer une racine projet fiable (APPIN_ROOT) quelle que soit la
-# machine — poste Windows local OU runner GitHub Actions — pour que les
-# `source(file.path(APPIN_ROOT, "Function/..."))` de tes tests fonctionnent
-# partout sans modification.
+# Role :
+#  1) exposer APPIN_ROOT de facon fiable (poste Windows local OU runner CI) ;
+#  2) sourcer tout le code metier (Function/*.R, R/*.R) dans l'env global,
+#     car les test-*.R appellent ces fonctions sans les sourcer eux-memes.
+#
+# Regle keras : en CI, keras/tensorflow ne sont pas installes. Les fichiers
+# qui en dependent (CNN detection/model, et CNN_shiny qui charge keras en
+# tete) echouent au chargement -> on TOLERE leur echec (les tests associes
+# skippent via skip_if_not_installed / skip_if_no_cnn_model). En revanche un
+# fichier metier NON-ML qui echoue est une vraie erreur -> on s'arrete.
 # =============================================================================
 
-# Détecte la racine du projet en remontant depuis le dossier courant jusqu'à
-# trouver un dossier contenant à la fois Function/ et R/.
+# ---- 1. Resolution de APPIN_ROOT -------------------------------------------
 .find_appin_root <- function(start = getwd()) {
   path <- normalizePath(start, winslash = "/", mustWork = FALSE)
   for (i in seq_len(6)) {
@@ -19,31 +23,24 @@
       return(path)
     }
     parent <- dirname(path)
-    if (identical(parent, path)) break  # racine du FS atteinte
+    if (identical(parent, path)) break
     path <- parent
   }
-  # Fallback : un cran au-dessus de tests/testthat/
   normalizePath("..", winslash = "/", mustWork = FALSE)
 }
 
-# Ne définit APPIN_ROOT que s'il n'est pas déjà fixé dans l'environnement,
-# pour ne pas écraser un override manuel en local.
 if (!exists("APPIN_ROOT", envir = globalenv())) {
   assign("APPIN_ROOT", .find_appin_root(), envir = globalenv())
 }
+.appin_root <- get("APPIN_ROOT", envir = globalenv())
 
-# Dossier des fixtures (données réelles Bruker, modèles, snapshots).
-# Les tests qui en dépendent doivent skip si le dossier est absent.
+# ---- 2. Fixtures ------------------------------------------------------------
 if (!exists("FIXTURES_DIR", envir = globalenv())) {
-  assign(
-    "FIXTURES_DIR",
-    file.path(get("APPIN_ROOT", envir = globalenv()), "tests", "fixtures"),
-    envir = globalenv()
-  )
+  assign("FIXTURES_DIR",
+         file.path(.appin_root, "tests", "fixtures"),
+         envir = globalenv())
 }
 
-# Helper réutilisable : skip un test si une fixture donnée n'est pas présente
-# (utile en CI où les gros fichiers binaires ne sont pas committés).
 skip_if_no_fixture <- function(relative_path) {
   full <- file.path(get("FIXTURES_DIR", envir = globalenv()), relative_path)
   if (!file.exists(full) && !dir.exists(full)) {
@@ -52,57 +49,68 @@ skip_if_no_fixture <- function(relative_path) {
   invisible(full)
 }
 
-# =============================================================================
-# CHARGEMENT DU CODE MÉTIER
-# =============================================================================
-# Certains fichiers test-*.R appellent directement des fonctions de
-# Function/*.R sans les sourcer eux-mêmes (ex. detect_local_maxima,
-# pseudo_voigt_2d, fit_2d_peak...). En local ça marche car les fonctions
-# sont déjà chargées dans la session ; en CI la session est vierge.
-# On source donc tout le code métier ici, une fois pour toutes, dans
-# l'environnement global pour qu'il soit visible de tous les tests.
-
-.appin_root <- get("APPIN_ROOT", envir = globalenv())
-
-# Ordre important : les fonctions de base d'abord, puis ce qui en dépend.
-.source_files <- c(
+# ---- 3. Chargement du code metier ------------------------------------------
+# Fichiers REQUIS : leur echec de chargement doit faire echouer la suite
+# (un package manquant ici = bug a corriger dans le workflow/DESCRIPTION).
+.required_files <- c(
   "Function/Read_2DNMR_spectrum.R",
   "Function/Vizualisation.R",
   "Function/Peak_picking.R",
   "Function/Peak_fitting.R",
-  "Function/CNN_shiny.R",   # optionnel (CNN) ; ignoré s'il référence keras au chargement
+  "Function/CNN_clustering.R",   # DBSCAN pur, pas de keras -> doit charger
+  "Function/CNN_filtering.R",    # filtrage pur, pas de keras -> doit charger
   "R/utils.R"
 )
 
-# Fichiers optionnels dont l'échec de chargement NE DOIT PAS casser la suite
-# (typiquement le CNN, qui tire keras/tensorflow absents en CI).
-.optional_files <- c("Function/CNN_shiny.R")
+# Fichiers OPTIONNELS : peuvent tirer keras/tensorflow (absents en CI).
+# Leur echec est tolere ; les tests correspondants skippent d'eux-memes.
+.optional_files <- c(
+  "Function/CNN_model.R",
+  "Function/CNN_detection.R",
+  "Function/CNN_main.R",
+  "Function/CNN_shiny.R"
+)
 
-for (f in .source_files) {
-  full <- file.path(.appin_root, f)
+# Modules Shiny (R/mod_*.R) : sourced en optionnel. Ils ne sont necessaires
+# qu'aux tests de modules ; s'ils tirent une dependance Shiny lourde au
+# chargement, on ne veut pas casser toute la suite.
+.module_files <- list.files(
+  file.path(.appin_root, "R"),
+  pattern = "^mod_.*\\.R$",
+  full.names = FALSE
+)
+.module_files <- file.path("R", .module_files)
+
+.source_one <- function(relpath, required) {
+  full <- file.path(.appin_root, relpath)
   if (!file.exists(full)) {
-    message("setup.R : fichier source absent, ignoré -> ", f)
-    next
+    if (required) {
+      stop(sprintf("setup.R : fichier REQUIS introuvable : %s", relpath),
+           call. = FALSE)
+    }
+    message("setup.R : fichier absent, ignore -> ", relpath)
+    return(invisible(FALSE))
   }
   ok <- tryCatch({
     sys.source(full, envir = globalenv())
     TRUE
   }, error = function(e) {
     msg <- conditionMessage(e)
-    if (f %in% .optional_files) {
-      # Échec toléré : les tests qui en dépendent skippent d'eux-mêmes.
-      message("setup.R : [optionnel] échec du source de ", f, " -> ", msg)
-      FALSE
-    } else {
-      # Échec d'un fichier métier requis : on remonte une erreur explicite
-      # AU LIEU de laisser 40 'could not find function' masquer la cause.
+    if (required) {
       stop(sprintf(
-        "setup.R : impossible de sourcer le fichier requis '%s' : %s\n  -> dépendance manquante ? Ajoute le package dans DESCRIPTION (Imports).",
-        f, msg
-      ), call. = FALSE)
+        "setup.R : echec du source du fichier REQUIS '%s' : %s\n  -> dependance manquante ? Ajoute le package dans le workflow CI.",
+        relpath, msg), call. = FALSE)
     }
+    message("setup.R : [optionnel] echec du source de ", relpath, " -> ", msg)
+    FALSE
   })
-  if (isTRUE(ok)) message("setup.R : sourcé -> ", f)
+  if (isTRUE(ok)) message("setup.R : source -> ", relpath)
+  invisible(ok)
 }
+
+# Ordre : requis d'abord, puis optionnels (CNN keras), puis modules Shiny.
+for (f in .required_files) .source_one(f, required = TRUE)
+for (f in .optional_files) .source_one(f, required = FALSE)
+for (f in .module_files)   .source_one(f, required = FALSE)
 
 message("setup.R : APPIN_ROOT = ", .appin_root)
