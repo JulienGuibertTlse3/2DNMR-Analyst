@@ -383,8 +383,12 @@ test_that("filter_noisy_columns warns and handles aggregate failure gracefully",
   
   peaks <- data.frame(F1 = c(1, 2), F2 = c(10, 20), Intensity = c(0.5, 0.8))
   
-  result <- expect_warning(
-    filter_noisy_columns(peaks, threshold_ratio = 0.9),
+  # On capture la VALEUR de retour dans `result` via une assignation a
+  # l'interieur de expect_warning() : en testthat 3, expect_warning() ne
+  # renvoie pas la valeur de l'expression (il renvoie l'objet condition).
+  result <- NULL
+  expect_warning(
+    result <- filter_noisy_columns(peaks, threshold_ratio = 0.9),
     regexp = "aggregate failed"
   )
   
