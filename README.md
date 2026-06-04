@@ -14,6 +14,7 @@
   <a href="#-supported-spectrum-types"><img src="https://img.shields.io/badge/NMR-2D%20Analysis-green" alt="NMR 2D"/></a>
   <a href="https://www.metabohub.fr/"><img src="https://img.shields.io/badge/MetaboHub-blue" alt=" MTH "/></a>
   <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-CeCILL--2.1-yellow" alt="License CeCILL-2.1"/></a>
+  ![R Tests](https://github.com/JulienGuibertTlse3/2DNMR-Analyst/actions/workflows/R-tests.yml/badge.svg)
 </p>
 
 <p align="center">
@@ -23,8 +24,6 @@
   <a href="#-documentation">Documentation</a> •
   <a href="#-license">License</a>
 </p>
-
-![R Tests](https://github.com/JulienGuibertTlse3/2DNMR-Analyst/actions/workflows/R-tests.yml/badge.svg)
 
 ---
 
