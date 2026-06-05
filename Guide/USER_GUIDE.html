@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>APPIN - User Guide v2.1</title>
+    <title>APPIN - User Guide v3.0</title>
     <style>
         :root {
             --primary-color: #2c7bb6;
@@ -19,9 +19,7 @@
             --code-bg: #f5f5f5;
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -46,21 +44,9 @@
             text-align: center;
         }
 
-        header h1 {
-            margin: 0;
-            font-size: 3rem;
-            font-weight: 300;
-        }
-
-        header h1 .emoji {
-            font-size: 2.5rem;
-        }
-
-        header .subtitle {
-            font-size: 1.3rem;
-            opacity: 0.9;
-            margin-top: 10px;
-        }
+        header h1 { margin: 0; font-size: 3rem; font-weight: 300; }
+        header h1 .emoji { font-size: 2.5rem; }
+        header .subtitle { font-size: 1.3rem; opacity: 0.9; margin-top: 10px; }
 
         header .version {
             display: inline-block;
@@ -71,9 +57,7 @@
             font-size: 0.9rem;
         }
 
-        .badges {
-            margin-top: 20px;
-        }
+        .badges { margin-top: 20px; }
 
         .badge {
             display: inline-block;
@@ -86,7 +70,7 @@
 
         .badge-r { background: #276dc3; color: white; }
         .badge-shiny { background: #4caf50; color: white; }
-        .badge-license { background: #f9a825; color: #333; }
+        .badge-license { background: #1565c0; color: white; }
 
         /* Navigation */
         nav {
@@ -124,9 +108,7 @@
         }
 
         /* Main content */
-        main {
-            padding: 40px 0;
-        }
+        main { padding: 40px 0; }
 
         section {
             background: var(--card-bg);
@@ -143,20 +125,28 @@
             margin-top: 0;
         }
 
-        h3 {
-            color: var(--secondary-color);
-            margin-top: 30px;
-        }
-
-        h4 {
-            color: #555;
-            margin-top: 25px;
-        }
+        h3 { color: var(--secondary-color); margin-top: 30px; }
+        h4 { color: #555; margin-top: 25px; }
+        h5 { color: #666; margin-top: 20px; font-size: 1rem; }
 
         /* New feature badge */
         .new-badge {
             display: inline-block;
             background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* Updated badge */
+        .updated-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #2c7bb6, #00a6ca);
             color: white;
             padding: 2px 8px;
             border-radius: 4px;
@@ -186,9 +176,7 @@
             font-weight: 500;
         }
 
-        tr:hover {
-            background: rgba(44, 123, 182, 0.05);
-        }
+        tr:hover { background: rgba(44, 123, 182, 0.05); }
 
         /* Code blocks */
         pre {
@@ -209,10 +197,7 @@
             font-size: 0.9em;
         }
 
-        pre code {
-            background: none;
-            padding: 0;
-        }
+        pre code { background: none; padding: 0; }
 
         /* Alerts */
         .alert {
@@ -222,34 +207,12 @@
             border-left: 4px solid;
         }
 
-        .alert-info {
-            background: #e3f2fd;
-            border-color: var(--primary-color);
-            color: #1565c0;
-        }
+        .alert-info { background: #e3f2fd; border-color: var(--primary-color); color: #1565c0; }
+        .alert-warning { background: #fff8e1; border-color: var(--warning-color); color: #f57f17; }
+        .alert-success { background: #e8f5e9; border-color: var(--success-color); color: #2e7d32; }
+        .alert-danger { background: #ffebee; border-color: var(--error-color); color: #c62828; }
 
-        .alert-warning {
-            background: #fff8e1;
-            border-color: var(--warning-color);
-            color: #f57f17;
-        }
-
-        .alert-success {
-            background: #e8f5e9;
-            border-color: var(--success-color);
-            color: #2e7d32;
-        }
-
-        .alert-danger {
-            background: #ffebee;
-            border-color: var(--error-color);
-            color: #c62828;
-        }
-
-        .alert strong {
-            display: block;
-            margin-bottom: 5px;
-        }
+        .alert strong { display: block; margin-bottom: 5px; }
 
         /* Feature cards */
         .features-grid {
@@ -272,21 +235,9 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
 
-        .feature-card .icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
-        }
-
-        .feature-card h4 {
-            margin: 10px 0;
-            color: var(--primary-color);
-        }
-
-        .feature-card p {
-            margin: 0;
-            color: #666;
-            font-size: 0.95rem;
-        }
+        .feature-card .icon { font-size: 2rem; margin-bottom: 10px; }
+        .feature-card h4 { margin: 10px 0; color: var(--primary-color); }
+        .feature-card p { margin: 0; color: #666; font-size: 0.95rem; }
 
         /* Collapsible sections */
         details {
@@ -304,17 +255,9 @@
             user-select: none;
         }
 
-        summary:hover {
-            background: rgba(44, 123, 182, 0.05);
-        }
-
-        details[open] summary {
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        details > div {
-            padding: 20px;
-        }
+        summary:hover { background: rgba(44, 123, 182, 0.05); }
+        details[open] summary { border-bottom: 1px solid var(--border-color); }
+        details > div { padding: 20px; }
 
         /* File structure */
         .file-tree {
@@ -327,9 +270,7 @@
             overflow-x: auto;
         }
 
-        .file-tree .comment {
-            color: #78909c;
-        }
+        .file-tree .comment { color: #78909c; }
 
         /* Footer */
         footer {
@@ -340,80 +281,32 @@
             margin-top: 40px;
         }
 
-        footer h3 {
-            color: white;
-            margin-top: 0;
-        }
-
-        footer a {
-            color: var(--accent-color);
-        }
-
-        footer .contact-info {
-            margin: 20px 0;
-        }
-
-        footer .contact-info p {
-            margin: 5px 0;
-        }
+        footer h3 { color: white; margin-top: 0; }
+        footer a { color: var(--accent-color); }
+        footer .contact-info { margin: 20px 0; }
+        footer .contact-info p { margin: 5px 0; }
 
         /* Responsive */
         @media (max-width: 768px) {
-            header h1 {
-                font-size: 2rem;
-            }
-
-            header .subtitle {
-                font-size: 1rem;
-            }
-
-            nav ul {
-                flex-direction: column;
-            }
-
+            header h1 { font-size: 2rem; }
+            header .subtitle { font-size: 1rem; }
+            nav ul { flex-direction: column; }
             nav li a {
                 padding: 12px 15px;
                 border-bottom: 1px solid var(--border-color);
             }
-
-            section {
-                padding: 20px;
-            }
-
-            table {
-                font-size: 0.85rem;
-            }
-
-            th, td {
-                padding: 8px 10px;
-            }
+            section { padding: 20px; }
+            table { font-size: 0.85rem; }
+            th, td { padding: 8px 10px; }
         }
 
         /* Print styles */
         @media print {
-            nav, .badges {
-                display: none;
-            }
-
-            header {
-                background: none;
-                color: var(--text-color);
-                padding: 20px;
-            }
-
-            section {
-                box-shadow: none;
-                border: 1px solid #ddd;
-                page-break-inside: avoid;
-            }
-
-            details {
-                display: block;
-            }
-
-            details > div {
-                display: block;
-            }
+            nav, .badges { display: none; }
+            header { background: none; color: var(--text-color); padding: 20px; }
+            section { box-shadow: none; border: 1px solid #ddd; page-break-inside: avoid; }
+            details { display: block; }
+            details > div { display: block; }
         }
     </style>
 </head>
@@ -422,11 +315,11 @@
 <header>
     <h1><span class="emoji">🧪</span> APPIN</h1>
     <p class="subtitle">Automated Peak Picking and INtegration for 2D NMR</p>
-    <span class="version">User Guide v2.1</span>
+    <span class="version">User Guide v3.0</span>
     <div class="badges">
         <span class="badge badge-r">R ≥ 4.0</span>
         <span class="badge badge-shiny">Shiny App</span>
-        <span class="badge badge-license">MIT License</span>
+        <span class="badge badge-license">CeCILL 2.1 License</span>
     </div>
 </header>
 
@@ -434,8 +327,9 @@
     <ul>
         <li><a href="#overview">Overview</a></li>
         <li><a href="#getting-started">Getting Started</a></li>
+        <li><a href="#layout">Layout</a></li>
         <li><a href="#workflow">Workflow</a></li>
-        <li><a href="#new-features">New Features</a></li>
+        <li><a href="#conventions">ID Conventions</a></li>
         <li><a href="#tips">Tips</a></li>
         <li><a href="#troubleshooting">Troubleshooting</a></li>
     </ul>
@@ -446,7 +340,7 @@
     <!-- Overview Section -->
     <section id="overview">
         <h2>📖 Overview</h2>
-        <p><strong>APPIN</strong> is a powerful Shiny application designed for loading, visualizing, processing, and exporting 2D NMR spectra from Bruker instruments. It provides a complete interactive interface optimized for metabolomics research.</p>
+        <p><strong>APPIN</strong> is a Shiny application designed for loading, visualizing, processing, and exporting 2D NMR spectra from Bruker instruments. It provides a complete interactive interface optimized for metabolomics research, from raw Bruker files to publication-ready intensity tables.</p>
 
         <div class="features-grid">
             <div class="feature-card">
@@ -456,38 +350,38 @@
             </div>
             <div class="feature-card">
                 <div class="icon">🎯</div>
-                <h4>Smart Peak Detection</h4>
-                <p>Local maxima with DBSCAN clustering + CNN neural network</p>
+                <h4>Two Detection Methods</h4>
+                <p>Local maxima with DBSCAN clustering OR CNN neural network</p>
             </div>
             <div class="feature-card">
                 <div class="icon">🧠</div>
-                <h4>CNN Detection</h4>
-                <p>Deep learning-based peak detection for complex spectra</p>
+                <h4>Smart CNN Detection</h4>
+                <p>Deep learning model auto-selected per spectrum type</p>
             </div>
             <div class="feature-card">
                 <div class="icon">✏️</div>
                 <h4>Interactive Editing</h4>
-                <p>Manual creation, modification, and fusion of peaks/boxes</p>
+                <p>Click-based or form-based add / edit / delete / fuse</p>
             </div>
             <div class="feature-card">
-                <div class="icon">🖱️</div>
-                <h4>Box Select Tool <span class="new-badge">New</span></h4>
-                <p>Add or delete peaks/boxes directly via rectangular selection</p>
+                <div class="icon">🔄</div>
+                <h4>Pending Changes Workflow</h4>
+                <p>Preview modifications before applying them</p>
             </div>
             <div class="feature-card">
-                <div class="icon">📊</div>
+                <div class="icon">📐</div>
                 <h4>Advanced Integration</h4>
-                <p>Sum, Gaussian, and Voigt fitting methods</p>
+                <p>Sum, Gaussian, and Voigt fitting with R² fallback</p>
             </div>
             <div class="feature-card">
                 <div class="icon">📈</div>
-                <h4>Quality Metrics</h4>
-                <p>R² analysis and residuals visualization</p>
+                <h4>Quality Diagnostics</h4>
+                <p>R² distribution, residuals, and fit visualization</p>
             </div>
             <div class="feature-card">
                 <div class="icon">⚡</div>
-                <h4>Batch Processing <span class="new-badge">Enhanced</span></h4>
-                <p>Analyze multiple spectra with dynamic shift recentering</p>
+                <h4>Batch Processing</h4>
+                <p>Multi-spectra export with dynamic shift recentering</p>
             </div>
         </div>
     </section>
@@ -503,13 +397,17 @@
             <li><strong>RStudio</strong> (recommended) — <a href="https://posit.co/download/rstudio-desktop/">Download RStudio Desktop</a></li>
         </ul>
 
+        <div class="alert alert-info">
+            <strong>💡 CNN support</strong>
+            The CNN peak detection requires <code>tensorflow</code> and <code>keras</code> R packages. They are installed automatically on first launch, but the initial setup may take a few minutes.
+        </div>
+
         <h3>Installation</h3>
 
         <h4>Option A: Direct Download</h4>
         <ol>
             <li>Visit the <a href="https://github.com/JulienGuibertTlse3/APPIN">GitHub repository</a></li>
-            <li>Click the green <strong>"Code"</strong> button</li>
-            <li>Select <strong>"Download ZIP"</strong></li>
+            <li>Click the green <strong>"Code"</strong> button → <strong>"Download ZIP"</strong></li>
             <li>Extract the archive to your preferred location</li>
         </ol>
 
@@ -526,12 +424,11 @@ cd APPIN</code></pre>
 
         <div class="alert alert-info">
             <strong>💡 Note</strong>
-            The script automatically installs all required packages on first run.
+            The script automatically installs all required packages on first run. Expect a longer startup the first time.
         </div>
 
         <h3>Project Structure</h3>
-        <div class="file-tree">
-APPIN/
+        <pre class="file-tree">APPIN/
 │
 ├── run_app.R                 <span class="comment"># 🚀 Entry point - run this file</span>
 ├── Shine.R                   <span class="comment"># Main application</span>
@@ -540,160 +437,239 @@ APPIN/
 │   ├── utils.R
 │   ├── mod_load_data.R
 │   ├── mod_peak_picking.R    <span class="comment"># Local Max + CNN detection</span>
-│   ├── mod_manual_editing.R
+│   ├── mod_manual_editing.R  <span class="comment"># Click modes, fuse, delete, edit, add</span>
 │   ├── mod_integration.R
 │   └── mod_save_export.R
 │
-├── Function/                 <span class="comment"># Core functions</span>
-│   ├── Read_2DNMR_spectrum.R
-│   ├── Vizualisation.R
-│   ├── Peak_picking.R
-│   ├── Peak_fitting.R
+├── Function/                 <span class="comment"># Core scientific functions</span>
+│   ├── Read_2DNMR_spectrum.R <span class="comment"># Bruker data reading</span>
+│   ├── Vizualisation.R       <span class="comment"># Contour plots & DBSCAN</span>
+│   ├── Peak_picking.R        <span class="comment"># Local maxima detection</span>
+│   ├── Peak_fitting.R        <span class="comment"># Gaussian / Voigt fitting</span>
+│   │
 │   ├── CNN_shiny.R           <span class="comment"># 🧠 CNN entry point</span>
-│   ├── CNN_model.R
-│   ├── CNN_detection.R
-│   ├── CNN_filtering.R
-│   ├── CNN_clustering.R
-│   └── CNN_main.R
+│   ├── CNN_model.R           <span class="comment"># CNN architecture & weights</span>
+│   ├── CNN_detection.R       <span class="comment"># Peak detection</span>
+│   ├── CNN_filtering.R       <span class="comment"># Peak filtering</span>
+│   ├── CNN_clustering.R      <span class="comment"># DBSCAN clustering</span>
+│   └── CNN_main.R            <span class="comment"># Main CNN pipeline</span>
 │
 ├── saved_model/              <span class="comment"># 🧠 CNN pre-trained weights</span>
-│   └── weights/
+│   ├── weights/              <span class="comment"># Generic homonuclear</span>
+│   └── weights_hsqc/         <span class="comment"># HSQC-specific model</span>
 │
-└── www/                      <span class="comment"># Web assets</span>
-    ├── styles.css
-    └── plotly_ticks.js
+└── www/                      <span class="comment"># Web assets (CSS, JS)</span></pre>
+    </section>
+
+    <!-- Application Layout -->
+    <section id="layout">
+        <h2>🧭 Application Layout</h2>
+        <p>The application has two main tabs accessible from the left sidebar:</p>
+        <table>
+            <thead><tr><th>Tab</th><th>Purpose</th></tr></thead>
+            <tbody>
+                <tr><td>📖 <strong>Guide</strong></td><td>Built-in introduction and contextual help</td></tr>
+                <tr><td>📊 <strong>Analysis</strong></td><td>Main workspace for spectrum visualization and analysis</td></tr>
+            </tbody>
+        </table>
+
+        <p>The <strong>Analysis</strong> tab is split in two:</p>
+        <ul>
+            <li><strong>Left Panel (collapsible accordion)</strong> — Six numbered sections matching the workflow steps</li>
+            <li><strong>Right Panel (tabbed visualization)</strong> — Three tabs:</li>
+        </ul>
+
+        <table>
+            <thead><tr><th>Right Panel Tab</th><th>Contents</th></tr></thead>
+            <tbody>
+                <tr><td>🌈 <strong>Spectrum</strong></td><td>Interactive Plotly plot with contours, boxes, and centroids</td></tr>
+                <tr><td>📋 <strong>Data</strong></td><td>Tables of peaks, boxes, and pending changes</td></tr>
+                <tr><td>📈 <strong>Fit Quality</strong></td><td>R² distribution, fitted boxes details, 2D fit view, residuals</td></tr>
+            </tbody>
+        </table>
+
+        <div class="alert alert-info">
+            <strong>💡 Tip</strong>
+            Only one accordion section can be open at a time. This keeps the interface clean and guides you through the workflow in order.
         </div>
     </section>
 
     <!-- Workflow Section -->
     <section id="workflow">
         <h2>📋 Workflow</h2>
+        <p>The workflow follows a linear path through the six numbered accordion sections, with pending changes acting as a safety buffer between steps 4 and 5.</p>
 
-        <details>
+        <details open>
             <summary>📂 Step 1: Load Data</summary>
             <div>
                 <h4>Bruker File Requirements</h4>
                 <p>Your Bruker data must follow this structure:</p>
-                <pre><code>/&lt;experiment_folder&gt;/pdata/1/
-    ├── 2rr        # Processed data
-    ├── procs      # Processing parameters (F2)
-    ├── proc2s     # Processing parameters (F1)
-    └── ...</code></pre>
+                <pre><code>/&lt;experiment_folder&gt;/&lt;expno&gt;/
+    ├── acqus          # Acquisition parameters
+    ├── ser  or  fid   # Raw data
+    └── pdata/1/
+        ├── 2rr        # Processed 2D data
+        ├── procs      # Processing parameters (F2)
+        ├── proc2s     # Processing parameters (F1)
+        └── ...</code></pre>
+                <p>APPIN automatically detects valid Bruker folders by looking for <code>acqus</code> + (<code>ser</code> or <code>fid</code>).</p>
 
                 <h4>Loading Steps</h4>
                 <ol>
-                    <li>Navigate to the <strong>Analysis</strong> tab</li>
-                    <li>Expand <strong>"1. Load Data"</strong> section</li>
-                    <li>Click <strong>"Select Folder"</strong></li>
-                    <li>Browse to your Bruker experiment folder</li>
-                    <li>Check the spectra you want to analyze</li>
-                    <li>Click <strong>"Load Selected"</strong></li>
+                    <li>Navigate to the <strong>📊 Analysis</strong> tab</li>
+                    <li>Expand <strong>"📂 1. Load Data"</strong></li>
+                    <li>Click <strong>"Select Folder"</strong> and browse to the parent folder containing your experiments</li>
+                    <li>APPIN scans recursively and lists all valid Bruker folders found</li>
+                    <li>Check the spectra you want to analyze (or use <strong>✅ All</strong> / <strong>❌ None</strong>)</li>
+                    <li>Click <strong>"📥 Load Selected"</strong></li>
                 </ol>
 
                 <div class="alert alert-info">
                     <strong>💡 Tip</strong>
-                    Use "Load All" for quick selection of all available spectra.
+                    Spectra are cached after first load. Reloading the same folder is much faster.
                 </div>
             </div>
         </details>
 
         <details>
-            <summary>📈 Step 2: Configure Plot</summary>
+            <summary>📈 Step 2: Plot Settings</summary>
             <div>
                 <h4>Spectrum Types</h4>
+                <p>Choose the experiment type — this affects default contour thresholds and DBSCAN epsilon values.</p>
                 <table>
-                    <thead>
-                        <tr><th>Type</th><th>Description</th></tr>
-                    </thead>
+                    <thead><tr><th>Type</th><th>Description</th><th>Default threshold</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>TOCSY</strong></td><td>Homonuclear correlations through multiple bonds</td></tr>
-                        <tr><td><strong>COSY</strong></td><td>Direct homonuclear correlations (2-3 bonds)</td></tr>
-                        <tr><td><strong>HSQC</strong></td><td>Heteronuclear ¹H-¹³C single-bond correlations</td></tr>
-                        <tr><td><strong>UFCOSY</strong></td><td>Ultrafast COSY acquisition</td></tr>
+                        <tr><td><strong>TOCSY</strong></td><td>Homonuclear correlations through multiple bonds</td><td>80 000</td></tr>
+                        <tr><td><strong>COSY</strong></td><td>Direct homonuclear correlations (2-3 bonds)</td><td>80 000</td></tr>
+                        <tr><td><strong>HSQC</strong></td><td>Heteronuclear ¹H-¹³C single-bond correlations</td><td>20 000</td></tr>
+                        <tr><td><strong>UFCOSY</strong></td><td>Ultrafast COSY acquisition</td><td>30 000</td></tr>
                     </tbody>
                 </table>
 
-                <h4>Parameters</h4>
+                <div class="alert alert-warning">
+                    <strong>⚠️ Important</strong>
+                    Always verify the spectrum type matches your actual experiment before generating the plot. Wrong defaults will give unusable results.
+                </div>
+
+                <h4>Threshold Parameters</h4>
                 <table>
-                    <thead>
-                        <tr><th>Parameter</th><th>Description</th></tr>
-                    </thead>
+                    <thead><tr><th>Parameter</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>Threshold</strong></td><td>Minimum intensity for contour display</td></tr>
-                        <tr><td><strong>Auto</strong></td><td>Automatically calculates optimal threshold</td></tr>
-                        <tr><td><strong>Advanced</strong></td><td>Fine-tune noise threshold and contour settings</td></tr>
+                        <tr><td><strong>Threshold</strong></td><td>Minimum intensity for contour display (manual value)</td></tr>
+                        <tr><td><strong>Auto</strong></td><td>Automatically calculates threshold from spectrum noise or maximum</td></tr>
+                        <tr><td><strong>Advanced</strong></td><td>Two automatic methods: <code>% of max</code> or <code>Noise × multiplier</code></td></tr>
                     </tbody>
                 </table>
 
-                <p>Click <strong>"Generate Plot"</strong> to display the spectrum.</p>
+                <div class="alert alert-warning">
+                    <strong>⚠️ HSQC note</strong>
+                    The <code>% of max</code> method can give inconsistent thresholds for HSQC due to varying ¹³C intensities. The app displays a warning suggesting <code>Noise ×</code> instead.
+                </div>
+
+                <p>Click <strong>"📊 Generate Plot"</strong> to display the spectrum.</p>
             </div>
         </details>
 
         <details>
-            <summary>🎯 Step 3: Peak Detection</summary>
+            <summary>🎯 Step 3: Peak Picking</summary>
             <div>
-                <h4>Detection Methods</h4>
+                <p>APPIN offers two detection methods, side by side in the interface. Both work independently and can be re-run as many times as needed — each run replaces the previous results.</p>
+
+                <h4>Method Comparison</h4>
                 <table>
-                    <thead>
-                        <tr><th>Method</th><th>Description</th><th>Best For</th></tr>
-                    </thead>
+                    <thead><tr><th>Method</th><th>Description</th><th>Best For</th></tr></thead>
                     <tbody>
-                        <tr>
-                            <td><strong>Local Max</strong></td>
-                            <td>Detects local maxima with optional DBSCAN clustering</td>
-                            <td>Fast detection, well-resolved spectra</td>
-                        </tr>
-                        <tr>
-                            <td><strong>CNN</strong></td>
-                            <td>Convolutional neural network for intelligent peak detection</td>
-                            <td>Complex spectra, overlapping peaks</td>
-                        </tr>
+                        <tr><td>🟢 <strong>Local Max</strong></td><td>Local maxima detection with optional DBSCAN clustering</td><td>Fast detection, well-resolved spectra</td></tr>
+                        <tr><td>🟡 <strong>CNN</strong></td><td>Convolutional neural network with sliding window scan</td><td>Complex spectra, overlapping peaks, t1 noise</td></tr>
                     </tbody>
                 </table>
 
-                <h4>🔬 Local Max Method</h4>
+                <div class="alert alert-warning">
+                    <strong>⚠️ Important</strong>
+                    Running Local Max after CNN (or vice versa) overwrites the previous results. There is no automatic merging between methods.
+                </div>
+
+                <h4>🟢 Local Max Method</h4>
+                <p>Click <strong>"Local Max"</strong> to run traditional detection. Uses DBSCAN clustering by default to group nearby maxima into single peaks.</p>
+                <p><strong>Options (in ⚙️ Options collapsible):</strong></p>
                 <table>
-                    <thead>
-                        <tr><th>Option</th><th>Effect</th></tr>
-                    </thead>
+                    <thead><tr><th>Option</th><th>Effect</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>No clustering</strong></td><td>Each local maximum becomes a separate peak</td></tr>
-                        <tr><td><strong>Epsilon (eps)</strong></td><td>Maximum distance between points in a cluster</td></tr>
-                        <tr><td><strong>Delete ranges</strong></td><td>Remove peaks from specified ppm regions</td></tr>
+                        <tr><td><strong>No clustering</strong></td><td>Each local maximum becomes a separate peak (no DBSCAN)</td></tr>
+                        <tr><td><strong>Epsilon (eps)</strong></td><td>Maximum distance between points in a cluster (lower = more peaks)</td></tr>
+                        <tr><td><strong>Delete ranges</strong></td><td>Exclude peaks from specific ppm regions (e.g., water, solvent)</td></tr>
                     </tbody>
                 </table>
 
-                <p><strong>Recommended epsilon values:</strong></p>
+                <p><strong>Recommended epsilon values (set automatically when changing spectrum type):</strong></p>
                 <ul>
-                    <li>TOCSY/HSQC/COSY: <code>0.0068</code></li>
+                    <li>TOCSY / HSQC / COSY: <code>0.0068</code></li>
                     <li>UFCOSY: <code>0.014</code></li>
                 </ul>
 
-                <h4>🧠 CNN Method (Neural Network)</h4>
-                <p>The CNN method uses a trained deep learning model to detect peaks more intelligently. It's particularly effective for:</p>
+                <p><strong>Delete ranges format:</strong> Comma-separated coordinate pairs, semicolon-separated:</p>
+                <pre><code>0.5,-0.5; 1,0.8; 1.55,1.45; 5.1,4.6;</code></pre>
+                <p>This excludes the F2 ranges <code>[-0.5, 0.5]</code>, <code>[0.8, 1]</code>, etc. Useful for water suppression artifacts (typically <code>5.1,4.6</code>) or known impurities.</p>
+
+                <h4>🟡 CNN Method (Neural Network)</h4>
+                <p>Click <strong>"CNN"</strong> to run deep learning-based detection. The model is automatically selected based on the spectrum type:</p>
+                <table>
+                    <thead><tr><th>Spectrum type</th><th>Model used</th></tr></thead>
+                    <tbody>
+                        <tr><td>TOCSY / COSY / UFCOSY</td><td><code>saved_model/weights</code> (generic homonuclear)</td></tr>
+                        <tr><td>HSQC</td><td><code>saved_model/weights_hsqc/weights</code> (HSQC-specific)</td></tr>
+                    </tbody>
+                </table>
+
+                <p>The CNN is particularly effective for:</p>
                 <ul>
                     <li>Spectra with overlapping peaks</li>
                     <li>Low signal-to-noise conditions</li>
                     <li>Complex multiplet patterns</li>
-                    <li>TOCSY spectra with t1 noise artifacts</li>
+                    <li>TOCSY spectra with t1 noise artifacts (vertical streaks)</li>
                 </ul>
 
-                <h5>CNN Parameters</h5>
+                <h5>CNN Parameters (in 🧠 CNN Parameters sub-section)</h5>
                 <table>
-                    <thead>
-                        <tr><th>Parameter</th><th>Description</th><th>Default</th></tr>
-                    </thead>
+                    <thead><tr><th>Parameter</th><th>Description</th><th>Default</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>Prediction threshold</strong></td><td>Minimum CNN confidence (0-1)</td><td>0.3</td></tr>
-                        <tr><td><strong>Trace filter</strong></td><td>Removes t1 noise artifacts (% of line max)</td><td>50%</td></tr>
+                        <tr><td><strong>Prediction threshold</strong></td><td>Minimum CNN confidence to detect a peak (0–1)</td><td>0.3</td></tr>
+                        <tr><td><strong>Trace filter</strong></td><td>Removes t1 noise artifacts along F2 lines (% of line max)</td><td>50%</td></tr>
                     </tbody>
                 </table>
 
-                <h5>CNN Tips</h5>
+                <h5>How CNN Detection Works</h5>
+                <ol>
+                    <li><strong>Spectrum normalization</strong> — Normalized using the 99.9th percentile to avoid outlier scaling issues</li>
+                    <li><strong>Sliding window scan</strong> — The CNN scans rows and columns using 2048-point windows with 256-point overlap</li>
+                    <li><strong>Peak classification</strong> — Each point is classified as background / peak edge / peak center</li>
+                    <li><strong>DBSCAN clustering</strong> — Detected points are grouped into peak clusters (same algorithm as Local Max)</li>
+                    <li><strong>CNN-cluster matching</strong> — Only clusters containing a CNN-detected peak are kept (50% adaptive margin)</li>
+                    <li><strong>Bounding box generation</strong> — Each kept cluster gets a bounding box, renamed <code>cnn_1</code>, <code>cnn_2</code>, ...</li>
+                </ol>
+
+                <div class="alert alert-info">
+                    <strong>💡 HSQC tip</strong>
+                    For HSQC, an additional intensity filter automatically removes peaks below 3% of the maximum intensity to reduce false positives.
+                </div>
+
+                <h5>Progress Indicator</h5>
+                <p>When running CNN detection, a progress bar displays the current step:</p>
                 <table>
-                    <thead>
-                        <tr><th>Goal</th><th>Action</th></tr>
-                    </thead>
+                    <thead><tr><th>Step</th><th>Progress</th></tr></thead>
+                    <tbody>
+                        <tr><td>Preparing spectrum (normalization)</td><td>5%</td></tr>
+                        <tr><td>Running neural network</td><td>20%</td></tr>
+                        <tr><td>Clustering contour data</td><td>45%</td></tr>
+                        <tr><td>Filtering by CNN detections</td><td>70%</td></tr>
+                        <tr><td>Updating plot</td><td>90%</td></tr>
+                        <tr><td>Complete</td><td>100%</td></tr>
+                    </tbody>
+                </table>
+
+                <h5>CNN Tuning Tips</h5>
+                <table>
+                    <thead><tr><th>Goal</th><th>Action</th></tr></thead>
                     <tbody>
                         <tr><td>Detect more peaks</td><td>↓ Lower prediction threshold (e.g., 0.2)</td></tr>
                         <tr><td>Reduce false positives</td><td>↑ Higher prediction threshold (e.g., 0.5)</td></tr>
@@ -701,210 +677,326 @@ APPIN/
                         <tr><td>Keep weak correlations</td><td>↓ Lower trace filter (e.g., 30%)</td></tr>
                     </tbody>
                 </table>
+
+                <div class="alert alert-info">
+                    <strong>💡 Note</strong>
+                    CNN detection typically takes longer than Local Max (10–60 s for typical spectra), but usually produces cleaner results on complex matrices.
+                </div>
             </div>
         </details>
 
         <details>
             <summary>✏️ Step 4: Manual Editing</summary>
             <div>
-                <h4>🖱️ Click Modes</h4>
-                <table>
-                    <thead>
-                        <tr><th>Mode</th><th>Action</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr><td><strong>Off</strong></td><td>Clicks have no effect</td></tr>
-                        <tr><td><strong>Add box (2 clicks)</strong></td><td>Click two corners to create a bounding box</td></tr>
-                        <tr><td><strong>Delete box on click</strong></td><td>Click inside a box to mark for deletion</td></tr>
-                    </tbody>
-                </table>
+                <p>This step contains six collapsible sub-sections plus the Apply / Discard buttons at the bottom. <strong>All operations except Fusion and Delete-by-lasso are staged as pending changes</strong> — see Step 5 for the validation workflow.</p>
 
-                <h4>🔲 Box Select Tool <span class="new-badge">New</span></h4>
-                <p>The <strong>Box Select Tool</strong> allows you to add or delete peaks and boxes by drawing a rectangular selection directly on the spectrum.</p>
+                <h4>🖱️ Click Mode <span class="updated-badge">Updated</span></h4>
+                <p>Choose one of four mutually exclusive modes:</p>
                 <table>
-                    <thead>
-                        <tr><th>Action</th><th>How to Use</th></tr>
-                    </thead>
+                    <thead><tr><th>Mode</th><th>Action</th></tr></thead>
                     <tbody>
-                        <tr>
-                            <td><strong>Add peaks/boxes</strong></td>
-                            <td>Select "Add" mode, then draw a rectangle on the spectrum to create a new integration zone</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Delete peaks/boxes</strong></td>
-                            <td>Select "Delete" mode, then draw a rectangle to remove all peaks/boxes within the selection area</td>
-                        </tr>
+                        <tr><td><strong>Off</strong></td><td>Clicks have no effect (default)</td></tr>
+                        <tr><td><strong>Add peak (1 click)</strong></td><td>Click once on the spectrum to add a centroid → staged as pending</td></tr>
+                        <tr><td><strong>Add box (selection)</strong></td><td>Use the rectangular <strong>Box Select</strong> tool from the Plotly toolbar to draw a box → staged as pending</td></tr>
+                        <tr><td><strong>Delete box on click</strong></td><td>Click inside an existing box to mark it for deletion → staged as pending</td></tr>
                     </tbody>
                 </table>
 
                 <div class="alert alert-info">
-                    <strong>💡 Tip</strong>
-                    The Box Select Tool is particularly useful for quickly cleaning up regions with many false positives or for adding multiple integration zones in a specific area.
+                    <strong>💡 Add box mode</strong>
+                    This mode does NOT use a 2-click sequence. Instead, activate <strong>Box Select</strong> in the Plotly toolbar (square icon at the top right of the plot), then drag a rectangle on the spectrum. The drawn rectangle becomes a new box.
                 </div>
 
-                <h4>🔗 Fusing Peaks</h4>
+                <div class="alert alert-info">
+                    <strong>💡 Delete-on-click with overlapping boxes</strong>
+                    If you click in a region covered by multiple overlapping boxes, the smallest one is selected.
+                </div>
+
+                <h4>🔗 Fusing Peaks and Boxes</h4>
+                <p>Merge multiple peaks into one weighted centroid, and combine their boxes into a single enclosing box.</p>
                 <ol>
-                    <li>Go to the <strong>Data</strong> tab</li>
-                    <li>Select multiple peaks/boxes using <code>Ctrl+Click</code></li>
+                    <li>In the <strong>Spectrum</strong> tab, use Plotly's <strong>Box Select</strong> or <strong>Lasso Select</strong> (toolbar icons) to enclose the peaks you want to fuse</li>
                     <li>Return to <strong>Manual Editing</strong></li>
-                    <li>Click <strong>"Fuse Selected"</strong></li>
+                    <li>Click <strong>"🔗 Fuse Selected"</strong></li>
                 </ol>
 
-                <h4>🗑️ Delete Selected <span class="new-badge">New</span></h4>
-                <p>Similar to "Fuse Selected", you can now delete multiple selected items at once:</p>
+                <p><strong>Result:</strong></p>
+                <ul>
+                    <li>The selected peaks are removed and replaced by a single fused centroid named <code>fused_point&lt;N&gt;</code></li>
+                    <li>Position = volume-weighted average (or simple average if no volumes)</li>
+                    <li>Volume = sum of source volumes</li>
+                    <li>Their enclosing boxes are merged into <code>bbox_fused_point&lt;N&gt;</code> (min/max of all corners)</li>
+                </ul>
+
+                <div class="alert alert-warning">
+                    <strong>⚠️ Note</strong>
+                    Fusion modifies your data <strong>immediately</strong> — not via the pending workflow. The fused peak is logged in the "Pending Fusions" table for traceability only. Clicking <strong>Discard</strong> at the bottom does not undo a fusion.
+                </div>
+
+                <h4>🗑️ Deleting Peaks and Boxes <span class="new-badge">New</span></h4>
+                <p>Bulk delete via lasso/box selection — mirror function of Fusion.</p>
                 <ol>
-                    <li>Go to the <strong>Data</strong> tab</li>
-                    <li>Select multiple peaks/boxes using <code>Ctrl+Click</code></li>
+                    <li>In the <strong>Spectrum</strong> tab, use <strong>Box Select</strong> or <strong>Lasso Select</strong> to enclose the peaks to delete</li>
                     <li>Return to <strong>Manual Editing</strong></li>
-                    <li>Click <strong>"Delete Selected"</strong></li>
+                    <li>Click <strong>"🗑️ Delete Selected"</strong></li>
                 </ol>
 
-                <div class="alert alert-success">
-                    <strong>💡 Tip</strong>
-                    This is a mirror function of "Fuse Selected" — useful for bulk cleanup operations.
+                <div class="alert alert-warning">
+                    <strong>⚠️ Same as Fusion</strong>
+                    Deletion is applied immediately. The deleted items are logged in "Pending Deletions" for traceability only. Cannot be undone via Discard.
+                </div>
+
+                <div class="alert alert-info">
+                    <strong>💡 Alternative — table-based delete</strong>
+                    In the <strong>Data</strong> tab, select rows via <code>Ctrl+Click</code> (multi-selection) and use the "Delete Selected" button below the table. This staging method goes through the pending workflow and IS reversible via Discard.
                 </div>
 
                 <h4>📦 Edit Selected Box</h4>
+                <p>Select a row in the boxes table (Data tab) to load it for editing. A dashed green preview appears on the plot.</p>
                 <table>
-                    <thead>
-                        <tr><th>Control</th><th>Function</th></tr>
-                    </thead>
+                    <thead><tr><th>Control</th><th>Function</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>Coordinates</strong></td><td>Manually enter xmin, xmax, ymin, ymax</td></tr>
-                        <tr><td><strong>Arrow buttons</strong></td><td>Move box (↑ ↓ ← →)</td></tr>
-                        <tr><td><strong>+/- buttons</strong></td><td>Expand or shrink box size</td></tr>
-                        <tr><td><strong>Step</strong></td><td>Movement increment in ppm</td></tr>
+                        <tr><td><strong>xmin / xmax / ymin / ymax</strong></td><td>Enter exact coordinates in ppm</td></tr>
+                        <tr><td><strong>↑ ↓ ← →</strong></td><td>Move box by the Step value</td></tr>
+                        <tr><td><strong>+ / −</strong></td><td>Expand or shrink box by Step in all directions</td></tr>
+                        <tr><td><strong>Step</strong></td><td>Movement increment (default 0.01 ppm)</td></tr>
+                    </tbody>
+                </table>
+                <p>The preview updates in real time. Click <strong>"Apply Edit"</strong> to stage the change in pending boxes.</p>
+
+                <div class="alert alert-warning">
+                    <strong>⚠️ Validation</strong>
+                    APPIN rejects boxes where xmin ≥ xmax, ymin ≥ ymax, or any side &lt; 0.001 ppm. An error notification will appear.
+                </div>
+
+                <h4>➕ Add Manually</h4>
+                <p>Form-based addition (no clicking required).</p>
+                <table>
+                    <thead><tr><th>Type</th><th>Inputs</th><th>Generated ID</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Peak</strong></td><td>F2 (ppm), F1 (ppm)</td><td><code>man1</code>, <code>man2</code>, ...</td></tr>
+                        <tr><td><strong>Box</strong></td><td>xmin, xmax, ymin, ymax</td><td><code>manual_box1</code>, <code>manual_box2</code>, ...</td></tr>
+                    </tbody>
+                </table>
+                <p>Both are staged as pending changes.</p>
+            </div>
+        </details>
+
+        <details>
+            <summary>🔄 Step 5: Pending Changes — Apply or Discard <span class="new-badge">New</span></summary>
+            <div>
+                <p>Most manual operations (add peak, add box, edit box, delete box) <strong>do not immediately modify</strong> your data. Instead they go into pending tables, visible in the <strong>Data</strong> tab, so you can review everything before committing.</p>
+
+                <h4>Why Pending Changes?</h4>
+                <p>This staging mechanism protects you from accidental modifications and lets you:</p>
+                <ul>
+                    <li>Review your accumulated changes before applying them</li>
+                    <li>Discard all pending changes at once if you made a mistake</li>
+                    <li>Cancel selected pending items individually</li>
+                </ul>
+
+                <h4>What goes through pending vs. not?</h4>
+                <table>
+                    <thead><tr><th>Operation</th><th>Goes through pending?</th></tr></thead>
+                    <tbody>
+                        <tr><td>Add peak by click (mode <code>add_peak</code>)</td><td>✅ Yes</td></tr>
+                        <tr><td>Add box by selection (mode <code>box_select</code>)</td><td>✅ Yes</td></tr>
+                        <tr><td>Delete box on click (mode <code>delete_click</code>)</td><td>✅ Yes</td></tr>
+                        <tr><td>Manual add (peak or box via form)</td><td>✅ Yes</td></tr>
+                        <tr><td>Edit selected box (coordinates, move, resize)</td><td>✅ Yes</td></tr>
+                        <tr><td>Delete peaks/boxes from tables (Ctrl+Click + Delete Selected)</td><td>✅ Yes</td></tr>
+                        <tr><td><strong>Fuse Selected (lasso)</strong></td><td>❌ Applied immediately</td></tr>
+                        <tr><td><strong>Delete Selected (lasso)</strong></td><td>❌ Applied immediately</td></tr>
                     </tbody>
                 </table>
 
+                <h4>How to Apply or Discard</h4>
+                <p>At the bottom of the Manual Editing section:</p>
+                <table>
+                    <thead><tr><th>Button</th><th>Effect</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>✅ Apply</strong></td><td>Commits all pending changes to the main data, refreshes the plot</td></tr>
+                        <tr><td><strong>❌ Discard</strong></td><td>Cancels all pending changes (peaks, boxes, fusions, deletions logs)</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="alert alert-info">
+                    <strong>💡 Selective discard</strong>
+                    In the Data tab, you can also select specific pending rows and click "Discard Selected" to cancel only those items.
+                </div>
+
+                <h4>Pending Tables in the Data Tab</h4>
+                <p>The <strong>Data</strong> tab shows the current state plus four pending tables:</p>
+                <table>
+                    <thead><tr><th>Table</th><th>Contents</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Pending Centroids</strong></td><td>Peaks to add or delete (column <code>status</code>)</td></tr>
+                        <tr><td><strong>Pending Boxes</strong></td><td>Boxes to add, edit, or delete (column <code>status</code>)</td></tr>
+                        <tr><td><strong>Pending Fusions</strong></td><td>Log of recent fusions (already applied)</td></tr>
+                        <tr><td><strong>Pending Deletions</strong></td><td>Log of recent lasso deletions (already applied)</td></tr>
+                    </tbody>
+                </table>
+                <p>A yellow warning bar above the plot also displays a summary like "⏳ Pending: 3 peaks, 2 boxes" whenever you have unapplied changes.</p>
+            </div>
+        </details>
+
+        <details>
+            <summary>📐 Step 6: Integration</summary>
+            <div>
+                <p>Compute the integrated intensity (volume) for each box, using one of three methods.</p>
+
+                <h4>Integration Methods</h4>
+                <table>
+                    <thead><tr><th>Method</th><th>Description</th><th>Best For</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Sum (AUC)</strong></td><td>Direct summation of intensities inside the box</td><td>Fast, robust, no parameter tuning</td></tr>
+                        <tr><td><strong>Gaussian</strong></td><td>2D Gaussian peak fitting</td><td>Symmetric peaks, well-resolved</td></tr>
+                        <tr><td><strong>Voigt</strong></td><td>Pseudo-Voigt (Gaussian + Lorentzian mix)</td><td>Asymmetric peaks, broad shoulders</td></tr>
+                    </tbody>
+                </table>
+                <p>Sum and Peak Fitting are mutually exclusive — selecting one automatically deselects the other.</p>
+
+                <h4>Fitting Options (Gaussian / Voigt only)</h4>
+                <table>
+                    <thead><tr><th>Option</th><th>Description</th><th>Default</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Include R² in export</strong></td><td>Add quality metrics to output CSV</td><td>✅ Enabled</td></tr>
+                        <tr><td><strong>Min R² threshold</strong></td><td>Below this R², the peak falls back to Sum integration</td><td>0.85</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>R² Fallback Behavior <span class="updated-badge">Documented</span></h4>
+                <p>When you select Gaussian or Voigt, APPIN fits each box independently. If a fit fails (e.g. too few points, multiplet too complex) or has R² below the threshold:</p>
+                <ul>
+                    <li>The box automatically falls back to Sum integration</li>
+                    <li>Its method column is marked <code>sum_fit_failed</code> or <code>sum_r2_below_&lt;threshold&gt;</code></li>
+                    <li>A warning notification appears summarizing how many peaks fell back</li>
+                </ul>
+
+                <p>For multiplets (multiple maxima in one box), each peak is fitted separately and summed:</p>
+                <ul>
+                    <li>If all sub-fits succeed → method = <code>multiplet_fit</code></li>
+                    <li>If at least one sub-fit fails → method = <code>multiplet_sum</code></li>
+                </ul>
+
+                <p>Click <strong>"▶️ Run Integration"</strong> to process all boxes. The summary appears below the button, and the <strong>Fit Quality</strong> tab fills with diagnostics.</p>
+
                 <div class="alert alert-warning">
-                    <strong>⚠️ Important</strong>
-                    Click <strong>"Apply"</strong> to confirm changes or <strong>"Discard"</strong> to cancel.
+                    <strong>⚠️ Negative intensities</strong>
+                    Some peaks may show negative volumes. This can be expected (CH₂ groups in multiplicity-edited HSQC have inverted phase) or indicate phase / baseline issues. APPIN warns you when this happens. Exports replace negatives with 0 by default.
                 </div>
             </div>
         </details>
 
         <details>
-            <summary>📐 Step 5: Integration</summary>
+            <summary>📈 Step 7: Fit Quality (Read-only Diagnostics)</summary>
             <div>
-                <h4>Integration Methods</h4>
+                <p>This panel is in the right-hand visualization area (third tab). It only contains data when you have run an integration with Gaussian or Voigt.</p>
                 <table>
-                    <thead>
-                        <tr><th>Method</th><th>Description</th><th>Best For</th></tr>
-                    </thead>
+                    <thead><tr><th>Section</th><th>Content</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>Sum (AUC)</strong></td><td>Direct summation of intensities</td><td>Fast analysis, robust</td></tr>
-                        <tr><td><strong>Gaussian</strong></td><td>2D Gaussian peak fitting</td><td>Symmetric peaks</td></tr>
-                        <tr><td><strong>Voigt</strong></td><td>Gaussian + Lorentzian profile</td><td>Asymmetric peaks</td></tr>
+                        <tr><td><strong>Fit Summary</strong></td><td>Statistics grouped by fitting method (n_boxes, mean / median / min / max R²)</td></tr>
+                        <tr><td><strong>Fitted Boxes Details</strong></td><td>Sortable table with R² per box, color-coded</td></tr>
+                        <tr><td><strong>R² Distribution</strong></td><td>Histogram showing the spread of fit quality</td></tr>
+                        <tr><td><strong>2D Fit View</strong></td><td>Experimental contours (black) vs. fitted model (red) for the selected box</td></tr>
+                        <tr><td><strong>Residuals</strong></td><td>Histogram of <code>observed − fitted</code> for the selected box</td></tr>
                     </tbody>
                 </table>
-
-                <h4>Fitting Options</h4>
-                <table>
-                    <thead>
-                        <tr><th>Option</th><th>Description</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr><td><strong>Include R² in export</strong></td><td>Add quality metrics to output</td></tr>
-                        <tr><td><strong>Min R² threshold</strong></td><td>Fallback to Sum if fit quality is below threshold</td></tr>
-                    </tbody>
-                </table>
-
-                <p>Click <strong>"Run Integration"</strong> to process all boxes.</p>
-            </div>
-        </details>
-
-        <details>
-            <summary>📊 Step 6: Quality Analysis</summary>
-            <div>
-                <p>When using Gaussian or Voigt fitting, the <strong>Fit Quality</strong> tab provides:</p>
-                <table>
-                    <thead>
-                        <tr><th>Section</th><th>Content</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr><td><strong>Fit Summary</strong></td><td>Statistics grouped by fitting method</td></tr>
-                        <tr><td><strong>Fitted Boxes</strong></td><td>Sortable table with R² for each box</td></tr>
-                        <tr><td><strong>R² Distribution</strong></td><td>Histogram of fit quality</td></tr>
-                        <tr><td><strong>2D Fit View</strong></td><td>Visual representation of selected fit</td></tr>
-                        <tr><td><strong>Residuals</strong></td><td>Distribution of fitting residuals</td></tr>
-                    </tbody>
-                </table>
+                <p>To inspect a specific peak, click its row in <strong>Fitted Boxes Details</strong>. The 2D Fit View and Residuals update accordingly.</p>
 
                 <h4>R² Interpretation Guide</h4>
                 <table>
-                    <thead>
-                        <tr><th>R² Value</th><th>Quality</th><th>Recommendation</th></tr>
-                    </thead>
+                    <thead><tr><th>R² Value</th><th>Quality</th><th>Recommendation</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>> 0.9</strong></td><td>✅ Excellent</td><td>Peak is well-defined</td></tr>
-                        <tr><td><strong>0.7 - 0.9</strong></td><td>⚠️ Good</td><td>Acceptable for quantification</td></tr>
-                        <tr><td><strong>< 0.7</strong></td><td>❌ Poor</td><td>Use Sum method or adjust box</td></tr>
+                        <tr><td><strong>&gt; 0.95</strong></td><td>✅ Excellent</td><td>Use the fit as-is</td></tr>
+                        <tr><td><strong>0.90 – 0.95</strong></td><td>✅ Very good</td><td>Use the fit</td></tr>
+                        <tr><td><strong>0.80 – 0.90</strong></td><td>⚠️ Good</td><td>Verify visually in 2D Fit View</td></tr>
+                        <tr><td><strong>0.70 – 0.80</strong></td><td>⚠️ Moderate</td><td>Consider adjusting the box or switching to Sum</td></tr>
+                        <tr><td><strong>&lt; 0.70</strong></td><td>❌ Poor</td><td>Fallback already triggered (default 0.85 threshold)</td></tr>
                     </tbody>
                 </table>
             </div>
         </details>
 
         <details>
-            <summary>💾 Step 7: Save & Export</summary>
+            <summary>💾 Step 8: Save & Export</summary>
             <div>
-                <h4>Session Management</h4>
+                <p>The last accordion section bundles four sub-modules.</p>
+
+                <h4>💼 Session Management (RDS Format)</h4>
                 <table>
-                    <thead>
-                        <tr><th>Action</th><th>Description</th></tr>
-                    </thead>
+                    <thead><tr><th>Action</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>Save</strong></td><td>Save complete session as <code>.rds</code> file</td></tr>
-                        <tr><td><strong>Load</strong></td><td>Restore a previously saved session</td></tr>
+                        <tr><td><strong>💾 Save</strong></td><td>Save complete session (peaks, boxes, pending changes, fit results, UI parameters) as <code>.rds</code></td></tr>
+                        <tr><td><strong>📂 Load</strong></td><td>Restore a previously saved session</td></tr>
                     </tbody>
                 </table>
+                <div class="alert alert-info">
+                    <strong>💡 What's saved</strong>
+                    Data and parameters only. The original spectra path is recorded but spectra are <strong>not</strong> included in the RDS — you must reload them after restoring a session.
+                </div>
 
-                <h4>Import/Export Options</h4>
+                <h4>📥 Import (CSV)</h4>
                 <table>
-                    <thead>
-                        <tr><th>Format</th><th>Content</th></tr>
-                    </thead>
+                    <thead><tr><th>Format</th><th>Required columns</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>Peaks CSV</strong></td><td>Peak coordinates (stain_id, F2_ppm, F1_ppm)</td></tr>
-                        <tr><td><strong>Boxes CSV</strong></td><td>Box boundaries (stain_id, xmin, xmax, ymin, ymax)</td></tr>
-                        <tr><td><strong>Batch Export</strong></td><td>Project boxes onto all spectra and export intensities</td></tr>
+                        <tr><td><strong>Peaks CSV</strong></td><td><code>stain_id</code>, <code>F2_ppm</code>, <code>F1_ppm</code>, <code>Volume</code></td></tr>
+                        <tr><td><strong>Boxes CSV</strong></td><td><code>stain_id</code>, <code>xmin</code>, <code>xmax</code>, <code>ymin</code>, <code>ymax</code> (<code>Volume</code> optional)</td></tr>
                     </tbody>
                 </table>
+                <p>APPIN tries <code>;</code> separator first (French Excel format), then <code>,</code> if only one column is detected. Decimal commas are auto-converted to dots.</p>
 
-                <h4>🔄 Dynamic Shift Recentering <span class="new-badge">New</span></h4>
-                <p>When using <strong>Batch Export</strong>, APPIN now supports <strong>dynamic chemical shift recentering</strong> to compensate for slight variations in peak positions across spectra.</p>
-
+                <h4>📤 Export (CSV)</h4>
                 <table>
-                    <thead>
-                        <tr><th>Parameter</th><th>Description</th></tr>
-                    </thead>
+                    <thead><tr><th>Export</th><th>Description</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>Shift Tolerance (ppm)</strong></td><td>Maximum allowed deviation from the reference position</td></tr>
+                        <tr><td><strong>Peaks</strong></td><td>Centroids as CSV</td></tr>
+                        <tr><td><strong>Boxes</strong></td><td>Boxes with integrated intensities (current spectrum)</td></tr>
+                        <tr><td><strong>📤 Batch Export (all spectra)</strong></td><td>Apply boxes to <strong>all loaded spectra</strong>, output one intensity column per spectrum</td></tr>
+                    </tbody>
+                </table>
+                <p>All exports use <code>;</code> separator (compatible with French Excel). Negative intensities are replaced with 0.</p>
+
+                <h4>🔄 Dynamic Shift Recentering (Batch Export) <span class="new-badge">New</span></h4>
+                <p>The Batch Export now supports <strong>per-box dynamic recentering</strong> to compensate for chemical shift variations between samples (pH, temperature, ionic strength differences).</p>
+                <table>
+                    <thead><tr><th>Parameter</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Shift Tolerance (ppm)</strong></td><td>Half-width of the search window around each box (slider, 0 – 0.1 ppm)</td></tr>
                     </tbody>
                 </table>
 
                 <h5>How It Works</h5>
+                <p>For each box and each spectrum independently:</p>
                 <ol>
-                    <li>For each integration box, APPIN searches for the local maximum within the tolerance window</li>
-                    <li>The box is recentered on this maximum for each spectrum</li>
-                    <li>This ensures optimal integration even when peaks shift slightly between samples</li>
+                    <li>APPIN expands the box by <code>±tolerance</code> in both F2 and F1 dimensions</li>
+                    <li>The local maximum is found within this expanded window</li>
+                    <li>The box is recentered on this maximum, <strong>but only if</strong> this new position captures more intensity than the original</li>
+                    <li>Integration is then performed at the (possibly recentered) position</li>
                 </ol>
+                <p>This conservative criterion ("only recenter if it improves intensity") avoids drifting onto noise or neighboring peaks.</p>
 
                 <h5>When to Use</h5>
                 <table>
-                    <thead>
-                        <tr><th>Scenario</th><th>Recommendation</th></tr>
-                    </thead>
+                    <thead><tr><th>Scenario</th><th>Recommendation</th></tr></thead>
                     <tbody>
-                        <tr><td><strong>Stable peak positions</strong></td><td>Disable or use small tolerance (0.01 ppm)</td></tr>
-                        <tr><td><strong>Variable pH/temperature</strong></td><td>Enable with moderate tolerance (0.02-0.05 ppm)</td></tr>
-                        <tr><td><strong>Complex matrices</strong></td><td>Enable with larger tolerance (0.05-0.1 ppm)</td></tr>
+                        <tr><td>Stable peak positions across samples</td><td>Tolerance = 0 (disabled)</td></tr>
+                        <tr><td>Variable pH / temperature</td><td>0.01 – 0.03 ppm</td></tr>
+                        <tr><td>Complex matrices, biological fluids</td><td>0.03 – 0.05 ppm</td></tr>
+                        <tr><td>Highly variable conditions</td><td>Up to 0.1 ppm (use with caution)</td></tr>
                     </tbody>
                 </table>
 
                 <div class="alert alert-info">
-                    <strong>💡 Tip</strong>
-                    Start with a small tolerance and increase if needed. Too large a tolerance may cause boxes to jump to neighboring peaks.
+                    <strong>💡 Best practice</strong>
+                    Start with 0.01 ppm and increase only if you see systematic intensity drops in some samples for known stable peaks.
+                </div>
+
+                <h4>🔄 Reset All</h4>
+                <p>A single button at the bottom clears everything: peaks, boxes, fits, pending changes, caches, and UI parameters.</p>
+                <div class="alert alert-danger">
+                    <strong>⚠️ Use with care</strong>
+                    There is no confirmation dialog. Save your session first if you might need to recover the data.
                 </div>
 
                 <h4>CSV File Formats</h4>
@@ -912,38 +1004,42 @@ APPIN/
                 <pre><code>stain_id;F2_ppm;F1_ppm;Volume
 peak1;1.234;3.456;123456</code></pre>
 
-                <p><strong>Boxes:</strong></p>
-                <pre><code>stain_id;xmin;xmax;ymin;ymax
-peak1;1.200;1.268;3.400;3.512</code></pre>
+                <p><strong>Boxes (single spectrum):</strong></p>
+                <pre><code>stain_id;F2_ppm;F1_ppm;xmin;xmax;ymin;ymax;Intensity_&lt;spectrum&gt;
+peak1;1.234;3.456;1.200;1.268;3.400;3.512;123456</code></pre>
+
+                <p><strong>Batch export (multi-spectra):</strong></p>
+                <pre><code>stain_id;F2_ppm;F1_ppm;xmin;xmax;ymin;ymax;Intensity_&lt;spec1&gt;;Intensity_&lt;spec2&gt;;...
+peak1;1.234;3.456;1.200;1.268;3.400;3.512;123456;120345;...</code></pre>
 
                 <div class="alert alert-info">
-                    <strong>💡 Batch Processing Limits</strong>
-                    For optimal performance, limit to 25 spectra for TOCSY, or 50 for COSY/HSQC.
+                    <strong>💡 Batch processing capacity</strong>
+                    For optimal performance, limit to ~25 TOCSY or 50 COSY/HSQC spectra per batch. Larger batches may run but become slow.
                 </div>
             </div>
         </details>
     </section>
 
-    <!-- New Features Section -->
-    <section id="new-features">
-        <h2>🆕 New Features in v2.1</h2>
-
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="icon">🔲</div>
-                <h4>Box Select Tool</h4>
-                <p>Add or delete peaks and integration boxes by drawing a rectangular selection directly on the spectrum. Much faster than individual clicks for bulk operations.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon">🗑️</div>
-                <h4>Delete Selected</h4>
-                <p>Mirror function of "Fuse Selected" — select multiple items in the Data tab, then delete them all at once. Perfect for bulk cleanup operations.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon">🔄</div>
-                <h4>Dynamic Shift Recentering</h4>
-                <p>Batch export now supports automatic peak recentering based on a configurable tolerance (ppm). Compensates for chemical shift variations across samples.</p>
-            </div>
+    <!-- ID Naming Conventions -->
+    <section id="conventions">
+        <h2>🏷️ ID Naming Conventions</h2>
+        <p>Each peak and box has a unique <code>stain_id</code>. Understanding the prefix tells you where it came from:</p>
+        <table>
+            <thead><tr><th>Prefix</th><th>Source</th><th>Example</th></tr></thead>
+            <tbody>
+                <tr><td><code>peak&lt;N&gt;</code></td><td>Detected by Local Max</td><td><code>peak1</code>, <code>peak42</code></td></tr>
+                <tr><td><code>cnn_&lt;N&gt;</code></td><td>Detected by CNN</td><td><code>cnn_1</code>, <code>cnn_17</code></td></tr>
+                <tr><td><code>man&lt;N&gt;</code></td><td>Manually added via form (peak)</td><td><code>man1</code>, <code>man2</code></td></tr>
+                <tr><td><code>manual_box&lt;N&gt;</code></td><td>Manually added via form (box)</td><td><code>manual_box1</code></td></tr>
+                <tr><td><code>click&lt;N&gt;</code></td><td>Added by click in <code>add_peak</code> mode</td><td><code>click1</code>, <code>click2</code></td></tr>
+                <tr><td><code>sel_box_&lt;HHMMSS&gt;</code></td><td>Drawn via Box Select on the spectrum</td><td><code>sel_box_143052</code></td></tr>
+                <tr><td><code>fused_point&lt;N&gt;</code></td><td>Result of fusing multiple peaks</td><td><code>fused_point1</code></td></tr>
+                <tr><td><code>bbox_fused_point&lt;N&gt;</code></td><td>Enclosing box of a fused peak</td><td><code>bbox_fused_point1</code></td></tr>
+            </tbody>
+        </table>
+        <div class="alert alert-info">
+            <strong>💡 Tip</strong>
+            When importing externally generated CSVs, you can use any string as <code>stain_id</code>. Just make sure they are unique within the file — APPIN will auto-rename duplicates with <code>_dup1</code>, <code>_dup2</code>, ... suffixes.
         </div>
     </section>
 
@@ -953,24 +1049,26 @@ peak1;1.200;1.268;3.400;3.512</code></pre>
 
         <h3>Workflow Optimization</h3>
         <ol>
-            <li><strong>Start with QC samples</strong> — Optimize parameters on your most intense spectrum before batch analysis</li>
-            <li><strong>Use Auto threshold</strong> — Let the algorithm find optimal contour levels</li>
-            <li><strong>Check Pending tab</strong> — Always review modifications before clicking Apply</li>
-            <li><strong>Validate with Fit Quality</strong> — When using Gaussian/Voigt, check R² values</li>
-            <li><strong>Use Box Select for bulk operations</strong> — Faster than individual clicks for adding/removing multiple items</li>
-            <li><strong>Enable shift recentering for batch</strong> — Compensates for inter-sample variability</li>
+            <li><strong>Start with a QC sample</strong> — Optimize parameters on your most intense, well-resolved spectrum before batch analysis. The same parameters often transfer well to the rest.</li>
+            <li><strong>Use Auto threshold first</strong> — Then refine manually if needed. The automatic estimates are usually within 20% of the optimal value.</li>
+            <li><strong>Review the Pending tables before Apply</strong> — A quick scroll through the pending boxes/centroids in the Data tab catches misclicks before they're committed.</li>
+            <li><strong>Validate with Fit Quality</strong> — When using Gaussian or Voigt, always check the R² distribution histogram. A bimodal distribution often signals two populations of peaks (clean singlets vs. multiplets).</li>
+            <li><strong>Use lasso operations for bulk cleanup</strong> — Fuse Selected and Delete Selected via Plotly's selection tools are much faster than clicking individually.</li>
+            <li><strong>Enable shift recentering for biological samples</strong> — Even at 0.01 ppm, dynamic recentering noticeably improves batch consistency for serum / urine / cell extract studies.</li>
+            <li><strong>Save your session regularly</strong> — Especially after manual editing. An RDS save takes 1-2 seconds and protects against accidental Reset or crashes.</li>
         </ol>
 
-        <h3>Parameter Tuning</h3>
+        <h3>Parameter Tuning at a Glance</h3>
         <table>
-            <thead>
-                <tr><th>Goal</th><th>Action</th></tr>
-            </thead>
+            <thead><tr><th>Goal</th><th>Action</th></tr></thead>
             <tbody>
-                <tr><td>Group more peaks</td><td>↑ Increase epsilon</td></tr>
+                <tr><td>Group more peaks together</td><td>↑ Increase epsilon</td></tr>
                 <tr><td>Separate overlapping peaks</td><td>↓ Decrease epsilon</td></tr>
-                <tr><td>Reduce noise</td><td>↑ Increase threshold</td></tr>
+                <tr><td>Reduce noise detection</td><td>↑ Increase threshold</td></tr>
                 <tr><td>Detect weak signals</td><td>↓ Decrease threshold</td></tr>
+                <tr><td>Stricter CNN detection</td><td>↑ Increase prediction threshold</td></tr>
+                <tr><td>Remove TOCSY t1 noise streaks</td><td>↑ Increase trace filter to 60-80%</td></tr>
+                <tr><td>Allow more peak position drift in batch</td><td>↑ Increase shift tolerance</td></tr>
             </tbody>
         </table>
     </section>
@@ -979,25 +1077,73 @@ peak1;1.200;1.268;3.400;3.512</code></pre>
     <section id="troubleshooting">
         <h2>🔧 Troubleshooting</h2>
 
+        <h3>Data Loading</h3>
         <table>
-            <thead>
-                <tr><th>Problem</th><th>Solution</th></tr>
-            </thead>
+            <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
             <tbody>
-                <tr><td><strong>No spectrum detected</strong></td><td>Verify Bruker folder structure (<code>pdata/1/</code>)</td></tr>
-                <tr><td><strong>Empty or error plot</strong></td><td>Adjust threshold or use Auto</td></tr>
-                <tr><td><strong>Too many/few peaks</strong></td><td>Adjust epsilon and intensity threshold</td></tr>
-                <tr><td><strong>Import fails</strong></td><td>Check CSV format (separator <code>;</code> or <code>,</code>)</td></tr>
-                <tr><td><strong>Application slow</strong></td><td>Reduce number of contours in Advanced settings</td></tr>
-                <tr><td><strong>Poor fit quality</strong></td><td>Use Sum method or adjust box boundaries</td></tr>
-                <tr><td><strong>Session won't load</strong></td><td>Ensure spectral data is available</td></tr>
-                <tr><td><strong>CNN model not loaded</strong></td><td>Verify <code>saved_model/weights</code> folder exists</td></tr>
-                <tr><td><strong>CNN too slow</strong></td><td>Normal for large spectra; progress bar shows status</td></tr>
-                <tr><td><strong>CNN finds no peaks</strong></td><td>Lower prediction threshold (e.g., 0.2)</td></tr>
-                <tr><td><strong>CNN too many false positives</strong></td><td>Increase prediction threshold and trace filter</td></tr>
-                <tr><td><strong>CNN t1 noise artifacts</strong></td><td>Increase trace filter to 60-80%</td></tr>
-                <tr><td><strong>Box Select not working</strong></td><td>Ensure correct mode (Add/Delete) is selected</td></tr>
-                <tr><td><strong>Shift recentering jumps to wrong peak</strong></td><td>Reduce tolerance value</td></tr>
+                <tr><td><strong>No spectrum detected in folder</strong></td><td>Verify Bruker folder structure (<code>acqus</code> + <code>ser</code>/<code>fid</code> + <code>pdata/1/2rr</code>)</td></tr>
+                <tr><td><strong>Wrong ppm range displayed</strong></td><td>Check that <code>procs</code> / <code>proc2s</code> files are present and not corrupted</td></tr>
+                <tr><td><strong>Spectra load slowly the first time</strong></td><td>Normal — they are cached in memory for subsequent reads</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Plot Generation</h3>
+        <table>
+            <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Empty or error plot</strong></td><td>Adjust threshold (try Auto), check spectrum type matches the experiment</td></tr>
+                <tr><td><strong>Plot generation very slow</strong></td><td>Reduce contour count in Advanced settings (Plot Settings)</td></tr>
+                <tr><td><strong>Wrong axis range</strong></td><td>Click "Autoscale" in the Plotly toolbar to reset</td></tr>
+                <tr><td><strong>Axes look inverted (numbers)</strong></td><td>Normal — APPIN follows NMR convention (chemical shift decreases left-to-right)</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Peak Detection</h3>
+        <table>
+            <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Too many false positives (Local Max)</strong></td><td>↑ Increase threshold, ↓ decrease epsilon, or use Delete Ranges for known artifacts</td></tr>
+                <tr><td><strong>Too few peaks detected (Local Max)</strong></td><td>↓ Decrease threshold, ↑ increase epsilon</td></tr>
+                <tr><td><strong>CNN model not loaded</strong></td><td>Verify <code>saved_model/weights</code> (or <code>weights_hsqc/weights</code> for HSQC) exists</td></tr>
+                <tr><td><strong>CNN very slow on first run</strong></td><td>TensorFlow initialization (1–2 min). Subsequent runs are fast</td></tr>
+                <tr><td><strong>CNN finds no peaks</strong></td><td>↓ Lower prediction threshold (e.g., 0.2)</td></tr>
+                <tr><td><strong>CNN: too many false positives</strong></td><td>↑ Increase prediction threshold (0.4–0.6) and trace filter (60–80%)</td></tr>
+                <tr><td><strong>CNN: TOCSY shows vertical streaks</strong></td><td>↑ Increase trace filter to 70–80% to remove t1 noise</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Manual Editing</h3>
+        <table>
+            <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Box Select tool doesn't create a box</strong></td><td>Confirm click mode is set to "Add box (selection)" AND the Plotly Box Select tool is active in the toolbar</td></tr>
+                <tr><td><strong>Click-add-peak doesn't register</strong></td><td>Confirm click mode is "Add peak (1 click)" — modes are mutually exclusive</td></tr>
+                <tr><td><strong>Pending changes don't appear in plot</strong></td><td>Pending changes are previewed in the Data tab but not on the plot until you Apply</td></tr>
+                <tr><td><strong>Fuse / Delete Selected does nothing</strong></td><td>Make a selection on the spectrum first (Box Select or Lasso Select), then click the button</td></tr>
+                <tr><td><strong>Box preview disappears after editing</strong></td><td>Normal — the preview clears after Apply or when you deselect the row</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Integration</h3>
+        <table>
+            <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+            <tbody>
+                <tr><td><strong>All peaks marked as <code>sum_r2_below_*</code></strong></td><td>Threshold too high for your data, or boxes too tight. Lower R² threshold or expand boxes</td></tr>
+                <tr><td><strong>Many <code>sum_fit_failed</code></strong></td><td>Boxes contain too few points. Expand them or use Sum directly</td></tr>
+                <tr><td><strong>Negative intensities</strong></td><td>Expected for CH₂ in HSQC multiplicity-edited; otherwise check phase / baseline of the spectrum</td></tr>
+                <tr><td><strong>Run Integration is slow on Voigt</strong></td><td>Normal — Voigt has more parameters than Gaussian. Use Gaussian if speed matters</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Save / Load / Batch</h3>
+        <table>
+            <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Import CSV fails</strong></td><td>Check column names match required ones, separator is <code>;</code> or <code>,</code>, encoding is UTF-8</td></tr>
+                <tr><td><strong>Session won't load</strong></td><td>Ensure spectra are reloaded first — session restores annotations only</td></tr>
+                <tr><td><strong>Batch export gives 0 for some peaks</strong></td><td>Box may fall outside ppm range in some spectra. Check <code>shift_tolerance_ppm</code> is appropriate</td></tr>
+                <tr><td><strong>Shift recentering jumps to wrong peak</strong></td><td>↓ Reduce tolerance, or shift drift is too large — consider per-spectrum manual review</td></tr>
+                <tr><td><strong>All intensities are 0 in batch export</strong></td><td>Box coordinates likely outside the spectra's ppm range. Verify with Load Data spectra metadata</td></tr>
             </tbody>
         </table>
     </section>
@@ -1007,7 +1153,8 @@ peak1;1.200;1.268;3.400;3.512</code></pre>
         <h2>📚 Additional Resources</h2>
         <ul>
             <li><strong>GitHub Repository:</strong> <a href="https://github.com/JulienGuibertTlse3/APPIN">JulienGuibertTlse3/APPIN</a></li>
-            <li><strong>Issue Tracker:</strong> Report bugs and request features on GitHub</li>
+            <li><strong>Issue Tracker:</strong> Report bugs and request features via the GitHub issues page</li>
+            <li><strong>Developer Guide:</strong> A separate <code>Guide_Developpeur_APPIN_v4.0.docx</code> is available for those who need to extend or maintain APPIN</li>
         </ul>
     </section>
 
@@ -1021,8 +1168,9 @@ peak1;1.200;1.268;3.400;3.512</code></pre>
         <p><strong>Institution:</strong> INRAe Toxalim / MetaboHUB</p>
     </div>
     <p style="margin-top: 30px; opacity: 0.7;">
-        <em>APPIN v2.1 — Developed for metabolomics research</em><br>
-        <em>Last updated: April 2026</em>
+        <em>APPIN v3.0 — Developed for metabolomics research</em><br>
+        <em>License: <a href="https://cecill.info/licences/Licence_CeCILL_V2.1-en.html">CeCILL 2.1</a> — French free software license (GPL-compatible)</em><br>
+        <em>Last updated: May 2026</em>
     </p>
 </footer>
 
