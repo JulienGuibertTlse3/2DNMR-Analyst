@@ -294,7 +294,7 @@ APPIN/
 ## 📚 Documentation
 
 - [User Guide](Guide/USER_GUIDE.md) - Detailed usage instructions
-- [Developer Guide](Guide/DEVELOPER_GUIDE.md) - Technical documentation
+- [Developer Guide](Guide/Guide_Developpeur_APPIN_v4.0.docx) - Technical documentation
 
 ---
 
