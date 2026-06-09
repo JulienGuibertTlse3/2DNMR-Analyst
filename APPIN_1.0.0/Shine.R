@@ -89,11 +89,6 @@ source("R/mod_pending_changes.R")
 source("R/mod_manual_editing.R") 
 source("R/mod_delete.R")  
 
-# Optional: C++ acceleration
-if (file.exists("Function_test/petit_test.cpp")) {
-  Rcpp::sourceCpp("Function_test/petit_test.cpp")
-}
-
 
 ## SECTION 1: USER INTERFACE ----                        
 
@@ -249,7 +244,7 @@ ui <- fluidPage(
                            tags$b("Spectrum Type", style = "color: #856404; font-size: 14px;")
                          ),
                          selectInput("spectrum_type", NULL, 
-                                     choices = c("TOCSY", "HSQC", "COSY", "UFCOSY"),
+                                     choices = c("TOCSY", "HSQC", "HMBC", "COSY", "UFCOSY", "JRES"),
                                      selected = "TOCSY",
                                      width = "100%"),
                          tags$small(
@@ -744,7 +739,14 @@ server <- function(input, output, session) {
            "COSY"   = list(intensity_threshold = 60000, contour_num = 30, contour_factor = 1.3, 
                            eps_value = 0.068, neighborhood_size = 9),
            "UFCOSY" = list(intensity_threshold = 50000, contour_num = 70, contour_factor = 1.3, 
-                           eps_value = 0.014, neighborhood_size = 2)
+                           eps_value = 0.014, neighborhood_size = 2),
+           "HMBC"   = list(intensity_threshold = 20000, contour_num = 30, contour_factor = 1.3, 
+                           eps_value = 0.009, neighborhood_size = 3),
+           "JRES"   = list(intensity_threshold = 60000, contour_num = 40, contour_factor = 1.3, 
+                           eps_value = 0.06, neighborhood_size = 3),
+           # Default fallback: never return NULL (would break downstream params$...)
+           list(intensity_threshold = 50000, contour_num = 30, contour_factor = 1.3,
+                eps_value = 0.0068, neighborhood_size = 3)
     )
   })
   
@@ -756,7 +758,16 @@ server <- function(input, output, session) {
                            pred_class_thres = 0.001, batch_size = 64, step = 4),
            "HSQC"   = list(int_thres = 0.001, int_prop = 0.5, eps_value = 0.014,
                            pred_class_thres = 0.001, batch_size = 64, step = 4),
-           stop("Unknown spectrum type for CNN")
+           "HMBC"   = list(int_thres = 0.001, int_prop = 0.5, eps_value = 0.009,
+                           pred_class_thres = 0.001, batch_size = 64, step = 4),
+           "COSY"   = list(int_thres = 0.001, int_prop = 0.5, eps_value = 0.068,
+                           pred_class_thres = 0.001, batch_size = 64, step = 4),
+           "JRES"   = list(int_thres = 0.001, int_prop = 0.5, eps_value = 0.0068,
+                           pred_class_thres = 0.001, batch_size = 64, step = 4),
+           # Default fallback instead of stop(): a stop() raised inside a reactive
+           # crashes the whole Shiny session (the app closes). Return safe defaults.
+           list(int_thres = 0.001, int_prop = 0.5, eps_value = 0.0068,
+                pred_class_thres = 0.001, batch_size = 64, step = 4)
     )
   })
   
@@ -815,7 +826,13 @@ server <- function(input, output, session) {
                         "_centroids:", nrow(centroids_data() %||% data.frame()))
     cached_plots <- plot_cache()
     if (!force_recalc && !is.null(cached_plots[[cache_key]])) {
-      nmr_plot(cached_plots[[cache_key]])
+      # Tag with a fresh timestamp so nmr_plot() is ALWAYS a new value -- the
+      # spinner-hiding observeEvent fires on value change, and two runs with the
+      # same box/centroid COUNT would otherwise produce an identical value and
+      # leave the spinner stuck / the new result not shown (HMBC/J-RES symptom).
+      p <- cached_plots[[cache_key]]
+      attr(p, "refresh_stamp") <- as.numeric(Sys.time())
+      nmr_plot(p)
       return(invisible(NULL))
     }
     plot_base <- contour_plot_base()
@@ -863,6 +880,7 @@ server <- function(input, output, session) {
     }
     cached_plots[[cache_key]] <- plot_base
     plot_cache(cached_plots)
+    attr(plot_base, "refresh_stamp") <- as.numeric(Sys.time())
     nmr_plot(plot_base)
   }
   
@@ -1317,7 +1335,7 @@ server <- function(input, output, session) {
       eps_val <- peak_picking$eps_value() %||% 0.04
       reference_centroids <- centroids_data()
       volumes_list <- list()
-      eps_factors <- list(HSQC = 10, TOCSY = 8, COSY = 10, UFCOSY = 4)
+      eps_factors <- list(HSQC = 10, TOCSY = 8, COSY = 10, UFCOSY = 4, HMBC = 10, JRES = 8)
       for (name in names(result_data_list())) {
         result <- result_data_list()[[name]]
         if (is.null(result$contour_data)) next
@@ -1879,10 +1897,12 @@ server <- function(input, output, session) {
       x_ticktext <- sprintf("%.0f", -x_tickvals)  # Inverse le signe : -7 -> "7", 1 -> "-1"
       
       # Adapt F1 according to the spectrum type
-      is_hsqc <- !is.null(input$spectrum_type) && input$spectrum_type == "HSQC"
-      if (is_hsqc) {
+      # HSQC and HMBC are heteronuclear: F1 = 13C (wide range, 10 ppm ticks)
+      is_heteronuclear <- !is.null(input$spectrum_type) &&
+        input$spectrum_type %in% c("HSQC", "HMBC")
+      if (is_heteronuclear) {
         
-        # HSQC: F1 = 13C, ticks every 10 ppm (-10 to 230 ppm in display)
+        # HSQC/HMBC: F1 = 13C, ticks every 10 ppm (-10 to 230 ppm in display)
         y_tickvals <- seq(-240, 20, by = 10)
         y_ticktext <- sprintf("%.0f", -y_tickvals)
       } else {
@@ -2025,8 +2045,30 @@ server <- function(input, output, session) {
                      "TOCSY" = list(contour_start = 80000),
                      "HSQC" = list(contour_start = 20000),
                      "COSY" = list(contour_start = 80000),
-                     "UFCOSY" = list(contour_start = 30000))
-    updateNumericInput(session, "contour_start", value = params$contour_start)
+                     "UFCOSY" = list(contour_start = 30000),
+                     "HMBC" = list(contour_start = 20000),
+                     "JRES" = list(contour_start = 60000),
+                     list(contour_start = 80000))  # default, avoid NULL
+    req(params)
+    
+    cstart <- params$contour_start
+    
+    # HMBC: derive an initial contour_start from the actual noise of the loaded
+    # spectrum (~7 sigma) instead of a fixed guess. This only PRE-FILLS the UI
+    # field; the user can then change it and the change WILL be applied, because
+    # find_nmr_peak_centroids_optimized respects any user-supplied value.
+    if (identical(input$spectrum_type, "HMBC") && !is.null(load_data$bruker_data())) {
+      mat <- load_data$bruker_data()$spectrumData
+      if (!is.null(mat)) {
+        noise_sd <- sd(as.numeric(mat), na.rm = TRUE)
+        max_abs  <- max(abs(mat), na.rm = TRUE)
+        if (is.finite(noise_sd) && noise_sd > 0) {
+          cstart <- round(min(noise_sd * 7, max_abs * 0.25))
+        }
+      }
+    }
+    
+    updateNumericInput(session, "contour_start", value = cstart)
     
     # Note: eps_value is now updated by the peak_picking module
   })
@@ -2620,6 +2662,8 @@ server <- function(input, output, session) {
                              "TOCSY" = list(contour_num = 20, contour_factor = 1.3),
                              "COSY" = list(contour_num = 30, contour_factor = 1.3),
                              "UFCOSY" = list(contour_num = 20, contour_factor = 1.3),
+                             "HMBC" = list(contour_num = 18, contour_factor = 1.25),
+                             "JRES" = list(contour_num = 20, contour_factor = 1.3),
                              list(contour_num = 10, contour_factor = 1.3)  # default
     )
     
