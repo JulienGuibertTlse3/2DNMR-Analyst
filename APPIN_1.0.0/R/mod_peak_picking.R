@@ -168,8 +168,10 @@ mod_peak_picking_server <- function(id,
       params <- switch(parent_input$spectrum_type,
                        "TOCSY" = list(eps_value = 0.0068),
                        "HSQC" = list(eps_value = 0.0068),
+                       "HMBC"   = list(eps_value = 0.0090),
                        "COSY" = list(eps_value = 0.0068),
                        "UFCOSY" = list(eps_value = 0.014),
+                       "JRES"   = list(eps_value = 0.06),
                        list(eps_value = 0.0068))
       updateNumericInput(session, "eps_value", value = params$eps_value)
     }, ignoreInit = TRUE)
@@ -220,7 +222,7 @@ mod_peak_picking_server <- function(id,
             neighborhood_size = params$neighborhood_size,
             f2_exclude_range = c(4.7, 5.0),
             keep_peak_ranges = keep_ranges,
-            spectrum_type = "TOCSY",
+            spectrum_type = parent_input$spectrum_type %||% "TOCSY",
             diagnose_zones = c(0.9, 1.6),
             diagnose_radius = 0.1
           )
@@ -325,7 +327,7 @@ mod_peak_picking_server <- function(id,
       rv$modifiable_boxes(rv$fixed_boxes())
       rv$reference_boxes(rv$fixed_boxes())
       rv$contour_plot_base(selected_result$plot + ggplot2::labs(title = ""))
-      refresh_nmr_plot()
+      refresh_nmr_plot(force_recalc = TRUE)
       
       n_peaks <- nrow(rv$centroids_data() %||% data.frame())
       n_boxes <- nrow(box_coords_only)
@@ -770,7 +772,7 @@ mod_peak_picking_server <- function(id,
         rv$modifiable_boxes(rv$fixed_boxes())
         rv$reference_boxes(rv$fixed_boxes())
         rv$contour_plot_base(selected_result$plot + ggplot2::labs(title = ""))
-        refresh_nmr_plot()
+        refresh_nmr_plot(force_recalc = TRUE)
         
         n_peaks <- nrow(peaks_df)
         n_boxes <- nrow(box_coords_only)
