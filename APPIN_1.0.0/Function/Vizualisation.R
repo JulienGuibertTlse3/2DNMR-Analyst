@@ -87,32 +87,95 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
     stop("Invalid Bruker data. Ensure rr_data is a matrix with proper intensity values.")
   }
   
+  # Record which parameters the caller actually supplied (before defaults fill
+  # them in). Used by the HMBC noise-derivation so it only kicks in for
+  # parameters the user did NOT set -- otherwise it would silently override the
+  # UI and changing the settings would have no effect.
+  user_contour_start      <- contour_start
+  user_intensity_threshold <- intensity_threshold
+  user_contour_num        <- contour_num
+  user_contour_factor     <- contour_factor
+  
   # --- Default parameters for each spectrum type ---
   # These values are empirically determined for typical NMR experiments
   spectrum_defaults <- list(
     HSQC = list(contour_start = 8000, intensity_threshold = 200, contour_num = 8, contour_factor = 1.3),
     TOCSY = list(contour_start = 100000, intensity_threshold = 4000, contour_num = 40, contour_factor = 1.3, f2_exclude_range = c(4.7, 5.0)),
     UFCOSY = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 40, contour_factor = 1.3),
-    COSY = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3)
+    COSY = list(contour_start = 1000, intensity_threshold = 20000, contour_num = 60, contour_factor = 1.3),
+    # HMBC: heteronuclear, signals much weaker than HSQC (2J/3J correlations).
+    # Lower thresholds so real cross-peaks are not all filtered out, and a
+    # modest contour count to keep the contour grid affordable on the wide 13C axis.
+    HMBC = list(contour_start = 5000, intensity_threshold = 150, contour_num = 12, contour_factor = 1.3),
+    # J-RES: homonuclear; F2 = 1H shift, F1 = J coupling (narrow). Thresholds
+    # similar to TOCSY/COSY; signals are strong, no special weakening needed.
+    JRES = list(contour_start = 80000, intensity_threshold = 4000, contour_num = 40, contour_factor = 1.3, f2_exclude_range = c(4.7, 5.0))
   )
   
   # Load defaults if spectrum_type is specified, allowing individual parameter overrides
   if (!is.null(spectrum_type)) {
     if (!spectrum_type %in% names(spectrum_defaults)) {
-      stop("Invalid spectrum_type. Choose from 'HSQC', 'TOCSY', 'COSY' or 'UFCOSY'.")
+      # Unknown type: warn and fall back to TOCSY-like defaults instead of stop().
+      # A stop() here is caught by the caller's tryCatch, but an unknown type
+      # should degrade gracefully rather than abort processing.
+      warning(sprintf("Unknown spectrum_type '%s' - falling back to generic defaults.", spectrum_type))
+      defaults <- list(contour_start = 100000, intensity_threshold = 4000,
+                       contour_num = 20, contour_factor = 1.3)
+    } else {
+      defaults <- spectrum_defaults[[spectrum_type]]
     }
-    defaults <- spectrum_defaults[[spectrum_type]]
     contour_start <- ifelse(is.null(contour_start), defaults$contour_start, contour_start)
     intensity_threshold <- ifelse(is.null(intensity_threshold), defaults$intensity_threshold, intensity_threshold)
     contour_num <- ifelse(is.null(contour_num), defaults$contour_num, contour_num)
     contour_factor <- ifelse(is.null(contour_factor), defaults$contour_factor, contour_factor)
+    
+    # HMBC: signals are weak and vary a lot between samples, so a fixed
+    # contour_start often misses every peak (0 peaks). Derive sensible values
+    # from the actual noise level of this spectrum -- but ONLY for parameters
+    # the caller did not provide. If the UI passed a value, respect it (this is
+    # why changing the settings previously had no effect: the derivation used
+    # to overwrite the UI values unconditionally).
+    if (identical(spectrum_type, "HMBC")) {
+      noise_sd <- sd(as.numeric(rr_data), na.rm = TRUE)
+      max_abs  <- max(abs(rr_data), na.rm = TRUE)
+      
+      # user_* captured at function entry == NULL means the caller (UI) did not
+      # supply that parameter, so we derive it from the noise; otherwise respect it.
+      if (is.finite(noise_sd) && noise_sd > 0) {
+        if (is.null(user_contour_start)) {
+          contour_start <- min(noise_sd * 7, max_abs * 0.25)
+        }
+        if (is.null(user_intensity_threshold)) {
+          intensity_threshold <- noise_sd * 4
+        }
+      }
+      if (is.null(user_contour_num))    contour_num    <- max(contour_num, 18)
+      if (is.null(user_contour_factor)) contour_factor <- 1.25
+    }
   }
   
+  # --- Guard against NULL/NA/non-finite numeric parameters ---
+  # If any of these are NULL or NA (e.g. an unset reactive on a new spectrum
+  # type), downstream calls like which(rr_data >= NULL) or seq()/contour level
+  # construction can produce huge or invalid results and crash the R process.
+  if (is.null(intensity_threshold) || is.na(intensity_threshold) || !is.finite(intensity_threshold)) {
+    intensity_threshold <- stats::quantile(abs(rr_data), 0.999, na.rm = TRUE)
+    warning("intensity_threshold was invalid; using 99.9th percentile of |intensity| as fallback.")
+  }
+  if (is.null(contour_start) || is.na(contour_start) || !is.finite(contour_start)) {
+    contour_start <- intensity_threshold
+  }
+  if (is.null(contour_num) || is.na(contour_num) || contour_num < 1) contour_num <- 12
+  if (is.null(contour_factor) || is.na(contour_factor) || contour_factor <= 1) contour_factor <- 1.3
+  
   # OPTIMIZATION 1: Downsampling the matrix for display
-  # Reduces memory usage and rendering time for large spectra
-  if (downsample_factor > 1) {
-    seq_x <- seq(1, nrow(rr_data), by = downsample_factor)
-    seq_y <- seq(1, ncol(rr_data), by = downsample_factor)
+  # Reduces memory usage and rendering time for large spectra.
+  # HMBC: the indirect (13C) dimension is acquired with FEW increments, so
+  # downsampling makes contours jagged/stair-stepped. Skip it for HMBC.
+  effective_downsample <- if (identical(spectrum_type, "HMBC")) 1 else downsample_factor
+  if (effective_downsample > 1) {
+    seq_x <- seq(1, nrow(rr_data), by = effective_downsample)
+    seq_y <- seq(1, ncol(rr_data), by = effective_downsample)
     rr_data <- rr_data[seq_x, seq_y]
   }
   
@@ -130,18 +193,61 @@ find_nmr_peak_centroids_optimized <- function(rr_data, spectrum_type = NULL,
     return(list(plot = ggplot() + theme_void(), contour_data = data.frame()))
   }
   
-  # OPTIMIZATION 3: Direct creation of the data.frame without expand.grid
-  # Using data.table for memory efficiency with large datasets
-  intensity_df <- data.table(
-    ppm_x = ppm_x[high_intensity_indices[, 1]],
-    ppm_y = ppm_y[high_intensity_indices[, 2]],
-    intensity = rr_data[high_intensity_indices]
-  )
+  # --- ANTI-OOM GUARD ---
+  # If the threshold is too low for this spectrum (common on HMBC, whose
+  # signals are weak so users/defaults may under-set the threshold), the
+  # number of points above threshold and the resulting contour grid can blow
+  # up memory and the OS kills the R process (the app "just closes"). Cap the
+  # number of retained points by raising the threshold to keep the contour
+  # build affordable, rather than crashing.
+  max_points <- 400000L
+  n_above <- nrow(high_intensity_indices)
+  if (n_above > max_points) {
+    vals <- rr_data[high_intensity_indices]
+    # keep the strongest max_points points -> threshold = corresponding quantile
+    keep_frac <- max_points / n_above
+    adj_threshold <- stats::quantile(vals, probs = 1 - keep_frac, na.rm = TRUE)
+    warning(sprintf(
+      "Too many points above threshold (%d > %d) for %s; raising threshold to %.4g to avoid memory overflow.",
+      n_above, max_points, ifelse(is.null(spectrum_type), "spectrum", spectrum_type), adj_threshold))
+    high_intensity_indices <- which(rr_data >= adj_threshold, arr.ind = TRUE)
+    if (contour_start < adj_threshold) contour_start <- adj_threshold
+  }
   
-  # Exclusion of the water region (typically 4.7-5.0 ppm in F2)
-  # Water signal creates artifacts that interfere with peak detection
-  if (!is.null(f2_exclude_range) && length(f2_exclude_range) == 2) {
-    intensity_df <- intensity_df[!(ppm_y >= f2_exclude_range[1] & ppm_y <= f2_exclude_range[2])]
+  # OPTIMIZATION 3: Direct creation of the data.frame without expand.grid
+  # Using data.table for memory efficiency with large datasets.
+  #
+  # NOTE: geom_contour requires a COMPLETE regular grid to interpolate smooth
+  # lines. Feeding it only the above-threshold points (a holey point cloud)
+  # makes it interpolate across gaps -> jagged/torn contours. This "sparse"
+  # path is fine for dense spectra (TOCSY) but breaks on sparse HMBC.
+  # For HMBC we therefore build the FULL grid; the threshold only sets which
+  # contour levels are drawn (via breaks = contour_levels), not which points
+  # exist. The sparse path is preserved for all other spectrum types.
+  if (identical(spectrum_type, "HMBC")) {
+    intensity_df <- data.table(
+      ppm_x = rep(ppm_x, times = length(ppm_y)),
+      ppm_y = rep(ppm_y, each  = length(ppm_x)),
+      intensity = as.numeric(rr_data)
+    )
+    # Zero-out the water region instead of deleting rows, so the grid stays
+    # rectangular (deleting rows would re-introduce holes -> jagged contours).
+    if (!is.null(f2_exclude_range) && length(f2_exclude_range) == 2) {
+      intensity_df[ppm_y >= f2_exclude_range[1] & ppm_y <= f2_exclude_range[2],
+                   intensity := 0]
+    }
+  } else {
+    intensity_df <- data.table(
+      ppm_x = ppm_x[high_intensity_indices[, 1]],
+      ppm_y = ppm_y[high_intensity_indices[, 2]],
+      intensity = rr_data[high_intensity_indices]
+    )
+    
+    # Exclusion of the water region (typically 4.7-5.0 ppm in F2)
+    # Water signal creates artifacts that interfere with peak detection
+    if (!is.null(f2_exclude_range) && length(f2_exclude_range) == 2) {
+      intensity_df <- intensity_df[!(ppm_y >= f2_exclude_range[1] & ppm_y <= f2_exclude_range[2])]
+    }
   }
   
   # OPTIMIZATION 4: Reduce the number of contour levels for TOCSY

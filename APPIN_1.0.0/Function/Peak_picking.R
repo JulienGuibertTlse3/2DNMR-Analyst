@@ -442,6 +442,34 @@ peak_pick_2d_nt2 <- function(bruker_data, threshold = 5, neighborhood_size = 5,
         pull(contour_id)
     }
     
+  } else if (spectrum_type == "JRES") {
+    # J-RES (no-clustering / CNN path), regime A: each multiplet line = a peak.
+    # F1 = J coupling (tiny) vs F2 = 1H shift: recompute elongation on spans
+    # normalized by each axis range so a normal line is not seen as elongated.
+    x_axis_span <- diff(range(cluster_stats$x_center, na.rm = TRUE)) + 1e-9
+    y_axis_span <- diff(range(cluster_stats$y_center, na.rm = TRUE)) + 1e-9
+    valid_ids <- cluster_stats %>%
+      mutate(
+        x_span_norm = x_span / x_axis_span,
+        y_span_norm = y_span / y_axis_span,
+        elong_norm = pmax(x_span_norm / (y_span_norm + 1e-10),
+                          y_span_norm / (x_span_norm + 1e-10))
+      ) %>%
+      filter(
+        intensity >= min_cluster_intensity * 0.3,
+        # Reject only genuine streaks (normalized shape), keep multiplet lines
+        !(x_span_norm > 0.5 & y_span_norm < 0.01),
+        !(y_span_norm > 0.5 & x_span_norm < 0.01),
+        (
+          (intensity_norm > 0.15 & elong_norm <= 25) |
+            (intensity_norm > 0.03 & elong_norm <= 18) |
+            (elong_norm <= 12)
+        )
+      ) %>%
+      pull(contour_id)
+    message(sprintf("✅ [JRES] (no-cluster path) %d clusters in, %d kept.",
+                    nrow(cluster_stats), length(valid_ids)))
+    
   } else {  # UFCOSY
     # UFCOSY: Similar to COSY but with adjusted thresholds
     valid_ids <- cluster_stats %>%
@@ -776,6 +804,31 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
         F1_scaled = (y - mean(y, na.rm = TRUE)) / (sd(y, na.rm = TRUE) * 5)
       )
     min_pts <- 10  # HSQC peaks should have more points
+  } else if (spectrum_type == "HMBC") {
+    # HMBC: heteronuclear, F1 (13C) range even wider than HSQC (carbonyls up to ~220 ppm)
+    contour_data <- contour_data %>%
+      mutate(
+        F2_scaled = (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE),
+        F1_scaled = (y - mean(y, na.rm = TRUE)) / (sd(y, na.rm = TRUE) * 7)
+      )
+    # minPts MUST stay low. Weak HMBC peaks are drawn by very few contour
+    # points; minPts = 8 silently dropped them as DBSCAN "noise" (cluster 0)
+    # BEFORE any filtering -- the single biggest cause of "too stringent".
+    min_pts <- 2
+  } else if (spectrum_type == "JRES") {
+    # J-RES: homonuclear. F2 = 1H chemical shift (wide, ~10 ppm), F1 = J
+    # coupling (TINY, ~+/-30 Hz = a fraction of a ppm). This is the MIRROR of
+    # HMBC: here the narrow axis is F1. A multiplet is a short vertical column.
+    # In regime A (each multiplet line = one peak) we must NOT crush F1, or
+    # DBSCAN would merge the closely-J-spaced lines into a single cluster.
+    # We therefore EXPAND F1 (divide by a factor < 1) so lines stay separable.
+    contour_data <- contour_data %>%
+      mutate(
+        F2_scaled = (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE),
+        F1_scaled = (y - mean(y, na.rm = TRUE)) / (sd(y, na.rm = TRUE) * 0.5)
+      )
+    # Low minPts: individual multiplet lines are small clusters.
+    min_pts <- 2
   } else {
     # TOCSY/COSY: Both dimensions are 1H with similar ppm ranges
     contour_data <- contour_data %>%
@@ -793,6 +846,14 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
   
   # Remove noise points (cluster 0)
   contour_data <- contour_data %>% filter(stain_id != "0")
+  if (spectrum_type == "HMBC") {
+    message(sprintf("🔎 [HMBC] DBSCAN: %d clusters kept (minPts=%d).",
+                    length(unique(contour_data$stain_id)), min_pts))
+  }
+  if (spectrum_type == "JRES") {
+    message(sprintf("🔎 [JRES] DBSCAN: %d clusters kept (minPts=%d).",
+                    length(unique(contour_data$stain_id)), min_pts))
+  }
   
   # --- Step 4: Calculate comprehensive cluster statistics ---
   cluster_stats <- contour_data %>%
@@ -866,6 +927,38 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
   cluster_stats <- cluster_stats %>%
     mutate(intensity_norm = intensity / max_intensity)
   
+  # --- HMBC / J-RES: scale-aware elongation ---------------------------------
+  # When the two axes have incomparable scales, the raw y_span/x_span ratio
+  # mis-reports elongation. HMBC: F1=13C is ~15-20x wider than F2=1H. J-RES:
+  # F1=J coupling (Hz, tiny) is far narrower than F2=1H (ppm). In both cases a
+  # visually round/normal peak reads as extremely elongated. Recompute
+  # elongation on spans normalized by each axis' overall span so shape is
+  # judged on the displayed proportions, not raw units.
+  if (spectrum_type %in% c("HMBC", "JRES")) {
+    x_axis_span <- diff(range(contour_data$x, na.rm = TRUE))  # total F2 span
+    y_axis_span <- diff(range(contour_data$y, na.rm = TRUE))  # total F1 span
+    if (is.finite(x_axis_span) && is.finite(y_axis_span) &&
+        x_axis_span > 0 && y_axis_span > 0) {
+      cluster_stats <- cluster_stats %>%
+        mutate(
+          x_span_norm = x_span / x_axis_span,
+          y_span_norm = y_span / y_axis_span,
+          elongation = pmax(x_span_norm / (y_span_norm + 1e-10),
+                            y_span_norm / (x_span_norm + 1e-10)),
+          aspect_ratio_x = x_span_norm / (y_span_norm + 1e-10),
+          aspect_ratio_y = y_span_norm / (x_span_norm + 1e-10),
+          is_horizontal = aspect_ratio_x > aspect_ratio_y,
+          is_vertical = aspect_ratio_y > aspect_ratio_x
+        )
+    }
+    # Safety: if the scale-aware block above did not run (degenerate axis),
+    # make sure the normalized columns still exist for the filters below.
+    if (!"x_span_norm" %in% names(cluster_stats)) {
+      cluster_stats <- cluster_stats %>%
+        mutate(x_span_norm = x_span, y_span_norm = y_span)
+    }
+  }
+  
   
   # --- Step 5: Apply spectrum-type-specific filtering ---
   
@@ -877,6 +970,81 @@ process_nmr_centroids <- function(rr_data, contour_data, contour_num = NULL, con
         elongation <= 100  # Very permissive
       ) %>%
       pull(stain_id)
+    
+  } else if (spectrum_type == "HMBC") {
+    # ════════════════════════════════════════════════════════════════════
+    # HMBC: heteronuclear long-range correlations.
+    # - NO diagonal, NO autopeaks -> no is_diagonal protection
+    # - One 1H can correlate to several 13C -> DO NOT cap peaks per F2 column
+    # - HUGE dynamic range: weak 2J peaks sit far below the strongest 3J peak
+    #   but are informative -> keep the relative-intensity gate very low.
+    # - Cross-peaks are often elongated along F1 (no F1 decoupling) -> allow
+    #   more elongation than for a compact blob.
+    # ════════════════════════════════════════════════════════════════════
+    n_in <- nrow(cluster_stats)
+    valid_ids <- cluster_stats %>%
+      filter(
+        # Reject true horizontal streaks by SHAPE (aspect ratio), not by point
+        # count: real streaks are dense, so the old n_points < 200 let them pass.
+        !(is_horizontal & aspect_ratio_x > 6 & y_span < 0.03),
+        
+        # Reject thin vertical truncation streaks the same way
+        !(is_vertical & aspect_ratio_y > 6 & x_span < 0.01),
+        
+        # Reject only the extreme cross/line artifacts
+        elongation <= 30,
+        
+        # Relative-intensity gate -- LOW (was 0.02, which wiped out weak peaks).
+        # The noise-based contour threshold already removed background.
+        intensity_norm > 0.003,
+        
+        # Compactness, permissive for weak peaks
+        (
+          (intensity_norm > 0.15 & elongation <= 25) |
+            (intensity_norm > 0.03 & elongation <= 18) |
+            (elongation <= 12)
+        )
+      ) %>%
+      pull(stain_id)
+    
+    message(sprintf("✅ [HMBC] Filtering: %d clusters in, %d kept (scale-aware elongation).",
+                    n_in, length(valid_ids)))
+    
+  } else if (spectrum_type == "JRES") {
+    # ════════════════════════════════════════════════════════════════════
+    # J-RES (regime A: each multiplet line = one peak).
+    # - Homonuclear, but F1 = J coupling (Hz) vs F2 = 1H shift (ppm): axes have
+    #   incomparable scales -> elongation is already scale-normalized above.
+    # - Do NOT assume tilt/verticality: untilted data has multiplets on slanted
+    #   diagonals, tilted data has them vertical. Judge on normalized shape only.
+    # - Keep every real multiplet component -> low intensity gate, permissive
+    #   elongation. The (noise-based) contour threshold handles background.
+    # ════════════════════════════════════════════════════════════════════
+    n_in <- nrow(cluster_stats)
+    valid_ids <- cluster_stats %>%
+      filter(
+        # Reject only genuine instrument streaks by normalized shape:
+        # a band spanning most of one axis while being a sliver on the other.
+        !(is_horizontal & aspect_ratio_x > 8 & y_span_norm < 0.01),
+        !(is_vertical   & aspect_ratio_y > 8 & x_span_norm < 0.01),
+        
+        # Reject extreme line artifacts only
+        elongation <= 30,
+        
+        # Low relative-intensity gate: keep weak outer multiplet lines
+        intensity_norm > 0.003,
+        
+        # Compactness, permissive (normalized elongation ~1 for a round line)
+        (
+          (intensity_norm > 0.15 & elongation <= 25) |
+            (intensity_norm > 0.03 & elongation <= 18) |
+            (elongation <= 12)
+        )
+      ) %>%
+      pull(stain_id)
+    
+    message(sprintf("✅ [JRES] Filtering: %d clusters in, %d kept (scale-aware elongation).",
+                    n_in, length(valid_ids)))
     
   } else if (spectrum_type %in% c("TOCSY", "COSY")) {
     
